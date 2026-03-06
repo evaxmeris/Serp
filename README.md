@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trade ERP - 外贸 ERP 管理系统
 
-## Getting Started
+一个现代化的外贸行业 ERP 系统，基于 Next.js 14 + TypeScript + PostgreSQL 构建。
 
-First, run the development server:
+## 🚀 技术栈
+
+- **前端**: Next.js 14 (App Router) + React + TypeScript
+- **样式**: TailwindCSS v4 + shadcn/ui 组件库
+- **后端**: Next.js API Routes
+- **数据库**: PostgreSQL + Prisma ORM
+- **部署**: Vercel / Docker
+
+## 📦 核心模块
+
+| 模块 | 功能 |
+|------|------|
+| 👥 **用户管理** | 多角色权限（Admin/Manager/User/Viewer） |
+| 🏢 **客户管理** | 客户档案、联系人、信用评级 |
+| 📦 **产品管理** | SKU、多规格、成本价、图片 |
+| 📧 **询盘管理** | 询盘录入、跟进记录、转化追踪 |
+| 💰 **报价管理** | 报价单生成、版本管理、审批流 |
+| 📋 **订单管理** | 销售订单、生产跟踪、出货安排 |
+| 💳 **收款管理** | 收款记录、核销、账龄分析 |
+| 🚢 **发货管理** | 货代、跟踪号、船运信息 |
+| 🏭 **采购管理** | 供应商、采购单、入库验收 |
+| 📊 **库存管理** | 出入库、调拨、盘点 |
+
+## 🛠️ 开发指南
+
+### 环境准备
+
+```bash
+# 安装依赖
+npm install
+
+# 复制环境变量
+cp .env.example .env
+
+# 配置数据库连接
+# 编辑 .env 中的 DATABASE_URL
+```
+
+### 数据库
+
+```bash
+# 生成 Prisma 客户端
+npx prisma generate
+
+# 推送 schema 到数据库
+npx prisma db push
+
+# 或者创建迁移
+npx prisma migrate dev
+```
+
+### 开发服务器
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+访问 http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 生产构建
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## 📁 项目结构
 
-To learn more about Next.js, take a look at the following resources:
+```
+trade-erp/
+├── prisma/
+│   └── schema.prisma      # 数据库模型
+├── src/
+│   ├── app/               # Next.js App Router 页面
+│   ├── components/        # React 组件
+│   │   └── ui/           # shadcn/ui 组件
+│   ├── hooks/            # 自定义 Hooks
+│   └── lib/              # 工具函数
+├── .env.example          # 环境变量模板
+└── package.json
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔐 环境变量
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/trade_erp?schema=public"
+```
 
-## Deploy on Vercel
+## 📝 License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+MIT
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+**Built with ❤️ for Foreign Trade Industry**
