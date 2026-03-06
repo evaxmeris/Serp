@@ -68,6 +68,18 @@ npm run build
 npm start
 ```
 
+### 🐳 Docker 部署（推荐）
+
+```bash
+# 一键部署（OrbStack/Docker）
+./deploy.sh
+
+# 或手动执行
+docker-compose up -d
+```
+
+访问 http://localhost:3000
+
 ## 📁 项目结构
 
 ```

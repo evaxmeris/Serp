@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  db:
+    image: postgres:16-alpine
+    container_name: trade-erp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trade_erp
+      POSTGRES_PASSWORD: trade_erp_password
+      POSTGRES_DB: trade_erp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trade_erp -d trade_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js 应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trade-erp-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://trade_erp:trade_erp_password@db:5432/trade_erp?schema=public
+      # NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-this-in-production}
+      # NEXTAUTH_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+volumes:
+  postgres_data:
