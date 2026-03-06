@@ -1,6 +1,16 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+
+interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+}
 
 const modules = [
   {
@@ -42,12 +52,56 @@ const modules = [
 ];
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // 从 localStorage 获取用户信息
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-900">
+      {/* Header */}
+      <header className="border-b">
+        <div className="container mx-auto py-4 px-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Trade ERP</h1>
+          <div className="flex items-center gap-4">
+            {user ? (
+              <>
+                <span className="text-sm text-zinc-600">
+                  {user.name || user.email} ({user.role})
+                </span>
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  退出
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="outline" size="sm">登录</Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm">注册</Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
       <div className="container mx-auto py-12 px-4">
-        {/* Header */}
+        {/* Welcome */}
         <div className="mb-12 text-center">
-          <h1 className="text-4xl font-bold mb-4">Trade ERP</h1>
+          <h2 className="text-4xl font-bold mb-4">欢迎使用 Trade ERP</h2>
           <p className="text-xl text-zinc-600 dark:text-zinc-400">
             外贸行业 ERP 管理系统
           </p>
@@ -60,7 +114,7 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-zinc-500">客户总数</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">0</div>
+              <div className="text-3xl font-bold">-</div>
             </CardContent>
           </Card>
           <Card>
@@ -68,7 +122,7 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-zinc-500">产品数量</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">0</div>
+              <div className="text-3xl font-bold">-</div>
             </CardContent>
           </Card>
           <Card>
@@ -76,7 +130,7 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-zinc-500">待处理询盘</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">0</div>
+              <div className="text-3xl font-bold">-</div>
             </CardContent>
           </Card>
           <Card>
@@ -84,7 +138,7 @@ export default function Home() {
               <CardTitle className="text-sm font-medium text-zinc-500">本月订单</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">0</div>
+              <div className="text-3xl font-bold">-</div>
             </CardContent>
           </Card>
         </div>
@@ -115,7 +169,7 @@ export default function Home() {
 
         {/* Footer */}
         <div className="mt-12 text-center text-zinc-500 text-sm">
-          <p>Trade ERP v0.1.0 - 开发中</p>
+          <p>Trade ERP v0.2.0 - 开发中</p>
         </div>
       </div>
     </div>
