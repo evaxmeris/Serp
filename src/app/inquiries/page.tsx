@@ -20,13 +20,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Inquiry {
@@ -55,8 +48,6 @@ export default function InquiriesPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setStatusPriority] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newInquiry, setNewInquiry] = useState({
     customerId: '',
@@ -72,16 +63,12 @@ export default function InquiriesPage() {
   useEffect(() => {
     fetchInquiries();
     fetchCustomers();
-  }, [statusFilter, priorityFilter]);
+  }, []);
 
   const fetchInquiries = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        ...(statusFilter && { status: statusFilter }),
-        ...(priorityFilter && { priority: priorityFilter }),
-      });
-      const res = await fetch(`/api/inquiries?${params}`);
+      const res = await fetch('/api/inquiries');
       const data = await res.json();
       setInquiries(data.data || []);
     } catch (error) {
@@ -134,24 +121,46 @@ export default function InquiriesPage() {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, string> = {
-      NEW: 'bg-blue-100 text-blue-800 新建',
-      CONTACTED: 'bg-yellow-100 text-yellow-800 已联系',
-      QUOTED: 'bg-purple-100 text-purple-800 已报价',
-      NEGOTIATING: 'bg-orange-100 text-orange-800 谈判中',
-      WON: 'bg-green-100 text-green-800 成交',
-      LOST: 'bg-red-100 text-red-800 丢失',
+      NEW: 'bg-blue-100 text-blue-800',
+      CONTACTED: 'bg-yellow-100 text-yellow-800',
+      QUOTED: 'bg-purple-100 text-purple-800',
+      NEGOTIATING: 'bg-orange-100 text-orange-800',
+      WON: 'bg-green-100 text-green-800',
+      LOST: 'bg-red-100 text-red-800',
     };
-    return badges[status] || status;
+    return badges[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const badges: Record<string, string> = {
-      LOW: 'bg-gray-100 text-gray-800 低',
-      MEDIUM: 'bg-blue-100 text-blue-800 中',
-      HIGH: 'bg-orange-100 text-orange-800 高',
-      URGENT: 'bg-red-100 text-red-800 紧急',
+  const getStatusText = (status: string) => {
+    const texts: Record<string, string> = {
+      NEW: '新建',
+      CONTACTED: '已联系',
+      QUOTED: '已报价',
+      NEGOTIATING: '谈判中',
+      WON: '成交',
+      LOST: '丢失',
     };
-    return badges[priority] || priority;
+    return texts[status] || status;
+  };
+
+  const getPriorityText = (priority: string) => {
+    const texts: Record<string, string> = {
+      LOW: '低',
+      MEDIUM: '中',
+      HIGH: '高',
+      URGENT: '紧急',
+    };
+    return texts[priority] || priority;
+  };
+
+  const getPriorityColor = (priority: string) => {
+    const colors: Record<string, string> = {
+      LOW: 'bg-gray-100 text-gray-800',
+      MEDIUM: 'bg-blue-100 text-blue-800',
+      HIGH: 'bg-orange-100 text-orange-800',
+      URGENT: 'bg-red-100 text-red-800',
+    };
+    return colors[priority] || 'bg-gray-100 text-gray-800';
   };
 
   return (
@@ -170,49 +179,42 @@ export default function InquiriesPage() {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div>
                       <Label>客户 *</Label>
-                      <Select
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         value={newInquiry.customerId}
-                        onValueChange={(value) =>
-                          setNewInquiry({ ...newInquiry, customerId: value })
+                        onChange={(e) =>
+                          setNewInquiry({ ...newInquiry, customerId: e.target.value })
                         }
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="选择客户" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.companyName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <option value="">选择客户</option>
+                        {customers.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.companyName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="space-y-2">
+                    <div>
                       <Label>来源</Label>
-                      <Select
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         value={newInquiry.source}
-                        onValueChange={(value) =>
-                          setNewInquiry({ ...newInquiry, source: value })
+                        onChange={(e) =>
+                          setNewInquiry({ ...newInquiry, source: e.target.value })
                         }
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Website">网站</SelectItem>
-                          <SelectItem value="Alibaba">阿里巴巴</SelectItem>
-                          <SelectItem value="Email">邮件</SelectItem>
-                          <SelectItem value="Exhibition">展会</SelectItem>
-                          <SelectItem value="Referral">推荐</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <option value="Website">网站</option>
+                        <option value="Alibaba">阿里巴巴</option>
+                        <option value="Email">邮件</option>
+                        <option value="Exhibition">展会</option>
+                        <option value="Referral">推荐</option>
+                      </select>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div>
                     <Label>产品需求</Label>
                     <Textarea
                       placeholder="描述客户需要的产品..."
@@ -224,7 +226,7 @@ export default function InquiriesPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div>
                       <Label>数量</Label>
                       <Input
                         type="number"
@@ -235,7 +237,7 @@ export default function InquiriesPage() {
                         }
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div>
                       <Label>目标价格</Label>
                       <Input
                         type="number"
@@ -249,7 +251,7 @@ export default function InquiriesPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div>
                     <Label>详细要求</Label>
                     <Textarea
                       placeholder="客户的其他要求..."
@@ -260,26 +262,20 @@ export default function InquiriesPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>优先级</Label>
-                      <Select
-                        value={newInquiry.priority}
-                        onValueChange={(value) =>
-                          setNewInquiry({ ...newInquiry, priority: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="LOW">低</SelectItem>
-                          <SelectItem value="MEDIUM">中</SelectItem>
-                          <SelectItem value="HIGH">高</SelectItem>
-                          <SelectItem value="URGENT">紧急</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <Label>优先级</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={newInquiry.priority}
+                      onChange={(e) =>
+                        setNewInquiry({ ...newInquiry, priority: e.target.value })
+                      }
+                    >
+                      <option value="LOW">低</option>
+                      <option value="MEDIUM">中</option>
+                      <option value="HIGH">高</option>
+                      <option value="URGENT">紧急</option>
+                    </select>
                   </div>
                 </div>
                 <Button onClick={handleCreate}>保存</Button>
@@ -288,95 +284,54 @@ export default function InquiriesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 mb-4">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">全部</SelectItem>
-                <SelectItem value="NEW">新建</SelectItem>
-                <SelectItem value="CONTACTED">已联系</SelectItem>
-                <SelectItem value="QUOTED">已报价</SelectItem>
-                <SelectItem value="NEGOTIATING">谈判中</SelectItem>
-                <SelectItem value="WON">成交</SelectItem>
-                <SelectItem value="LOST">丢失</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter} onValueChange={setStatusPriority}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="优先级" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">全部</SelectItem>
-                <SelectItem value="LOW">低</SelectItem>
-                <SelectItem value="MEDIUM">中</SelectItem>
-                <SelectItem value="HIGH">高</SelectItem>
-                <SelectItem value="URGENT">紧急</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8">加载中...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>询盘编号</TableHead>
-                  <TableHead>客户</TableHead>
-                  <TableHead>来源</TableHead>
-                  <TableHead>产品</TableHead>
-                  <TableHead>数量</TableHead>
-                  <TableHead>目标价</TableHead>
-                  <TableHead>优先级</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>创建时间</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>询盘编号</TableHead>
+                <TableHead>客户</TableHead>
+                <TableHead>来源</TableHead>
+                <TableHead>产品</TableHead>
+                <TableHead>数量</TableHead>
+                <TableHead>目标价</TableHead>
+                <TableHead>优先级</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>创建时间</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {inquiries.map((inquiry) => (
+                <TableRow key={inquiry.id}>
+                  <TableCell className="font-medium">
+                    {inquiry.inquiryNo}
+                  </TableCell>
+                  <TableCell>{inquiry.customer.companyName}</TableCell>
+                  <TableCell>{inquiry.source || '-'}</TableCell>
+                  <TableCell className="max-w-xs truncate">
+                    {inquiry.products || '-'}
+                  </TableCell>
+                  <TableCell>{inquiry.quantity || '-'}</TableCell>
+                  <TableCell>
+                    {inquiry.targetPrice
+                      ? `${inquiry.currency} ${inquiry.targetPrice.toFixed(2)}`
+                      : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded text-xs ${getPriorityColor(inquiry.priority)}`}>
+                      {getPriorityText(inquiry.priority)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded text-xs ${getStatusBadge(inquiry.status)}`}>
+                      {getStatusText(inquiry.status)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(inquiry.createdAt).toLocaleDateString('zh-CN')}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {inquiries.map((inquiry) => (
-                  <TableRow key={inquiry.id}>
-                    <TableCell className="font-medium">
-                      {inquiry.inquiryNo}
-                    </TableCell>
-                    <TableCell>{inquiry.customer.companyName}</TableCell>
-                    <TableCell>{inquiry.source || '-'}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {inquiry.products || '-'}
-                    </TableCell>
-                    <TableCell>{inquiry.quantity || '-'}</TableCell>
-                    <TableCell>
-                      {inquiry.targetPrice
-                        ? `${inquiry.currency} ${inquiry.targetPrice.toFixed(2)}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          getPriorityBadge(inquiry.priority).split(' ')[0]
-                        }`}
-                      >
-                        {getPriorityBadge(inquiry.priority).split(' ').slice(1).join(' ')}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          getStatusBadge(inquiry.status).split(' ')[0]
-                        }`}
-                      >
-                        {getStatusBadge(inquiry.status).split(' ').slice(1).join(' ')}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(inquiry.createdAt).toLocaleDateString('zh-CN')}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+              ))}
+            </TableBody>
+          </Table>
 
           {inquiries.length === 0 && !loading && (
             <div className="text-center py-8 text-gray-500">

@@ -19,13 +19,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface Product {
   id: string;
@@ -46,7 +39,6 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({
     sku: '',
@@ -62,15 +54,12 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [search, statusFilter]);
+  }, [search]);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        search,
-        ...(statusFilter && { status: statusFilter }),
-      });
+      const params = new URLSearchParams({ search });
       const res = await fetch(`/api/products?${params}`);
       const data = await res.json();
       setProducts(data.data || []);
@@ -128,75 +117,95 @@ export default function ProductsPage() {
                   <DialogTitle>新增产品</DialogTitle>
                 </DialogHeader>
                 <div className="grid grid-cols-2 gap-4 py-4">
-                  <Input
-                    placeholder="SKU *"
-                    value={newProduct.sku}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, sku: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="产品名称 *"
-                    value={newProduct.name}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, name: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="英文名称"
-                    value={newProduct.nameEn}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, nameEn: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="分类"
-                    value={newProduct.category}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, category: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="规格"
-                    value={newProduct.specification}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, specification: e.target.value })
-                    }
-                  />
-                  <Select
-                    value={newProduct.unit}
-                    onValueChange={(value) =>
-                      setNewProduct({ ...newProduct, unit: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="单位" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PCS">PCS (件)</SelectItem>
-                      <SelectItem value="SET">SET (套)</SelectItem>
-                      <SelectItem value="KG">KG (千克)</SelectItem>
-                      <SelectItem value="M">M (米)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="成本价"
-                    type="number"
-                    step="0.01"
-                    value={newProduct.costPrice}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, costPrice: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="销售价"
-                    type="number"
-                    step="0.01"
-                    value={newProduct.salePrice}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, salePrice: e.target.value })
-                    }
-                  />
+                  <div>
+                    <label className="text-sm mb-1 block">SKU *</label>
+                    <Input
+                      placeholder="SKU"
+                      value={newProduct.sku}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, sku: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">产品名称 *</label>
+                    <Input
+                      placeholder="产品名称"
+                      value={newProduct.name}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">英文名称</label>
+                    <Input
+                      placeholder="英文名称"
+                      value={newProduct.nameEn}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, nameEn: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">分类</label>
+                    <Input
+                      placeholder="分类"
+                      value={newProduct.category}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, category: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">规格</label>
+                    <Input
+                      placeholder="规格"
+                      value={newProduct.specification}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, specification: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">单位</label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={newProduct.unit}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, unit: e.target.value })
+                      }
+                    >
+                      <option value="PCS">PCS (件)</option>
+                      <option value="SET">SET (套)</option>
+                      <option value="KG">KG (千克)</option>
+                      <option value="M">M (米)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">成本价</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newProduct.costPrice}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, costPrice: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm mb-1 block">销售价</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newProduct.salePrice}
+                      onChange={(e) =>
+                        setNewProduct({ ...newProduct, salePrice: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
                 <Button onClick={handleCreate}>保存</Button>
               </DialogContent>
@@ -204,24 +213,13 @@ export default function ProductsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 mb-4">
+          <div className="mb-4">
             <Input
               placeholder="搜索 SKU 或名称..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
             />
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">全部</SelectItem>
-                <SelectItem value="ACTIVE">在售</SelectItem>
-                <SelectItem value="DISCONTINUED">停产</SelectItem>
-                <SelectItem value="DEVELOPING">开发中</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {loading ? (
