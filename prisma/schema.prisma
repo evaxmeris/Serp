@@ -62,6 +62,7 @@ model Customer {
   inquiries       Inquiry[]
   orders          Order[]
   contacts        CustomerContact[]
+  quotations      Quotation[]
   
   @@map("customers")
 }
