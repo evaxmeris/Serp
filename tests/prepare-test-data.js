@@ -29,13 +29,20 @@ const TestDataFactory = {
 
   createSupplier(suffix = '') {
     const timestamp = Date.now();
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const day = String(new Date().getDate()).padStart(2, '0');
     return {
+      supplierNo: `SUP-TEST-${year}${month}${day}${suffix}`,
       companyName: `TEST_SUPPLIER_${timestamp}${suffix}`,
       contactName: '供应商联系人',
       email: `supplier_${timestamp}${suffix}@example.com`,
       phone: '13900139000',
-      country: '中国',
+      country: 'CN',
       status: 'ACTIVE',
+      type: 'DOMESTIC',
+      level: 'NORMAL',
+      currency: 'CNY',
       notes: '自动化测试创建的供应商'
     };
   },
