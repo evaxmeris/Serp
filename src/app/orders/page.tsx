@@ -1,27 +1,319 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useOrders, useDeleteOrder } from '@/hooks/use-orders';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/types/order';
+
+const ORDER_STATUS_OPTIONS = [
+  { value: '', label: '全部状态' },
+  { value: 'PENDING', label: '待确认' },
+  { value: 'CONFIRMED', label: '已确认' },
+  { value: 'IN_PRODUCTION', label: '生产中' },
+  { value: 'READY', label: '待发货' },
+  { value: 'SHIPPED', label: '已发货' },
+  { value: 'DELIVERED', label: '已送达' },
+  { value: 'COMPLETED', label: '已完成' },
+  { value: 'CANCELLED', label: '已取消' },
+];
 
 export default function OrdersPage() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  const { data, isLoading, error } = useOrders({ 
+    page, 
+    limit, 
+    status: (statusFilter || undefined) as OrderStatus | undefined, 
+    search: search || undefined 
+  });
+  const deleteOrder = useDeleteOrder();
+
+  const orders = data?.data || [];
+  const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 };
+
+  const handleCancel = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (!selectedOrderId) return;
+    setCancelDialogOpen(false);
+    setSelectedOrderId(null);
+    setCancelReason('');
+  };
+
+  const handleDelete = (orderId: string) => {
+    if (!confirm('确定要删除此订单吗？此操作不可恢复。')) {
+      return;
+    }
+    deleteOrder.mutate(orderId, {
+      onSuccess: () => {
+        alert('订单已删除');
+      },
+      onError: (err: any) => {
+        alert(err.message);
+      },
+    });
+  };
+
   return (
     <div className="container mx-auto py-8">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">订单管理</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl">订单管理</CardTitle>
+            <Button onClick={() => router.push('/orders/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              新增订单
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-lg mb-4">🚧 开发中</p>
-            <p>销售订单管理功能即将上线</p>
-            <div className="mt-8">
-              <a href="/">
-                <Button variant="outline">返回首页</Button>
-              </a>
+          {/* 筛选区 */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="搜索订单号/客户..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 max-w-sm"
+              />
             </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
+                {ORDER_STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* 加载状态 */}
+          {isLoading && (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              <p className="mt-2 text-gray-500">加载中...</p>
+            </div>
+          )}
+
+          {/* 错误状态 */}
+          {error && (
+            <div className="text-center py-8">
+              <p className="text-red-500">加载失败：{error.message}</p>
+              <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
+                重试
+              </Button>
+            </div>
+          )}
+
+          {/* 数据表格 */}
+          {!isLoading && !error && (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>订单号</TableHead>
+                    <TableHead>客户</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead className="text-right">金额</TableHead>
+                    <TableHead className="text-right">已付</TableHead>
+                    <TableHead className="text-right">余额</TableHead>
+                    <TableHead>交货日期</TableHead>
+                    <TableHead className="text-center">收款</TableHead>
+                    <TableHead className="text-center">发货</TableHead>
+                    <TableHead>创建时间</TableHead>
+                    <TableHead className="text-right">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => {
+                    const statusConfig = ORDER_STATUS_CONFIG[order.status];
+                    return (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {order.orderNo}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{order.customer.companyName}</TableCell>
+                        <TableCell>
+                          <Badge className={statusConfig.color}>
+                            {statusConfig.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {order.currency} {order.totalAmount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {order.currency} {order.paidAmount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {order.currency} {(order.totalAmount - order.paidAmount).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          {order.deliveryDate
+                            ? new Date(order.deliveryDate).toLocaleDateString('zh-CN')
+                            : '-'}
+                        </TableCell>
+                        <TableCell className="text-center">{order.paymentCount || 0}</TableCell>
+                        <TableCell className="text-center">{order.shipmentCount || 0}</TableCell>
+                        <TableCell>
+                          {new Date(order.createdAt).toLocaleDateString('zh-CN')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/orders/${order.id}`)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {order.status === 'PENDING' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => router.push(`/orders/${order.id}/edit`)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCancel(order.id)}
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(order.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              {orders.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  暂无订单数据
+                </div>
+              )}
+
+              {/* 分页 */}
+              {pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                  <p className="text-sm text-gray-500">
+                    共 {pagination.total} 条记录，第 {pagination.page} / {pagination.totalPages} 页
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      上一页
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page === pagination.totalPages}
+                    >
+                      下一页
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
+
+      {/* 取消订单对话框 */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>取消订单</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>取消原因 *</Label>
+            <Textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="请说明取消原因"
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={confirmCancel}>
+              确认取消
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

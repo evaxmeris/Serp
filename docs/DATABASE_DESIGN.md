@@ -1,259 +1,39 @@
-// Prisma Schema for Foreign Trade ERP
-// 外贸 ERP 数据库模型
+# Trade ERP 数据库设计文档
 
-generator client {
-  provider = "prisma-client-js"
-}
+**日期:** 2026-03-06  
+**版本:** v1.0  
+**作者:** 系统架构师
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+---
 
-// ============================================
-// 用户与权限
-// ============================================
+## 1. 订单管理模块数据库设计
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  passwordHash  String?
-  role          Role      @default(USER)
-  avatar        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  orders        Order[]   @relation("SalesRep")
-  customers     Customer[] @relation("Owner")
-  purchaseOrders PurchaseOrder[] @relation("Purchaser")
-  suppliers     Supplier[] @relation("Owner")
-  
-  @@map("users")
-}
+### 1.1 核心实体关系图
 
-enum Role {
-  ADMIN
-  MANAGER
-  USER
-  VIEWER
-}
+```
+┌─────────────┐       ┌──────────────┐       ┌─────────────┐
+│  Customer   │ 1───∞ │    Order     │ 1───∞ │  OrderItem  │
+└─────────────┘       └──────────────┘       └─────────────┘
+      │                      │                      │
+      │                      │ 1───∞                │
+      │                      ▼                      │
+      │               ┌──────────────┐              │
+      │               │   Payment    │              │
+      │               └──────────────┘              │
+      │                      │                      │
+      │                      │ 1───∞                │
+      │                      ▼                      │
+      │               ┌──────────────┐              │
+      │               │  Shipment    │              │
+      │               └──────────────┘              │
+      │                                            │
+      └────────────────────────────────────────────┘
+                         引用
+```
 
-// ============================================
-// 客户管理
-// ============================================
+### 1.2 Order 模型增强设计
 
-model Customer {
-  id              String    @id @default(cuid())
-  companyName     String
-  contactName     String?
-  email           String?
-  phone           String?
-  country         String?
-  address         String?
-  website         String?
-  source          String?   // 客户来源：展会/网站/推荐等
-  status          CustomerStatus @default(ACTIVE)
-  creditLevel     String?   // 信用评级
-  notes           String?
-  ownerId         String?
-  owner           User?     @relation("Owner", fields: [ownerId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  inquiries       Inquiry[]
-  orders          Order[]
-  contacts        CustomerContact[]
-  quotations      Quotation[]
-  
-  @@map("customers")
-}
-
-enum CustomerStatus {
-  ACTIVE
-  INACTIVE
-  BLACKLISTED
-}
-
-model CustomerContact {
-  id          String   @id @default(cuid())
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  name        String
-  position    String?
-  email       String?
-  phone       String?
-  isPrimary   Boolean  @default(false)
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@map("customer_contacts")
-}
-
-// ============================================
-// 产品管理
-// ============================================
-
-model Product {
-  id              String    @id @default(cuid())
-  sku             String    @unique
-  name            String
-  nameEn          String?   // 英文名称
-  category        String?
-  specification   String?   // 规格
-  unit            String    @default("PCS")
-  costPrice       Decimal   @db.Decimal(10, 2)
-  salePrice       Decimal   @db.Decimal(10, 2)
-  currency        String    @default("USD")
-  images          String[]  // 图片 URL 数组
-  description     String?
-  descriptionEn   String?
-  weight          Decimal?  @db.Decimal(10, 2)  // 重量
-  volume          Decimal?  @db.Decimal(10, 2)  // 体积
-  moq             Int?      // 最小起订量
-  leadTime        Int?      // 交货期（天）
-  status          ProductStatus @default(ACTIVE)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  orderItems      OrderItem[]
-  quotationItems  QuotationItem[]
-  purchaseOrderItems PurchaseOrderItem[]
-  inventoryItems  InventoryItem[]
-  
-  @@map("products")
-}
-
-enum ProductStatus {
-  ACTIVE
-  DISCONTINUED
-  DEVELOPING
-}
-
-// ============================================
-// 询盘管理
-// ============================================
-
-model Inquiry {
-  id              String    @id @default(cuid())
-  inquiryNo       String    @unique  // 询盘编号
-  customerId      String
-  customer        Customer  @relation(fields: [customerId], references: [id])
-  source          String?   // 来源：阿里/官网/邮件等
-  status          InquiryStatus @default(NEW)
-  priority        Priority  @default(MEDIUM)
-  products        String?   // 询盘产品
-  quantity        Int?
-  targetPrice     Decimal?  @db.Decimal(10, 2)
-  currency        String    @default("USD")
-  requirements    String?   // 详细要求
-  deadline        DateTime?
-  assignedTo      String?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  followUps       FollowUp[]
-  
-  @@map("inquiries")
-}
-
-enum InquiryStatus {
-  NEW
-  CONTACTED
-  QUOTED
-  NEGOTIATING
-  WON
-  LOST
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-// ============================================
-// 跟进记录
-// ============================================
-
-model FollowUp {
-  id          String   @id @default(cuid())
-  inquiryId   String
-  inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
-  type        FollowUpType @default(CALL)
-  content     String
-  nextFollowUp DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@map("follow_ups")
-}
-
-enum FollowUpType {
-  CALL
-  EMAIL
-  MEETING
-  MESSAGE
-  OTHER
-}
-
-// ============================================
-// 报价管理
-// ============================================
-
-model Quotation {
-  id              String    @id @default(cuid())
-  quotationNo     String    @unique  // 报价单号
-  customerId      String
-  customer        Customer  @relation(fields: [customerId], references: [id])
-  inquiryId       String?
-  status          QuotationStatus @default(DRAFT)
-  currency        String    @default("USD")
-  paymentTerms    String?   // 付款条件
-  deliveryTerms   String?   // 交货条款
-  validityDays    Int?      // 有效期（天）
-  notes           String?
-  totalAmount     Decimal   @db.Decimal(12, 2)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  items           QuotationItem[]
-  
-  @@map("quotations")
-}
-
-enum QuotationStatus {
-  DRAFT
-  SENT
-  VIEWED
-  ACCEPTED
-  REJECTED
-  EXPIRED
-}
-
-model QuotationItem {
-  id              String    @id @default(cuid())
-  quotationId     String
-  quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  productId       String?
-  product         Product?  @relation(fields: [productId], references: [id])
-  productName     String    // 产品名称（快照）
-  specification   String?
-  quantity        Int
-  unitPrice       Decimal   @db.Decimal(10, 2)
-  amount          Decimal   @db.Decimal(12, 2)
-  notes           String?
-  
-  @@map("quotation_items")
-}
-
-// ============================================
-// 订单管理（增强版）
-// ============================================
-
+```prisma
 model Order {
   id                  String    @id @default(cuid())
   orderNo             String    @unique  // 订单号：SO-20260306-001
@@ -270,10 +50,10 @@ model Order {
   exchangeRate        Decimal   @default(1) @db.Decimal(10, 6)  // 汇率
   totalAmount         Decimal   @db.Decimal(12, 2)  // 总金额
   paidAmount          Decimal   @db.Decimal(12, 2) @default(0)  // 已付金额
-  balanceAmount       Decimal   @db.Decimal(12, 2) @default(0)  // 余额
+  balanceAmount       Decimal   @db.Decimal(12, 2) @default(0)  // 余额（计算字段）
   
   // 交易条款
-  paymentTerms        String?   @db.Text  // 付款条件
+  paymentTerms        String?   // 付款条件：T/T 30% deposit, 70% before shipment
   paymentDeadline     DateTime? // 付款截止日期
   deliveryTerms       String?   // 交货条款：FOB/CIF/EXW
   deliveryDate        DateTime? // 交货日期
@@ -295,7 +75,7 @@ model Order {
   
   // 备注和附件
   notes               String?   @db.Text
-  internalNotes       String?   @db.Text  // 内部备注
+  internalNotes       String?   @db.Text  // 内部备注，客户不可见
   attachments         String[]  // 附件 URL 数组
   
   // 时间戳
@@ -310,9 +90,8 @@ model Order {
   items               OrderItem[]
   payments            Payment[]
   shipments           Shipment[]
-  productionRecords   ProductionRecord[]
-  qualityChecks       QualityCheck[]
-  purchaseOrders      PurchaseOrder[] @relation("SalesOrder")
+  productionRecords   ProductionRecord[]  // 生产记录
+  qualityChecks       QualityCheck[]      // 质检记录
   
   // 索引
   @@index([customerId, status])
@@ -341,7 +120,11 @@ enum ApprovalStatus {
   APPROVED       // 已批准
   REJECTED       // 已拒绝
 }
+```
 
+### 1.3 OrderItem 模型增强设计
+
+```prisma
 model OrderItem {
   id              String    @id @default(cuid())
   orderId         String
@@ -398,8 +181,11 @@ enum ProductionStatus {
   COMPLETED      // 已完成
   DELAYED        // 延期
 }
+```
 
-// 生产记录模型
+### 1.4 新增：生产记录模型
+
+```prisma
 model ProductionRecord {
   id              String    @id @default(cuid())
   orderId         String
@@ -444,8 +230,11 @@ enum ProductionRecordStatus {
   ON_HOLD        // 暂停
   CANCELLED      // 已取消
 }
+```
 
-// 质检记录模型
+### 1.5 新增：质检记录模型
+
+```prisma
 model QualityCheck {
   id              String    @id @default(cuid())
   orderId         String
@@ -511,68 +300,29 @@ model QualityCheckItem {
   
   @@map("quality_check_items")
 }
+```
 
-// ============================================
-// 收款管理
-// ============================================
+---
 
-model Payment {
-  id              String    @id @default(cuid())
-  orderId         String
-  order           Order     @relation(fields: [orderId], references: [id])
-  paymentNo       String    @unique
-  amount          Decimal   @db.Decimal(12, 2)
-  currency        String    @default("USD")
-  paymentMethod   String?   // T/T, L/C, PayPal 等
-  paymentDate     DateTime?
-  bankReference   String?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  @@map("payments")
-}
+## 2. 采购管理模块数据库设计
 
-// ============================================
-// 发货管理
-// ============================================
+### 2.1 核心实体关系图
 
-model Shipment {
-  id              String    @id @default(cuid())
-  orderId         String
-  order           Order     @relation(fields: [orderId], references: [id])
-  shipmentNo      String    @unique
-  carrier         String?   // 货代/船公司
-  trackingNo      String?
-  etd             DateTime? // 预计离港
-  eta             DateTime? // 预计到港
-  portOfLoading   String?
-  portOfDischarge String?
-  containerNo     String?
-  sealNo          String?
-  packages        Int?
-  grossWeight     Decimal?  @db.Decimal(10, 2)
-  volume          Decimal?  @db.Decimal(10, 2)
-  status          ShipmentStatus @default(PENDING)
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  @@map("shipments")
-}
+```
+┌─────────────┐       ┌──────────────────┐       ┌───────────────────┐
+│  Supplier   │ 1───∞ │  PurchaseOrder   │ 1───∞ │ PurchaseOrderItem │
+└─────────────┘       └──────────────────┘       └───────────────────┘
+                             │
+                             │ 1───∞
+                             ▼
+                      ┌──────────────────┐
+                      │  PurchaseReceipt │  采购入库单
+                      └──────────────────┘
+```
 
-enum ShipmentStatus {
-  PENDING
-  BOOKED
-  IN_TRANSIT
-  SHIPPED
-  DELIVERED
-}
+### 2.2 Supplier 模型增强设计
 
-// ============================================
-// 采购管理（增强版）
-// ============================================
-
+```prisma
 model Supplier {
   id              String    @id @default(cuid())
   supplierNo      String    @unique  // 供应商编号：SUP-20260306-001
@@ -611,7 +361,7 @@ model Supplier {
   score           Decimal?  @db.Decimal(3, 2)  // 评分 0-5
   
   // 商务条款
-  creditTerms     String?   // 账期
+  creditTerms     String?   // 账期：月结 30 天/货到付款等
   paymentMethods  String[]  // 支持的付款方式
   currency        String    @default("CNY")  // 结算币种
   minOrderAmount  Decimal?  @db.Decimal(12, 2)  // 最小订单金额
@@ -623,11 +373,11 @@ model Supplier {
   
   // 负责人
   ownerId         String?
-  owner           User?     @relation("Owner", fields: [ownerId], references: [id])
+  owner           User?     @relation("Purchaser", fields: [ownerId], references: [id])
   
   // 备注
   notes           String?   @db.Text
-  attachments     String[]  // 附件
+  attachments     String[]  // 附件（营业执照、合同等）
   
   // 时间戳
   createdAt       DateTime  @default(now())
@@ -664,8 +414,11 @@ enum SupplierLevel {
   NORMAL         // 普通供应商
   RESTRICTED     // 限制供应商
 }
+```
 
-// 供应商联系人模型
+### 2.3 新增：供应商联系人模型
+
+```prisma
 model SupplierContact {
   id          String   @id @default(cuid())
   supplierId  String
@@ -689,43 +442,11 @@ model SupplierContact {
   
   @@map("supplier_contacts")
 }
+```
 
-// 供应商评估模型
-model SupplierEvaluation {
-  id              String    @id @default(cuid())
-  supplierId      String
-  supplier        Supplier  @relation(fields: [supplierId], references: [id])
-  
-  // 评估信息
-  evaluationDate  DateTime  @default(now())
-  evaluatorId     String?
-  period          String    // 评估周期：2026-Q1
-  
-  // 评分维度 (1-5 分)
-  qualityScore    Decimal   @db.Decimal(2, 1)  // 质量
-  deliveryScore   Decimal   @db.Decimal(2, 1)  // 交期
-  priceScore      Decimal   @db.Decimal(2, 1)  // 价格
-  serviceScore    Decimal   @db.Decimal(2, 1)  // 服务
-  
-  // 综合评分
-  totalScore      Decimal   @db.Decimal(3, 2)
-  level           SupplierLevel
-  
-  // 备注
-  comments        String?   @db.Text
-  improvementPlan String?   @db.Text  // 改进计划
-  
-  // 时间戳
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // 索引
-  @@index([supplierId, period])
-  
-  @@map("supplier_evaluations")
-}
+### 2.4 PurchaseOrder 模型增强设计
 
-// 采购订单模型
+```prisma
 model PurchaseOrder {
   id              String    @id @default(cuid())
   poNo            String    @unique  // 采购单号：PO-20260306-001
@@ -736,7 +457,7 @@ model PurchaseOrder {
   
   // 关联的销售订单
   salesOrderId    String?   // 关联的销售订单
-  salesOrder      Order?    @relation("SalesOrder", fields: [salesOrderId], references: [id])
+  salesOrder      Order?    @relation(fields: [salesOrderId], references: [id])
   
   // 订单状态
   status          PurchaseOrderStatus @default(PENDING)
@@ -756,7 +477,7 @@ model PurchaseOrder {
   shippingMethod  String?   // 运输方式
   
   // 付款条款
-  paymentTerms    String?   @db.Text
+  paymentTerms    String?   // 付款条件
   paymentDeadline DateTime?
   
   // 负责人
@@ -799,8 +520,11 @@ enum PurchaseOrderStatus {
   COMPLETED      // 已完成
   CANCELLED      // 已取消
 }
+```
 
-// 采购订单项模型
+### 2.5 PurchaseOrderItem 模型增强设计
+
+```prisma
 model PurchaseOrderItem {
   id              String    @id @default(cuid())
   purchaseOrderId String
@@ -825,7 +549,7 @@ model PurchaseOrderItem {
   // 收货情况
   receivedQty     Int       @default(0)
   rejectedQty     Int       @default(0)
-  pendingQty      Int       @default(0)  // 待收数量
+  pendingQty      Int       @default(0)  // 待收数量（计算字段）
   
   // 预计和实际
   expectedDeliveryDate DateTime?
@@ -842,13 +566,13 @@ model PurchaseOrderItem {
   @@index([purchaseOrderId])
   @@index([productId])
   
-  // 关联
-  receiptItems    PurchaseReceiptItem[]
-  
   @@map("purchase_order_items")
 }
+```
 
-// 采购入库单模型
+### 2.6 新增：采购入库单模型
+
+```prisma
 model PurchaseReceipt {
   id              String    @id @default(cuid())
   receiptNo       String    @unique  // 入库单号：GRN-20260306-001
@@ -901,7 +625,7 @@ model PurchaseReceiptItem {
   
   // 关联采购单项
   purchaseOrderItemId String
-  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
   
   // 入库数量
   quantity        Int       @default(1)
@@ -922,8 +646,11 @@ model PurchaseReceiptItem {
   
   @@map("purchase_receipt_items")
 }
+```
 
-// 供应商付款模型
+### 2.7 新增：供应商付款模型
+
+```prisma
 model SupplierPayment {
   id              String    @id @default(cuid())
   paymentNo       String    @unique  // 付款单号：PAY-20260306-001
@@ -968,46 +695,187 @@ enum PaymentStatus {
   FAILED         // 失败
   CANCELLED      // 已取消
 }
+```
 
-// ============================================
-// 库存管理
-// ============================================
+### 2.8 新增：供应商评估模型
 
-model InventoryItem {
+```prisma
+model SupplierEvaluation {
   id              String    @id @default(cuid())
-  productId       String
-  product         Product   @relation(fields: [productId], references: [id])
-  warehouse       String    @default("MAIN")
-  quantity        Int       @default(0)
-  reservedQty     Int       @default(0)
-  availableQty    Int       @default(0)
-  location        String?   // 库位
-  lastCountedAt   DateTime?
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  
+  // 评估信息
+  evaluationDate  DateTime  @default(now())
+  evaluatorId     String?
+  period          String    // 评估周期：2026-Q1
+  
+  // 评分维度 (1-5 分)
+  qualityScore    Decimal   @db.Decimal(2, 1)  // 质量
+  deliveryScore   Decimal   @db.Decimal(2, 1)  // 交期
+  priceScore      Decimal   @db.Decimal(2, 1)  // 价格
+  serviceScore    Decimal   @db.Decimal(2, 1)  // 服务
+  
+  // 综合评分
+  totalScore      Decimal   @db.Decimal(3, 2)
+  level           SupplierLevel
+  
+  // 备注
+  comments        String?   @db.Text
+  improvementPlan String?   @db.Text  // 改进计划
+  
+  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  @@unique([productId, warehouse])
-  @@map("inventory_items")
-}
-
-model StockMovement {
-  id              String    @id @default(cuid())
-  productId       String
-  warehouse       String    @default("MAIN")
-  type            MovementType
-  quantity        Int       // 正数入库，负数出库
-  referenceType   String?   // 关联单据类型
-  referenceId     String?   // 关联单据 ID
-  notes           String?
-  createdAt       DateTime  @default(now())
+  // 索引
+  @@index([supplierId, period])
   
-  @@map("stock_movements")
+  @@map("supplier_evaluations")
 }
+```
 
-enum MovementType {
-  IN
-  OUT
-  ADJUSTMENT
-  TRANSFER
-  RETURN
-}
+---
+
+## 3. 数据库索引优化建议
+
+### 3.1 订单模块索引
+
+```prisma
+// 订单表
+@@index([customerId, status])
+@@index([salesRepId, createdAt])
+@@index([status, deliveryDate])
+@@index([createdAt])
+@@index([orderNo])
+@@index([sourceInquiryId])
+@@index([sourceQuotationId])
+
+// 订单项表
+@@index([orderId])
+@@index([productId])
+@@index([productionStatus])
+```
+
+### 3.2 采购模块索引
+
+```prisma
+// 供应商表
+@@index([status])
+@@index([companyName])
+@@index([ownerId])
+@@index([type, level])
+
+// 采购订单表
+@@index([supplierId, status])
+@@index([salesOrderId])
+@@index([status, deliveryDate])
+@@index([createdAt])
+@@index([poNo])
+
+// 采购入库表
+@@index([purchaseOrderId])
+@@index([warehouse])
+@@index([receiptDate])
+```
+
+---
+
+## 4. 数据完整性约束
+
+### 4.1 触发器建议
+
+```sql
+-- 自动计算订单余额
+CREATE OR REPLACE FUNCTION update_order_balance()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE orders 
+  SET balance_amount = total_amount - paid_amount
+  WHERE id = NEW.order_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 自动更新供应商统计
+CREATE OR REPLACE FUNCTION update_supplier_stats()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE suppliers 
+  SET total_orders = total_orders + 1,
+      total_amount = total_amount + NEW.total_amount,
+      last_order_date = NOW()
+  WHERE id = NEW.supplier_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 4.2 视图建议
+
+```sql
+-- 订单统计视图
+CREATE VIEW order_statistics AS
+SELECT 
+  DATE_TRUNC('month', created_at) AS month,
+  COUNT(*) AS order_count,
+  SUM(total_amount) AS total_amount,
+  SUM(paid_amount) AS paid_amount,
+  COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) AS completed_count
+FROM orders
+GROUP BY DATE_TRUNC('month', created_at);
+
+-- 供应商绩效视图
+CREATE VIEW supplier_performance AS
+SELECT 
+  s.id,
+  s.company_name,
+  COUNT(po.id) AS total_orders,
+  SUM(po.total_amount) AS total_amount,
+  AVG(CASE WHEN po.status = 'COMPLETED' 
+      THEN EXTRACT(DAY FROM (po.completed_at - po.created_at)) 
+      ELSE NULL END) AS avg_delivery_days
+FROM suppliers s
+LEFT JOIN purchase_orders po ON s.id = po.supplier_id
+WHERE s.status = 'ACTIVE'
+GROUP BY s.id, s.company_name;
+```
+
+---
+
+## 5. 数据迁移计划
+
+### 5.1 迁移步骤
+
+1. **备份现有数据**
+   ```bash
+   pg_dump -U user trade_erp > backup_20260306.sql
+   ```
+
+2. **创建新迁移**
+   ```bash
+   npx prisma migrate dev --name enhance_order_purchase_models
+   ```
+
+3. **数据填充** (如需要)
+   - 为现有订单生成生产记录
+   - 为现有供应商初始化评分
+
+4. **验证迁移**
+   ```bash
+   npx prisma db seed
+   ```
+
+### 5.2 回滚方案
+
+```bash
+# 回滚到最后一次迁移
+npx prisma migrate resolve --rolled-back
+
+# 或恢复备份
+psql -U user trade_erp < backup_20260306.sql
+```
+
+---
+
+*文档结束*

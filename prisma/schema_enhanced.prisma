@@ -1,5 +1,7 @@
-// Prisma Schema for Foreign Trade ERP
-// 外贸 ERP 数据库模型
+// Prisma Schema for Foreign Trade ERP - Enhanced Version
+// 外贸 ERP 数据库模型 - 增强版
+// 日期：2026-03-06
+// 说明：此文件包含订单管理和采购管理的增强模型
 
 generator client {
   provider = "prisma-client-js"
@@ -21,14 +23,22 @@ model User {
   passwordHash  String?
   role          Role      @default(USER)
   avatar        String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
-  orders        Order[]   @relation("SalesRep")
+  // 销售订单
+  salesOrders   Order[]   @relation("SalesRep")
+  // 负责的客户
   customers     Customer[] @relation("Owner")
+  // 采购订单
   purchaseOrders PurchaseOrder[] @relation("Purchaser")
+  // 供应商
   suppliers     Supplier[] @relation("Owner")
   
+  @@index([email])
+  @@index([role, isActive])
   @@map("users")
 }
 
@@ -46,16 +56,19 @@ enum Role {
 model Customer {
   id              String    @id @default(cuid())
   companyName     String
+  companyEn       String?   // 英文名称
   contactName     String?
   email           String?
   phone           String?
   country         String?
-  address         String?
+  address         String?   @db.Text
   website         String?
   source          String?   // 客户来源：展会/网站/推荐等
   status          CustomerStatus @default(ACTIVE)
   creditLevel     String?   // 信用评级
-  notes           String?
+  taxId           String?   // 税号
+  currency        String    @default("USD")  // 结算币种
+  notes           String?   @db.Text
   ownerId         String?
   owner           User?     @relation("Owner", fields: [ownerId], references: [id])
   createdAt       DateTime  @default(now())
@@ -66,6 +79,10 @@ model Customer {
   contacts        CustomerContact[]
   quotations      Quotation[]
   
+  @@index([email])
+  @@index([status, createdAt])
+  @@index([ownerId])
+  @@index([companyName])
   @@map("customers")
 }
 
@@ -83,11 +100,14 @@ model CustomerContact {
   position    String?
   email       String?
   phone       String?
+  mobile      String?
+  wechat      String?
   isPrimary   Boolean  @default(false)
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  @@index([customerId])
   @@map("customer_contacts")
 }
 
@@ -101,27 +121,31 @@ model Product {
   name            String
   nameEn          String?   // 英文名称
   category        String?
-  specification   String?   // 规格
+  specification   String?   @db.Text
   unit            String    @default("PCS")
   costPrice       Decimal   @db.Decimal(10, 2)
   salePrice       Decimal   @db.Decimal(10, 2)
   currency        String    @default("USD")
-  images          String[]  // 图片 URL 数组
-  description     String?
-  descriptionEn   String?
-  weight          Decimal?  @db.Decimal(10, 2)  // 重量
-  volume          Decimal?  @db.Decimal(10, 2)  // 体积
-  moq             Int?      // 最小起订量
-  leadTime        Int?      // 交货期（天）
+  images          String[]
+  description     String?   @db.Text
+  descriptionEn   String?   @db.Text
+  weight          Decimal?  @db.Decimal(10, 2)
+  volume          Decimal?  @db.Decimal(10, 2)
+  moq             Int?
+  leadTime        Int?
+  hsCode          String?   // HS 编码
+  originCountry   String?   @default("CN")
   status          ProductStatus @default(ACTIVE)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   orderItems      OrderItem[]
   quotationItems  QuotationItem[]
-  purchaseOrderItems PurchaseOrderItem[]
   inventoryItems  InventoryItem[]
+  purchaseOrderItems PurchaseOrderItem[]
   
+  @@index([sku])
+  @@index([category, status])
   @@map("products")
 }
 
@@ -137,25 +161,27 @@ enum ProductStatus {
 
 model Inquiry {
   id              String    @id @default(cuid())
-  inquiryNo       String    @unique  // 询盘编号
+  inquiryNo       String    @unique
   customerId      String
   customer        Customer  @relation(fields: [customerId], references: [id])
-  source          String?   // 来源：阿里/官网/邮件等
+  source          String?
   status          InquiryStatus @default(NEW)
   priority        Priority  @default(MEDIUM)
-  products        String?   // 询盘产品
+  products        String?   @db.Text
   quantity        Int?
   targetPrice     Decimal?  @db.Decimal(10, 2)
   currency        String    @default("USD")
-  requirements    String?   // 详细要求
+  requirements    String?   @db.Text
   deadline        DateTime?
   assignedTo      String?
-  notes           String?
+  notes           String?   @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   followUps       FollowUp[]
   
+  @@index([customerId, status])
+  @@index([status, createdAt])
   @@map("inquiries")
 }
 
@@ -175,20 +201,17 @@ enum Priority {
   URGENT
 }
 
-// ============================================
-// 跟进记录
-// ============================================
-
 model FollowUp {
   id          String   @id @default(cuid())
   inquiryId   String
   inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   type        FollowUpType @default(CALL)
-  content     String
+  content     String   @db.Text
   nextFollowUp DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  @@index([inquiryId])
   @@map("follow_ups")
 }
 
@@ -206,22 +229,24 @@ enum FollowUpType {
 
 model Quotation {
   id              String    @id @default(cuid())
-  quotationNo     String    @unique  // 报价单号
+  quotationNo     String    @unique
   customerId      String
   customer        Customer  @relation(fields: [customerId], references: [id])
   inquiryId       String?
   status          QuotationStatus @default(DRAFT)
   currency        String    @default("USD")
-  paymentTerms    String?   // 付款条件
-  deliveryTerms   String?   // 交货条款
-  validityDays    Int?      // 有效期（天）
-  notes           String?
+  paymentTerms    String?
+  deliveryTerms   String?
+  validityDays    Int?
+  notes           String?   @db.Text
   totalAmount     Decimal   @db.Decimal(12, 2)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   items           QuotationItem[]
   
+  @@index([customerId, status])
+  @@index([status, createdAt])
   @@map("quotations")
 }
 
@@ -240,68 +265,70 @@ model QuotationItem {
   quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   productId       String?
   product         Product?  @relation(fields: [productId], references: [id])
-  productName     String    // 产品名称（快照）
-  specification   String?
+  productName     String
+  specification   String?   @db.Text
   quantity        Int
   unitPrice       Decimal   @db.Decimal(10, 2)
   amount          Decimal   @db.Decimal(12, 2)
   notes           String?
   
+  @@index([quotationId])
+  @@index([productId])
   @@map("quotation_items")
 }
 
 // ============================================
-// 订单管理（增强版）
+// 订单管理 (增强版)
 // ============================================
 
 model Order {
   id                  String    @id @default(cuid())
-  orderNo             String    @unique  // 订单号：SO-20260306-001
+  orderNo             String    @unique
   customerId          String
   customer            Customer  @relation(fields: [customerId], references: [id])
   
-  // 溯源字段
-  sourceInquiryId     String?   // 来源询盘
-  sourceQuotationId   String?   // 来源报价单
+  // 溯源
+  sourceInquiryId     String?
+  sourceQuotationId   String?
   
-  // 订单基本信息
+  // 基本信息
   status              OrderStatus @default(PENDING)
   currency            String    @default("USD")
-  exchangeRate        Decimal   @default(1) @db.Decimal(10, 6)  // 汇率
-  totalAmount         Decimal   @db.Decimal(12, 2)  // 总金额
-  paidAmount          Decimal   @db.Decimal(12, 2) @default(0)  // 已付金额
-  balanceAmount       Decimal   @db.Decimal(12, 2) @default(0)  // 余额
+  exchangeRate        Decimal   @default(1) @db.Decimal(10, 6)
+  totalAmount         Decimal   @db.Decimal(12, 2)
+  paidAmount          Decimal   @db.Decimal(12, 2) @default(0)
+  balanceAmount       Decimal   @db.Decimal(12, 2) @default(0)
   
   // 交易条款
-  paymentTerms        String?   @db.Text  // 付款条件
-  paymentDeadline     DateTime? // 付款截止日期
-  deliveryTerms       String?   // 交货条款：FOB/CIF/EXW
-  deliveryDate        DateTime? // 交货日期
-  deliveryDeadline    DateTime? // 交货截止日期
+  paymentTerms        String?   @db.Text
+  paymentDeadline     DateTime?
+  deliveryTerms       String?
+  deliveryDate        DateTime?
+  deliveryDeadline    DateTime?
   
   // 收货地址
   shippingAddress     String?   @db.Text
-  shippingContact     String?   // 收货联系人
-  shippingPhone       String?   // 收货电话
+  shippingContact     String?
+  shippingPhone       String?
   
   // 业务员
   salesRepId          String?
   salesRep            User?     @relation("SalesRep", fields: [salesRepId], references: [id])
   
-  // 审批状态
+  // 审批
   approvalStatus      ApprovalStatus @default(NOT_REQUIRED)
   approvedBy          String?
   approvedAt          DateTime?
   
-  // 备注和附件
+  // 备注
   notes               String?   @db.Text
-  internalNotes       String?   @db.Text  // 内部备注
-  attachments         String[]  // 附件 URL 数组
+  internalNotes       String?   @db.Text
+  attachments         String[]
   
   // 时间戳
-  confirmedAt         DateTime? // 确认时间
-  completedAt         DateTime? // 完成时间
-  cancelledAt         DateTime? // 取消时间
+  confirmedAt         DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
   cancelReason        String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -312,34 +339,33 @@ model Order {
   shipments           Shipment[]
   productionRecords   ProductionRecord[]
   qualityChecks       QualityCheck[]
-  purchaseOrders      PurchaseOrder[] @relation("SalesOrder")
   
-  // 索引
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
   @@index([status, deliveryDate])
   @@index([createdAt])
   @@index([orderNo])
-  
+  @@index([sourceInquiryId])
+  @@index([sourceQuotationId])
   @@map("orders")
 }
 
 enum OrderStatus {
-  PENDING        // 待确认
-  CONFIRMED      // 已确认
-  IN_PRODUCTION  // 生产中
-  READY          // 待发货
-  SHIPPED        // 已发货
-  DELIVERED      // 已送达
-  COMPLETED      // 已完成
-  CANCELLED      // 已取消
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
 }
 
 enum ApprovalStatus {
-  NOT_REQUIRED   // 无需审批
-  PENDING        // 待审批
-  APPROVED       // 已批准
-  REJECTED       // 已拒绝
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model OrderItem {
@@ -347,66 +373,63 @@ model OrderItem {
   orderId         String
   order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   
-  // 产品信息
   productId       String?
   product         Product?  @relation(fields: [productId], references: [id])
-  productName     String    // 产品名称（快照）
-  productSku      String?   // 产品 SKU（快照）
-  specification   String?   @db.Text  // 规格（快照）
+  productName     String
+  productSku      String?
+  specification   String?   @db.Text
   
-  // 数量和价格
   quantity        Int       @default(1)
-  unit            String    @default("PCS")  // 单位
+  unit            String    @default("PCS")
   unitPrice       Decimal   @db.Decimal(10, 2)
-  discountRate    Decimal   @default(0) @db.Decimal(5, 2)  // 折扣率
-  amount          Decimal   @db.Decimal(12, 2)  // 小计金额
+  discountRate    Decimal   @default(0) @db.Decimal(5, 2)
+  amount          Decimal   @db.Decimal(12, 2)
   
-  // 生产信息
+  // 生产
   productionStatus ProductionStatus @default(NOT_STARTED)
   productionNote  String?   @db.Text
-  estimatedProductionDate DateTime?  // 预计生产完成日期
-  actualProductionDate    DateTime?  // 实际生产完成日期
+  estimatedProductionDate DateTime?
+  actualProductionDate    DateTime?
   
-  // 发货信息
-  shippedQty      Int       @default(0)  // 已发货数量
-  deliveredQty    Int       @default(0)  // 已送达数量
+  // 发货
+  shippedQty      Int       @default(0)
+  deliveredQty    Int       @default(0)
   
-  // 产品信息（详细快照）
-  productImage    String?   // 产品图片
-  productWeight   Decimal?  @db.Decimal(10, 2)  // 单品重量
-  productVolume   Decimal?  @db.Decimal(10, 2)  // 单品体积
-  hsCode          String?   // HS 编码
-  originCountry   String?   @default("CN")  // 原产国
+  // 产品信息快照
+  productImage    String?
+  productWeight   Decimal?  @db.Decimal(10, 2)
+  productVolume   Decimal?  @db.Decimal(10, 2)
+  hsCode          String?
+  originCountry   String?   @default("CN")
   
-  // 备注
   notes           String?   @db.Text
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 索引
   @@index([orderId])
   @@index([productId])
-  
+  @@index([productionStatus])
   @@map("order_items")
 }
 
 enum ProductionStatus {
-  NOT_STARTED    // 未开始
-  IN_PROGRESS    // 生产中
-  COMPLETED      // 已完成
-  DELAYED        // 延期
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
 }
 
-// 生产记录模型
+// ============================================
+// 生产记录 (新增)
+// ============================================
+
 model ProductionRecord {
   id              String    @id @default(cuid())
   orderId         String
   order           Order     @relation(fields: [orderId], references: [id])
   
-  // 生产信息
-  productionNo    String    @unique  // 生产单号
+  productionNo    String    @unique
   productId       String?
   quantity        Int
   plannedStartDate DateTime
@@ -414,89 +437,78 @@ model ProductionRecord {
   actualStartDate DateTime?
   actualEndDate   DateTime?
   
-  // 生产状态
   status          ProductionRecordStatus @default(PLANNED)
-  progress        Int       @default(0)  // 进度百分比 0-100
+  progress        Int       @default(0)
   
-  // 负责部门/工厂
   department      String?
   factory         String?
-  supervisor      String?   // 负责人
+  supervisor      String?
   
-  // 备注
   notes           String?   @db.Text
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 索引
   @@index([orderId])
   @@index([status])
-  
   @@map("production_records")
 }
 
 enum ProductionRecordStatus {
-  PLANNED        // 已计划
-  IN_PROGRESS    // 进行中
-  COMPLETED      // 已完成
-  ON_HOLD        // 暂停
-  CANCELLED      // 已取消
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
 }
 
-// 质检记录模型
+// ============================================
+// 质检记录 (新增)
+// ============================================
+
 model QualityCheck {
   id              String    @id @default(cuid())
   orderId         String
   order           Order     @relation(fields: [orderId], references: [id])
   
-  // 质检信息
-  qcNo            String    @unique  // 质检单号
+  qcNo            String    @unique
   type            QualityCheckType @default(FINAL)
-  inspector       String?   // 质检员
+  inspector       String?
   inspectionDate  DateTime  @default(now())
   
-  // 质检结果
   status          QualityCheckStatus @default(PENDING)
-  passRate        Decimal?  @db.Decimal(5, 2)  // 合格率
-  defectCount     Int?      @default(0)  // 不良品数量
-  defectReasons   String[]  // 不良原因列表
+  passRate        Decimal?  @db.Decimal(5, 2)
+  defectCount     Int       @default(0)
+  defectReasons   String[]
   
-  // 质检项目
   items           QualityCheckItem[]
   
-  // 附件
-  photos          String[]  // 质检照片
-  report          String?   // 质检报告
+  photos          String[]
+  report          String?
   
-  // 备注
   notes           String?   @db.Text
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 索引
   @@index([orderId])
   @@index([status])
-  
   @@map("quality_checks")
 }
 
 enum QualityCheckType {
-  RAW_MATERIAL   // 来料检验
-  IN_PROCESS     // 过程检验
-  FINAL          // 最终检验
-  PRE_SHIPMENT   // 出货前检验
+  RAW_MATERIAL
+  IN_PROCESS
+  FINAL
+  PRE_SHIPMENT
 }
 
 enum QualityCheckStatus {
-  PENDING        // 待检验
-  IN_PROGRESS    // 检验中
-  PASSED         // 合格
-  FAILED         // 不合格
-  CONDITIONAL    // 条件接收
+  PENDING
+  IN_PROGRESS
+  PASSED
+  FAILED
+  CONDITIONAL
 }
 
 model QualityCheckItem {
@@ -504,10 +516,10 @@ model QualityCheckItem {
   qualityCheckId  String
   qualityCheck    QualityCheck @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
   
-  itemName        String    // 检验项目
-  standard        String?   // 标准
-  result          String?   // 结果
-  passed          Boolean   // 是否通过
+  itemName        String
+  standard        String?
+  result          String?
+  passed          Boolean
   
   @@map("quality_check_items")
 }
@@ -523,14 +535,25 @@ model Payment {
   paymentNo       String    @unique
   amount          Decimal   @db.Decimal(12, 2)
   currency        String    @default("USD")
-  paymentMethod   String?   // T/T, L/C, PayPal 等
+  paymentMethod   String?
   paymentDate     DateTime?
   bankReference   String?
-  notes           String?
+  notes           String?   @db.Text
+  status          PaymentStatus @default(PENDING)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
+  @@index([orderId])
+  @@index([paymentDate])
   @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
 // ============================================
@@ -542,10 +565,10 @@ model Shipment {
   orderId         String
   order           Order     @relation(fields: [orderId], references: [id])
   shipmentNo      String    @unique
-  carrier         String?   // 货代/船公司
+  carrier         String?
   trackingNo      String?
-  etd             DateTime? // 预计离港
-  eta             DateTime? // 预计到港
+  etd             DateTime?
+  eta             DateTime?
   portOfLoading   String?
   portOfDischarge String?
   containerNo     String?
@@ -554,10 +577,12 @@ model Shipment {
   grossWeight     Decimal?  @db.Decimal(10, 2)
   volume          Decimal?  @db.Decimal(10, 2)
   status          ShipmentStatus @default(PENDING)
-  notes           String?
+  notes           String?   @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
+  @@index([orderId])
+  @@index([status])
   @@map("shipments")
 }
 
@@ -570,114 +595,102 @@ enum ShipmentStatus {
 }
 
 // ============================================
-// 采购管理（增强版）
+// 采购管理 (增强版)
 // ============================================
 
 model Supplier {
   id              String    @id @default(cuid())
-  supplierNo      String    @unique  // 供应商编号：SUP-20260306-001
+  supplierNo      String    @unique
   companyName     String
-  companyEn       String?   // 英文名称
+  companyEn       String?
   contactName     String?
-  contactTitle    String?   // 职位
+  contactTitle    String?
   email           String?
   phone           String?
-  mobile          String?   // 手机
+  mobile          String?
   fax             String?
   
-  // 地址信息
   address         String?   @db.Text
   city            String?
   province        String?
   country         String?   @default("CN")
   postalCode      String?
   
-  // 企业信息
   website         String?
-  taxId           String?   // 税号/统一社会信用代码
-  businessLicense String?   // 营业执照号
-  bankName        String?   // 开户行
-  bankAccount     String?   // 银行账号
-  bankCode        String?   // 银行联行号
+  taxId           String?
+  businessLicense String?
+  bankName        String?
+  bankAccount     String?
+  bankCode        String?
   
-  // 供应产品
-  products        String?   @db.Text  // 供应产品描述
-  categories      String[]  // 供应品类
+  products        String?   @db.Text
+  categories      String[]
   
-  // 状态和评级
   status          SupplierStatus @default(ACTIVE)
-  type            SupplierType @default(DOMESTIC)  // 国内/国外
-  level           SupplierLevel @default(NORMAL)    // 供应商等级
-  score           Decimal?  @db.Decimal(3, 2)  // 评分 0-5
+  type            SupplierType @default(DOMESTIC)
+  level           SupplierLevel @default(NORMAL)
+  score           Decimal?  @db.Decimal(3, 2)
   
-  // 商务条款
-  creditTerms     String?   // 账期
-  paymentMethods  String[]  // 支持的付款方式
-  currency        String    @default("CNY")  // 结算币种
-  minOrderAmount  Decimal?  @db.Decimal(12, 2)  // 最小订单金额
+  creditTerms     String?
+  paymentMethods  String[]
+  currency        String    @default("CNY")
+  minOrderAmount  Decimal?  @db.Decimal(12, 2)
   
-  // 业务统计
-  totalOrders     Int       @default(0)  // 累计订单数
-  totalAmount     Decimal   @default(0) @db.Decimal(14, 2)  // 累计采购金额
+  totalOrders     Int       @default(0)
+  totalAmount     Decimal   @default(0) @db.Decimal(14, 2)
   lastOrderDate   DateTime?
   
-  // 负责人
   ownerId         String?
-  owner           User?     @relation("Owner", fields: [ownerId], references: [id])
+  owner           User?     @relation("Purchaser", fields: [ownerId], references: [id])
   
-  // 备注
   notes           String?   @db.Text
-  attachments     String[]  // 附件
+  attachments     String[]
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 关联
   purchaseOrders  PurchaseOrder[]
   contacts        SupplierContact[]
   evaluations     SupplierEvaluation[]
   
-  // 索引
   @@index([status])
   @@index([companyName])
   @@index([ownerId])
-  
+  @@index([type, level])
   @@map("suppliers")
 }
 
 enum SupplierStatus {
-  ACTIVE         // 正常
-  INACTIVE       // 停用
-  BLACKLISTED    // 拉黑
-  PENDING        // 待审核
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+  PENDING
 }
 
 enum SupplierType {
-  DOMESTIC       // 国内供应商
-  OVERSEAS       // 海外供应商
+  DOMESTIC
+  OVERSEAS
 }
 
 enum SupplierLevel {
-  STRATEGIC      // 战略供应商
-  PREFERRED      // 优先供应商
-  NORMAL         // 普通供应商
-  RESTRICTED     // 限制供应商
+  STRATEGIC
+  PREFERRED
+  NORMAL
+  RESTRICTED
 }
 
-// 供应商联系人模型
 model SupplierContact {
   id          String   @id @default(cuid())
   supplierId  String
   supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   
   name        String
-  title       String?   // 职位
-  department  String?   // 部门
+  title       String?
+  department  String?
   email       String?
   phone       String?
   mobile      String?
-  wechat      String?   // 微信
+  wechat      String?
   qq          String?
   isPrimary   Boolean  @default(false)
   notes       String?
@@ -686,89 +699,43 @@ model SupplierContact {
   updatedAt   DateTime @updatedAt
   
   @@index([supplierId])
-  
   @@map("supplier_contacts")
 }
 
-// 供应商评估模型
-model SupplierEvaluation {
-  id              String    @id @default(cuid())
-  supplierId      String
-  supplier        Supplier  @relation(fields: [supplierId], references: [id])
-  
-  // 评估信息
-  evaluationDate  DateTime  @default(now())
-  evaluatorId     String?
-  period          String    // 评估周期：2026-Q1
-  
-  // 评分维度 (1-5 分)
-  qualityScore    Decimal   @db.Decimal(2, 1)  // 质量
-  deliveryScore   Decimal   @db.Decimal(2, 1)  // 交期
-  priceScore      Decimal   @db.Decimal(2, 1)  // 价格
-  serviceScore    Decimal   @db.Decimal(2, 1)  // 服务
-  
-  // 综合评分
-  totalScore      Decimal   @db.Decimal(3, 2)
-  level           SupplierLevel
-  
-  // 备注
-  comments        String?   @db.Text
-  improvementPlan String?   @db.Text  // 改进计划
-  
-  // 时间戳
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // 索引
-  @@index([supplierId, period])
-  
-  @@map("supplier_evaluations")
-}
-
-// 采购订单模型
 model PurchaseOrder {
   id              String    @id @default(cuid())
-  poNo            String    @unique  // 采购单号：PO-20260306-001
+  poNo            String    @unique
   
-  // 供应商
   supplierId      String
   supplier        Supplier  @relation(fields: [supplierId], references: [id])
   
-  // 关联的销售订单
-  salesOrderId    String?   // 关联的销售订单
-  salesOrder      Order?    @relation("SalesOrder", fields: [salesOrderId], references: [id])
+  salesOrderId    String?
+  salesOrder      Order?    @relation(fields: [salesOrderId], references: [id])
   
-  // 订单状态
   status          PurchaseOrderStatus @default(PENDING)
   approvalStatus  ApprovalStatus @default(NOT_REQUIRED)
   
-  // 金额信息
   currency        String    @default("CNY")
   exchangeRate    Decimal   @default(1) @db.Decimal(10, 6)
   totalAmount     Decimal   @db.Decimal(12, 2)
   paidAmount      Decimal   @db.Decimal(12, 2) @default(0)
   balanceAmount   Decimal   @db.Decimal(12, 2) @default(0)
   
-  // 交货条款
   deliveryDate    DateTime?
   deliveryDeadline DateTime?
   deliveryAddress String?   @db.Text
-  shippingMethod  String?   // 运输方式
+  shippingMethod  String?
   
-  // 付款条款
-  paymentTerms    String?   @db.Text
+  paymentTerms    String?
   paymentDeadline DateTime?
   
-  // 负责人
   purchaserId     String?
   purchaser       User?     @relation("Purchaser", fields: [purchaserId], references: [id])
   
-  // 备注
   notes           String?   @db.Text
   internalNotes   String?   @db.Text
   attachments     String[]
   
-  // 时间戳
   confirmedAt     DateTime?
   completedAt     DateTime?
   cancelledAt     DateTime?
@@ -776,37 +743,33 @@ model PurchaseOrder {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 关联
   items           PurchaseOrderItem[]
   receipts        PurchaseReceipt[]
   payments        SupplierPayment[]
   
-  // 索引
   @@index([supplierId, status])
   @@index([salesOrderId])
   @@index([status, deliveryDate])
   @@index([createdAt])
-  
+  @@index([poNo])
   @@map("purchase_orders")
 }
 
 enum PurchaseOrderStatus {
-  PENDING        // 待确认
-  CONFIRMED      // 已确认
-  IN_PRODUCTION  // 生产中
-  READY          // 待收货
-  RECEIVED       // 已收货
-  COMPLETED      // 已完成
-  CANCELLED      // 已取消
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  RECEIVED
+  COMPLETED
+  CANCELLED
 }
 
-// 采购订单项模型
 model PurchaseOrderItem {
   id              String    @id @default(cuid())
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   
-  // 产品信息
   productId       String?
   product         Product?  @relation(fields: [productId], references: [id])
   productName     String
@@ -814,84 +777,67 @@ model PurchaseOrderItem {
   specification   String?   @db.Text
   unit            String    @default("PCS")
   
-  // 数量和价格
   quantity        Int       @default(1)
   unitPrice       Decimal   @db.Decimal(10, 2)
   discountRate    Decimal   @default(0) @db.Decimal(5, 2)
   amount          Decimal   @db.Decimal(12, 2)
-  taxRate         Decimal   @default(0) @db.Decimal(5, 2)  // 税率
-  taxAmount       Decimal   @db.Decimal(12, 2) @default(0)  // 税额
+  taxRate         Decimal   @default(0) @db.Decimal(5, 2)
+  taxAmount       Decimal   @db.Decimal(12, 2) @default(0)
   
-  // 收货情况
   receivedQty     Int       @default(0)
   rejectedQty     Int       @default(0)
-  pendingQty      Int       @default(0)  // 待收数量
   
-  // 预计和实际
   expectedDeliveryDate DateTime?
   actualDeliveryDate   DateTime?
   
-  // 备注
   notes           String?   @db.Text
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 索引
   @@index([purchaseOrderId])
   @@index([productId])
-  
-  // 关联
-  receiptItems    PurchaseReceiptItem[]
-  
   @@map("purchase_order_items")
 }
 
-// 采购入库单模型
+// ============================================
+// 采购入库 (新增)
+// ============================================
+
 model PurchaseReceipt {
   id              String    @id @default(cuid())
-  receiptNo       String    @unique  // 入库单号：GRN-20260306-001
+  receiptNo       String    @unique
   
-  // 关联采购单
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
   
-  // 入库信息
   warehouse       String    @default("MAIN")
   receiptDate     DateTime  @default(now())
-  receiptBy       String?   // 入库人
+  receiptBy       String?
   
-  // 状态
   status          ReceiptStatus @default(PENDING)
   
-  // 质检
   qualityCheckId  String?
   qualityStatus   QualityCheckStatus @default(PENDING)
   
-  // 备注
   notes           String?   @db.Text
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 关联
   items           PurchaseReceiptItem[]
   
-  // 索引
   @@index([purchaseOrderId])
   @@index([warehouse])
   @@index([receiptDate])
-  
   @@map("purchase_receipts")
 }
 
 enum ReceiptStatus {
-  PENDING        // 待入库
-  PARTIAL        // 部分入库
-  COMPLETED      // 已完成
-  CANCELLED      // 已取消
+  PENDING
+  PARTIAL
+  COMPLETED
+  CANCELLED
 }
 
 model PurchaseReceiptItem {
@@ -899,74 +845,86 @@ model PurchaseReceiptItem {
   receiptId       String
   receipt         PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   
-  // 关联采购单项
   purchaseOrderItemId String
-  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
   
-  // 入库数量
   quantity        Int       @default(1)
-  acceptedQty     Int       @default(0)  // 合格数量
-  rejectedQty     Int       @default(0)  // 不合格数量
+  acceptedQty     Int       @default(0)
+  rejectedQty     Int       @default(0)
   
-  // 库位
   warehouse       String    @default("MAIN")
-  location        String?   // 库位
+  location        String?
   
-  // 备注
   notes           String?
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   
   @@index([receiptId])
-  
   @@map("purchase_receipt_items")
 }
 
-// 供应商付款模型
+// ============================================
+// 供应商付款 (新增)
+// ============================================
+
 model SupplierPayment {
   id              String    @id @default(cuid())
-  paymentNo       String    @unique  // 付款单号：PAY-20260306-001
+  paymentNo       String    @unique
   
-  // 关联采购单
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
   
-  // 付款信息
   amount          Decimal   @db.Decimal(12, 2)
   currency        String    @default("CNY")
-  paymentMethod   String?   // 付款方式
+  paymentMethod   String?
   paymentDate     DateTime?
   
-  // 银行信息
   bankName        String?
   bankAccount     String?
-  bankReference   String?   // 银行参考号
+  bankReference   String?
   
-  // 状态
   status          PaymentStatus @default(PENDING)
   
-  // 备注
   notes           String?   @db.Text
-  attachments     String[]  // 付款凭证
+  attachments     String[]
   
-  // 时间戳
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  // 索引
   @@index([purchaseOrderId])
   @@index([paymentDate])
-  
   @@map("supplier_payments")
 }
 
-enum PaymentStatus {
-  PENDING        // 待付款
-  PROCESSING     // 处理中
-  COMPLETED      // 已完成
-  FAILED         // 失败
-  CANCELLED      // 已取消
+// ============================================
+// 供应商评估 (新增)
+// ============================================
+
+model SupplierEvaluation {
+  id              String    @id @default(cuid())
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  
+  evaluationDate  DateTime  @default(now())
+  evaluatorId     String?
+  period          String
+  
+  qualityScore    Decimal   @db.Decimal(2, 1)
+  deliveryScore   Decimal   @db.Decimal(2, 1)
+  priceScore      Decimal   @db.Decimal(2, 1)
+  serviceScore    Decimal   @db.Decimal(2, 1)
+  
+  totalScore      Decimal   @db.Decimal(3, 2)
+  level           SupplierLevel
+  
+  comments        String?   @db.Text
+  improvementPlan String?   @db.Text
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([supplierId, period])
+  @@map("supplier_evaluations")
 }
 
 // ============================================
@@ -981,12 +939,15 @@ model InventoryItem {
   quantity        Int       @default(0)
   reservedQty     Int       @default(0)
   availableQty    Int       @default(0)
-  location        String?   // 库位
+  location        String?
   lastCountedAt   DateTime?
+  version         Int       @default(0)  // 乐观锁
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   @@unique([productId, warehouse])
+  @@index([productId])
+  @@index([warehouse])
   @@map("inventory_items")
 }
 
@@ -995,12 +956,16 @@ model StockMovement {
   productId       String
   warehouse       String    @default("MAIN")
   type            MovementType
-  quantity        Int       // 正数入库，负数出库
-  referenceType   String?   // 关联单据类型
-  referenceId     String?   // 关联单据 ID
+  quantity        Int
+  referenceType   String?
+  referenceId     String?
   notes           String?
   createdAt       DateTime  @default(now())
   
+  @@index([productId])
+  @@index([warehouse])
+  @@index([type])
+  @@index([createdAt])
   @@map("stock_movements")
 }
 
@@ -1010,4 +975,26 @@ enum MovementType {
   ADJUSTMENT
   TRANSFER
   RETURN
+}
+
+// ============================================
+// 审计日志 (新增)
+// ============================================
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  action          String
+  entityType      String
+  entityId        String
+  userId          String?
+  details         Json?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
