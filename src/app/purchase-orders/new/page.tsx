@@ -31,8 +31,8 @@ import { ArrowLeft, Plus, Trash2, Calculator } from 'lucide-react';
 
 const formSchema = z.object({
   supplierId: z.string().min(1, '请选择供应商'),
-  currency: z.string().default('CNY'),
-  exchangeRate: z.number().positive().default(1),
+  currency: z.string().optional(),
+  exchangeRate: z.number().positive().optional(),
   deliveryDate: z.string().optional(),
   deliveryDeadline: z.string().optional(),
   deliveryAddress: z.string().optional(),
@@ -48,11 +48,11 @@ const formSchema = z.object({
       productName: z.string().min(1, '请输入产品名称'),
       productSku: z.string().optional(),
       specification: z.string().optional(),
-      unit: z.string().default('PCS'),
+      unit: z.string().optional(),
       quantity: z.number().int().positive('数量必须为正整数'),
       unitPrice: z.number().nonnegative('单价不能为负数'),
-      discountRate: z.number().min(0).max(100).default(0),
-      taxRate: z.number().min(0).max(100).default(0),
+      discountRate: z.number().min(0).max(100).optional(),
+      taxRate: z.number().min(0).max(100).optional(),
       expectedDeliveryDate: z.string().optional(),
       notes: z.string().optional(),
     })
@@ -163,8 +163,8 @@ export default function CreatePurchaseOrderPage() {
     let tax = 0;
 
     items.forEach((item) => {
-      const amount = item.quantity * item.unitPrice * (1 - item.discountRate / 100);
-      const itemTax = amount * (item.taxRate / 100);
+      const amount = item.quantity * item.unitPrice * (1 - (item.discountRate || 0) / 100);
+      const itemTax = amount * ((item.taxRate || 0) / 100);
       subtotal += amount;
       tax += itemTax;
     });

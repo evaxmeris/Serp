@@ -7,17 +7,17 @@ export const orderItemFormSchema = z.object({
   productSku: z.string().optional(),
   specification: z.string().optional(),
   quantity: z.number().int().positive('数量必须为正整数'),
-  unit: z.string().default('PCS'),
+  unit: z.string().optional(),
   unitPrice: z.number().nonnegative('单价不能为负数'),
-  discountRate: z.number().min(0).max(100).default(0),
+  discountRate: z.number().min(0).max(100).optional(),
   notes: z.string().optional(),
 });
 
 // 订单表单 schema
 export const orderFormSchema = z.object({
   customerId: z.string().min(1, '客户必填'),
-  currency: z.string().default('USD'),
-  exchangeRate: z.number().positive().default(1),
+  currency: z.string().optional(),
+  exchangeRate: z.number().positive().optional(),
   paymentTerms: z.string().optional(),
   paymentDeadline: z.string().optional(),
   deliveryTerms: z.string().optional(),
