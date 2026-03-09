@@ -360,6 +360,12 @@ describe('Purchase Management API V1', () => {
         });
         const testResponse = await POST_SUPPLIER(testRequest);
         const testData = await testResponse.json();
+        
+        // ✅ 验证响应格式
+        expect(testData.success).toBe(true);
+        expect(testData.data).toBeDefined();
+        expect(testData.data.id).toBeDefined();
+        
         const testId = testData.data.id;
 
         const request = createMockRequest(`/api/v1/suppliers/${testId}`, 'DELETE');
@@ -492,6 +498,11 @@ describe('Purchase Management API V1', () => {
         const supplierRequest = createMockRequest('/api/v1/suppliers', 'POST', inactiveSupplier);
         const supplierResponse = await POST_SUPPLIER(supplierRequest);
         const supplierData = await supplierResponse.json();
+        
+        // ✅ 验证供应商创建成功
+        expect(supplierData.success).toBe(true);
+        expect(supplierData.data).toBeDefined();
+        expect(supplierData.data.id).toBeDefined();
 
         const poData = {
           ...testPurchaseOrderData,
