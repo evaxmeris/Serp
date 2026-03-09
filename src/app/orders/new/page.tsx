@@ -252,7 +252,7 @@ export default function CreateOrderPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">未指定</SelectItem>
+                            <SelectItem value="unspecified">未指定</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
