@@ -43,25 +43,36 @@
 2. Docker 服务已启动
 3. PostgreSQL 容器已运行（端口 5432）
 
-### 一键部署
+## 🚀 部署流程
+
+### 🔴 强制流程（2026-03-09 起执行）
+
+**禁止直接运行 `docker-compose up`！必须使用发布脚本。**
+
+### 方式一：发布部署（推荐）
 
 ```bash
 cd /Users/apple/clawd/trade-erp
 
-# 1. 构建 Docker 镜像
-docker-compose build
+# 执行强制检查清单 + 部署
+./scripts/release-deploy.sh v0.4.0
+```
 
-# 2. 启动服务
-docker-compose up -d
+**自动检查：**
+- ✅ Git 工作区干净
+- ✅ 在 main 分支
+- ✅ 代码已同步到远程
+- ✅ 测试通过
+- ✅ TypeScript 编译通过
+- ✅ 生产构建成功
+- ✅ Docker 已就绪
+- ✅ 数据库连接正常
 
-# 3. 查看日志
-docker-compose logs -f
+### 方式二：快速部署（仅开发）
 
-# 4. 停止服务
-docker-compose down
-
-# 5. 重启服务
-docker-compose restart
+```bash
+# 仅用于开发测试，不用于正式发布
+./deploy.sh
 ```
 
 ### 访问地址
