@@ -129,10 +129,13 @@ export default function SuppliersPage() {
       if (levelFilter !== 'all') params.append('level', levelFilter);
 
       const res = await fetch(`/api/v1/suppliers?${params}`);
-      const data = await res.json();
-      setSuppliers(data.data || []);
-      setTotalPages(data.pagination?.totalPages || 1);
-      setTotal(data.pagination?.total || 0);
+      const result: any = await res.json();
+      const suppliersData = Array.isArray(result?.data)
+        ? result?.data
+        : result?.data?.items || [];
+      setSuppliers(suppliersData);
+      setTotalPages(result.pagination?.totalPages || 1);
+      setTotal(result.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
     } finally {
@@ -438,7 +441,7 @@ export default function SuppliersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {suppliers.map((supplier) => (
+                  {Array.isArray(suppliers) && suppliers.map((supplier) => (
                     <TableRow key={supplier.id}>
                       <TableCell className="font-medium text-sm">
                         {supplier.supplierNo}

@@ -39,21 +39,21 @@ const modules = [
     description: '报价单生成、版本管理',
     href: '/quotations',
     icon: '💰',
-    status: 'dev',
+    status: 'ready',
   },
   {
     title: '订单管理',
     description: '销售订单、收款、发货',
     href: '/orders',
     icon: '📋',
-    status: 'dev',
+    status: 'ready',
   },
   {
     title: '采购管理',
     description: '供应商、采购单、入库',
     href: '/purchases',
     icon: '🏭',
-    status: 'dev',
+    status: 'ready',
   },
 ];
 
@@ -110,10 +110,10 @@ export default function Home() {
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
-              ✅ 3 个模块已就绪
+              ✅ 6 个模块已就绪
             </span>
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
-              🚧 3 个模块开发中
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+              🚀 v0.4.0 发布候选
             </span>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function Home() {
         </div>
 
         <div className="mt-12 text-center text-zinc-500 text-sm">
-          <p>Trade ERP v0.3.0 - 开发中</p>
+          <p>Trade ERP v0.4.0 - 发布候选版</p>
           <p className="mt-2">
             <a href="/test" className="hover:underline">测试页面</a>
           </p>

@@ -249,10 +249,10 @@ export default function ProductsPage() {
                     <TableCell>{product.specification || '-'}</TableCell>
                     <TableCell>{product.unit}</TableCell>
                     <TableCell>
-                      {product.currency} {product.costPrice.toFixed(2)}
+                      {product.currency} {typeof product.costPrice === 'number' ? product.costPrice.toFixed(2) : Number(product.costPrice || 0).toFixed(2)}
                     </TableCell>
                     <TableCell>
-                      {product.currency} {product.salePrice.toFixed(2)}
+                      {product.currency} {typeof product.salePrice === 'number' ? product.salePrice.toFixed(2) : Number(product.salePrice || 0).toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <span

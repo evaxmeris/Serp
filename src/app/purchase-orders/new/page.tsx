@@ -140,8 +140,11 @@ export default function CreatePurchaseOrderPage() {
   const fetchSuppliers = async () => {
     try {
       const res = await fetch('/api/v1/suppliers?limit=100&status=ACTIVE');
-      const data = await res.json();
-      setSuppliers(data.data || []);
+      const result: any = await res.json();
+      const suppliersData = Array.isArray(result?.data)
+        ? result?.data
+        : result?.data?.items || [];
+      setSuppliers(suppliersData);
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
     }
@@ -245,7 +248,7 @@ export default function CreatePurchaseOrderPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {suppliers.map((supplier) => (
+                        {Array.isArray(suppliers) && suppliers.map((supplier) => (
                           <SelectItem key={supplier.id} value={supplier.id}>
                             {supplier.companyName}
                           </SelectItem>

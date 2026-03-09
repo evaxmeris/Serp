@@ -107,8 +107,12 @@ export default function PurchaseOrdersPage() {
   const fetchSuppliers = async () => {
     try {
       const res = await fetch('/api/v1/suppliers?limit=100');
-      const data: SuppliersResponse = await res.json();
-      setSuppliers(data.data || []);
+      const result: any = await res.json();
+      // 处理两种格式：{ data: [...] } 或 { data: { items: [...] } }
+      const suppliersData = Array.isArray(result?.data)
+        ? result?.data
+        : result?.data?.items || [];
+      setSuppliers(suppliersData.map((s: any) => ({ id: s.id, companyName: s.companyName })));
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
     }
@@ -130,7 +134,8 @@ export default function PurchaseOrdersPage() {
 
       const res = await fetch(`/api/v1/purchase-orders?${params}`);
       const data = await res.json();
-      setPurchaseOrders(data.data || []);
+      const poList = Array.isArray(data?.data) ? data.data : [];
+      setPurchaseOrders(poList);
       setTotalPages(data.pagination?.totalPages || 1);
       setTotal(data.pagination?.total || 0);
     } catch (error) {
@@ -201,7 +206,7 @@ export default function PurchaseOrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部供应商</SelectItem>
-                  {suppliers.map((supplier) => (
+                  {Array.isArray(suppliers) && suppliers.map((supplier) => (
                     <SelectItem key={supplier.id} value={supplier.id}>
                       {supplier.companyName}
                     </SelectItem>

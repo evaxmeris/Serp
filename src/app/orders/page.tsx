@@ -37,7 +37,7 @@ import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight } f
 import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/types/order';
 
 const ORDER_STATUS_OPTIONS = [
-  { value: '', label: '全部状态' },
+  { value: 'ALL', label: '全部状态' },
   { value: 'PENDING', label: '待确认' },
   { value: 'CONFIRMED', label: '已确认' },
   { value: 'IN_PRODUCTION', label: '生产中' },
@@ -53,7 +53,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -61,7 +61,7 @@ export default function OrdersPage() {
   const { data, isLoading, error } = useOrders({ 
     page, 
     limit, 
-    status: (statusFilter || undefined) as OrderStatus | undefined, 
+    status: (statusFilter === 'ALL' ? undefined : statusFilter) as OrderStatus | undefined, 
     search: search || undefined 
   });
   const deleteOrder = useDeleteOrder();

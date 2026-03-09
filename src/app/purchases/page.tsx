@@ -84,7 +84,7 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
@@ -113,7 +113,7 @@ export default function PurchasesPage() {
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
-      if (statusFilter) params.set('status', statusFilter);
+      if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
       
       const res = await fetch(`/api/purchases?${params.toString()}`);
       const data = await res.json();
@@ -128,8 +128,11 @@ export default function PurchasesPage() {
   const fetchSuppliers = async () => {
     try {
       const res = await fetch('/api/suppliers');
-      const data = await res.json();
-      setSuppliers(data.data || []);
+      const result: any = await res.json();
+      const suppliersData = Array.isArray(result?.data)
+        ? result?.data
+        : result?.data?.items || [];
+      setSuppliers(suppliersData);
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
     }
@@ -227,7 +230,7 @@ export default function PurchasesPage() {
                           <SelectValue placeholder="选择供应商" />
                         </SelectTrigger>
                         <SelectContent>
-                          {suppliers.map((supplier) => (
+                          {Array.isArray(suppliers) && suppliers.map((supplier) => (
                             <SelectItem key={supplier.id} value={supplier.id}>
                               {supplier.companyName}
                             </SelectItem>
@@ -334,7 +337,7 @@ export default function PurchasesPage() {
                               </TableCell>
                               <TableCell>
                                 <span className="font-medium">
-                                  {item.amount.toFixed(2)}
+                                  {typeof item.amount === 'number' ? item.amount.toFixed(2) : Number(item.amount || 0).toFixed(2)}
                                 </span>
                               </TableCell>
                               <TableCell>
@@ -364,7 +367,7 @@ export default function PurchasesPage() {
                   <div className="flex justify-end">
                     <div className="text-right">
                       <span className="text-lg font-semibold">总计：{newPurchase.currency} </span>
-                      <span className="text-2xl font-bold">{calculateTotal().toFixed(2)}</span>
+                      <span className="text-2xl font-bold">{typeof calculateTotal() === 'number' ? calculateTotal().toFixed(2) : Number(calculateTotal() || 0).toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -399,7 +402,7 @@ export default function PurchasesPage() {
                 <SelectValue placeholder="全部状态" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部状态</SelectItem>
+                <SelectItem value="ALL">全部状态</SelectItem>
                 {Object.entries(PURCHASE_STATUS).map(([key, label]) => (
                   <SelectItem key={key} value={key}>{label}</SelectItem>
                 ))}
@@ -432,7 +435,7 @@ export default function PurchasesPage() {
                         {PURCHASE_STATUS[purchase.status] || purchase.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{purchase.currency} {purchase.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell>{purchase.currency} {typeof purchase.totalAmount === 'number' ? purchase.totalAmount.toFixed(2) : Number(purchase.totalAmount || 0).toFixed(2)}</TableCell>
                     <TableCell>
                       {purchase.deliveryDate
                         ? new Date(purchase.deliveryDate).toLocaleDateString('zh-CN')
