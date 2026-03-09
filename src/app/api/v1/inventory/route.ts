@@ -115,6 +115,21 @@ export async function POST(request: NextRequest) {
 
     // 如果库存记录不存在，创建一个新的
     if (!inventory) {
+      // 确保仓库存在
+      let warehouse = await prisma.warehouse.findUnique({
+        where: { id: data.warehouseId },
+      });
+
+      if (!warehouse) {
+        warehouse = await prisma.warehouse.create({
+          data: {
+            code: data.warehouseId,
+            name: data.warehouseId === 'default' ? '默认仓库' : data.warehouseId,
+            status: 'ACTIVE',
+          },
+        });
+      }
+
       inventory = await prisma.inventory.create({
         data: {
           productId: data.productId,
