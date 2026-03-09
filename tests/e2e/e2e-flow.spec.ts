@@ -20,28 +20,28 @@ test.describe('ERP v0.4.0 E2E 流程测试', () => {
     
     // 步骤 1: 访问询盘管理
     console.log('步骤 1: 访问询盘管理页面');
-    await page.goto('http://localhost:3001/inquiries');
+    await page.goto('http://localhost:3000/inquiries');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: /新增询盘/ })).toBeVisible();
     console.log('✓ 询盘管理页面加载成功\n');
 
     // 步骤 2: 访问报价管理
     console.log('步骤 2: 访问报价管理页面');
-    await page.goto('http://localhost:3001/quotations');
+    await page.goto('http://localhost:3000/quotations');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: /新增报价/ })).toBeVisible();
     console.log('✓ 报价管理页面加载成功\n');
 
     // 步骤 3: 访问订单管理
     console.log('步骤 3: 访问订单管理页面');
-    await page.goto('http://localhost:3001/orders');
+    await page.goto('http://localhost:3000/orders');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: /新增订单/ })).toBeVisible();
     console.log('✓ 订单管理页面加载成功\n');
 
     // 步骤 4: 验证订单新建页面无错误
     console.log('步骤 4: 验证订单新建页面');
-    await page.goto('http://localhost:3001/orders/new');
+    await page.goto('http://localhost:3000/orders/new');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(3000);
     
@@ -62,21 +62,21 @@ test.describe('ERP v0.4.0 E2E 流程测试', () => {
     
     // 步骤 1: 访问采购管理
     console.log('步骤 1: 访问采购管理页面');
-    await page.goto('http://localhost:3001/purchases');
+    await page.goto('http://localhost:3000/purchases');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: /新增采购单/ })).toBeVisible();
     console.log('✓ 采购管理页面加载成功\n');
 
     // 步骤 2: 访问采购订单
     console.log('步骤 2: 访问采购订单页面');
-    await page.goto('http://localhost:3001/purchase-orders');
+    await page.goto('http://localhost:3000/purchase-orders');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: '创建采购订单' })).toBeVisible();
     console.log('✓ 采购订单页面加载成功\n');
 
     // 步骤 3: 验证采购订单新建页面无错误
     console.log('步骤 3: 验证采购订单新建页面');
-    await page.goto('http://localhost:3001/purchase-orders/new');
+    await page.goto('http://localhost:3000/purchase-orders/new');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(3000);
     
@@ -97,7 +97,7 @@ test.describe('ERP v0.4.0 E2E 流程测试', () => {
     
     // 步骤 1: 访问供应商管理
     console.log('步骤 1: 访问供应商管理页面');
-    await page.goto('http://localhost:3001/suppliers');
+    await page.goto('http://localhost:3000/suppliers');
     await checkNoRuntimeError(page);
     await expect(page.getByRole('button', { name: /新增供应商/ })).toBeVisible();
     console.log('✓ 供应商管理页面加载成功\n');

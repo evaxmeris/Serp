@@ -49,7 +49,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 1: 客户管理 - 数据验证
   test('客户管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/customers');
+    await page.goto('http://localhost:3000/customers');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -65,7 +65,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 2: 订单管理 - 数据验证
   test('订单管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/orders');
+    await page.goto('http://localhost:3000/orders');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -81,7 +81,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 3: 产品管理 - 数据验证
   test('产品管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/products');
+    await page.goto('http://localhost:3000/products');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -97,7 +97,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 4: 采购管理 - 数据验证
   test('采购管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/purchases');
+    await page.goto('http://localhost:3000/purchases');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -113,7 +113,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 5: 询盘管理 - 数据验证
   test('询盘管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/inquiries');
+    await page.goto('http://localhost:3000/inquiries');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -129,7 +129,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 6: 报价管理 - 数据验证
   test('报价管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/quotations');
+    await page.goto('http://localhost:3000/quotations');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -145,7 +145,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 7: 供应商管理 - 数据验证
   test('供应商管理页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/suppliers');
+    await page.goto('http://localhost:3000/suppliers');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据
@@ -158,7 +158,7 @@ test.describe('ERP v0.4.0 数据完整性验证', () => {
 
   // 测试 8: 采购订单 - 数据验证
   test('采购订单页面数据应该正确显示', async ({ page }) => {
-    await page.goto('http://localhost:3001/purchase-orders');
+    await page.goto('http://localhost:3000/purchase-orders');
     await checkNoRuntimeError(page);
     
     // 验证表格有数据

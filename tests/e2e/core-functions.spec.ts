@@ -16,7 +16,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 客户管理测试 ====================
   
   test('客户管理 - 应该能打开新建客户对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/customers');
+    await page.goto('http://localhost:3000/customers');
     await checkNoRuntimeError(page);
     
     // 等待页面加载完成
@@ -35,7 +35,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 产品管理测试 ====================
   
   test('产品管理 - 应该能打开新建产品对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/products');
+    await page.goto('http://localhost:3000/products');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -50,7 +50,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 询盘管理测试 ====================
   
   test('询盘管理 - 应该能打开新建询盘对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/inquiries');
+    await page.goto('http://localhost:3000/inquiries');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -65,7 +65,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 报价管理测试 ====================
   
   test('报价管理 - 应该能打开新建报价对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/quotations');
+    await page.goto('http://localhost:3000/quotations');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -80,7 +80,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 订单管理测试 ====================
   
   test('订单管理 - 应该能打开新建订单对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/orders');
+    await page.goto('http://localhost:3000/orders');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -97,7 +97,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 采购管理测试 ====================
   
   test('采购管理 - 应该能打开新建采购单对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/purchases');
+    await page.goto('http://localhost:3000/purchases');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -112,7 +112,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 采购订单测试 ====================
   
   test('采购订单 - 应该能打开创建采购订单对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/purchase-orders');
+    await page.goto('http://localhost:3000/purchase-orders');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
@@ -127,7 +127,7 @@ test.describe('ERP v0.4.0 核心功能测试', () => {
   // ==================== 供应商管理测试 ====================
   
   test('供应商管理 - 应该能打开新建供应商对话框', async ({ page }) => {
-    await page.goto('http://localhost:3001/suppliers');
+    await page.goto('http://localhost:3000/suppliers');
     await checkNoRuntimeError(page);
     await page.waitForTimeout(2000);
     
