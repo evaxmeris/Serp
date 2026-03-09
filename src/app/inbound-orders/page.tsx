@@ -47,6 +47,7 @@ interface InboundOrder {
 }
 
 interface InboundOrdersResponse {
+  success: boolean;
   data: {
     items: InboundOrder[];
     pagination: {

@@ -47,6 +47,7 @@ interface Inventory {
 }
 
 interface InventoryResponse {
+  success: boolean;
   data: {
     items: Inventory[];
     pagination: {
