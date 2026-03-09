@@ -16,6 +16,9 @@ RUN npm ci
 # 复制源代码
 COPY . .
 
+# 生成 Prisma 客户端
+RUN npx prisma generate
+
 # 构建生产版本
 RUN npm run build
 

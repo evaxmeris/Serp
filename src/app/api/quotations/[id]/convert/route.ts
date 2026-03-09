@@ -73,7 +73,7 @@ export async function POST(
         notes: validatedData.notes,
         internalNotes: validatedData.internalNotes,
         items: {
-          create: quotation.items.map((item) => ({
+          create: quotation.items.map((item: any) => ({
             productId: item.productId,
             productName: item.productName,
             productSku: item.product?.sku || null,
