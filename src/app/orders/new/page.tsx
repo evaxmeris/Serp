@@ -101,7 +101,7 @@ export default function CreateOrderPage() {
   const onSubmit = (data: OrderFormValues) => {
     const orderData = {
       ...data,
-      items: data.items.map((item) => ({
+      items: data.items.map((item: any) => ({
         productId: item.productId,
         productName: item.productName,
         productSku: item.productSku,

@@ -100,7 +100,7 @@ export async function GET(
       shippingContact: order.shippingContact,
       shippingPhone: order.shippingPhone,
       salesRep: order.salesRep,
-      items: order.items.map((item) => ({
+      items: order.items.map((item: any) => ({
         id: item.id,
         product: item.product
           ? {
@@ -122,7 +122,7 @@ export async function GET(
         deliveredQty: item.deliveredQty,
         notes: item.notes,
       })),
-      payments: order.payments.map((payment) => ({
+      payments: order.payments.map((payment: any) => ({
         id: payment.id,
         paymentNo: payment.paymentNo,
         amount: payment.amount.toNumber(),
@@ -131,7 +131,7 @@ export async function GET(
         paymentDate: payment.paymentDate,
         status: 'COMPLETED',
       })),
-      shipments: order.shipments.map((shipment) => ({
+      shipments: order.shipments.map((shipment: any) => ({
         id: shipment.id,
         shipmentNo: shipment.shipmentNo,
         carrier: shipment.carrier,
@@ -140,7 +140,7 @@ export async function GET(
         eta: shipment.eta,
         status: shipment.status,
       })),
-      productionRecords: order.productionRecords.map((record) => ({
+      productionRecords: order.productionRecords.map((record: any) => ({
         id: record.id,
         productionNo: record.productionNo,
         status: record.status,
@@ -150,7 +150,7 @@ export async function GET(
         actualStartDate: record.actualStartDate,
         actualEndDate: record.actualEndDate,
       })),
-      qualityChecks: order.qualityChecks.map((check) => ({
+      qualityChecks: order.qualityChecks.map((check: any) => ({
         id: check.id,
         qcNo: check.qcNo,
         type: check.type,

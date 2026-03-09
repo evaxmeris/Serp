@@ -1,48 +1,30 @@
-# 多阶段构建 - 生产环境优化
-FROM node:20-alpine AS base
+# Trade ERP v0.4.0 Production Dockerfile
+FROM node:20-alpine
 
-# 依赖安装阶段
-FROM base AS deps
+# 安装必要的依赖
 RUN apk add --no-cache libc6-compat
+
+# 设置工作目录
 WORKDIR /app
 
+# 复制 package.json
 COPY package.json package-lock.json* ./
+
+# 安装依赖
 RUN npm ci
 
-# 构建阶段
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# 复制源代码
 COPY . .
 
-# 生成 Prisma 客户端
-RUN npx prisma generate
-
-# 构建 Next.js
-ENV NEXT_TELEMETRY_DISABLED=1
+# 构建生产版本
 RUN npm run build
 
-# 生产运行阶段
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# 复制构建产物
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-
-USER nextjs
-
+# 暴露端口
 EXPOSE 3000
 
+# 设置环境变量
+ENV NODE_ENV=production
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+# 启动生产服务器
+CMD ["npm", "start"]

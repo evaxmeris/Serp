@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // 格式化响应数据
-    const formattedOrders = orders.map((order) => ({
+    const formattedOrders = orders.map((order: any) => ({
       id: order.id,
       orderNo: order.orderNo,
       customer: order.customer,
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
         internalNotes,
         attachments: attachments || [],
         items: {
-          create: items.map((item) => ({
+          create: items.map((item: any) => ({
             productId: item.productId,
             productName: item.productName || '',
             productSku: item.productSku,
