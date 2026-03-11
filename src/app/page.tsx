@@ -99,7 +99,9 @@ const statusConfig = {
     color: 'bg-gray-100 text-gray-800',
     icon: Clock,
   },
-};
+} as const;
+
+type StatusKey = keyof typeof statusConfig;
 
 const quickLinks = [
   { name: '供应商', path: '/suppliers', icon: '🏢' },
@@ -207,7 +209,7 @@ export default function HomePage() {
         <CardContent>
           <div className="space-y-4">
             {sprintData.map((sprint) => {
-              const StatusIcon = statusConfig[sprint.status].icon;
+              const StatusIcon = statusConfig[sprint.status as StatusKey].icon;
               return (
                 <div key={sprint.sprint} className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -227,9 +229,9 @@ export default function HomePage() {
                           {sprint.progress}% 完成
                         </div>
                       </div>
-                      <Badge className={statusConfig[sprint.status].color}>
+                      <Badge className={statusConfig[sprint.status as StatusKey].color}>
                         <StatusIcon className="h-3 w-3 mr-1" />
-                        {statusConfig[sprint.status].label}
+                        {statusConfig[sprint.status as StatusKey].label}
                       </Badge>
                     </div>
                   </div>

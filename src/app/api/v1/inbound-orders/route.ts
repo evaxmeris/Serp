@@ -164,6 +164,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 验证所有产品是否存在
+    for (const item of data.items) {
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+
+      if (!product) {
+        return notFoundResponse(`产品 (ID: ${item.productId})`);
+      }
+    }
+
     // 生成入库单号
     const now = new Date();
     const year = now.getFullYear();

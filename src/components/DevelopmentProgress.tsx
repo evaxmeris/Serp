@@ -63,9 +63,9 @@ export function DevelopmentProgress() {
   const getStatusBadge = (status: Sprint['status']) => {
     switch (status) {
       case 'completed':
-        return <Badge variant="success">已完成</Badge>;
+        return <Badge className="bg-green-100 text-green-800">已完成</Badge>;
       case 'in-progress':
-        return <Badge variant="warning">进行中</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800">进行中</Badge>;
       case 'pending':
         return <Badge variant="secondary">待开发</Badge>;
       default:

@@ -11,6 +11,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
+  setupFiles: ['./tests/setup-env.js'],
   setupFilesAfterEnv: ['./tests/setup.js'],
   testTimeout: 30000,
   verbose: true,

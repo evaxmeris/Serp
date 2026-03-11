@@ -36,23 +36,25 @@ function createMockParams(id: string) {
   };
 }
 
-// ==================== 测试数据 ====================
+// ==================== 测试数据工厂函数 ====================
 
-const testInboundOrderData = {
-  type: 'PURCHASE_IN' as const,
-  supplierId: '',
-  warehouseId: testWarehouse.id,
-  expectedDate: new Date().toISOString(),
-  note: '测试入库单',
-  items: [
-    {
-      productId: '',
-      expectedQuantity: 100,
-      unitPrice: 10.5,
-      batchNo: 'BATCH-001',
-    },
-  ],
-};
+function createTestInboundOrderData(warehouseId: string, supplierId: string, productId: string) {
+  return {
+    type: 'PURCHASE_IN' as const,
+    supplierId: supplierId,
+    warehouseId: warehouseId,
+    expectedDate: new Date().toISOString(),
+    note: '测试入库单',
+    items: [
+      {
+        productId: productId,
+        expectedQuantity: 100,
+        unitPrice: 10.5,
+        batchNo: 'BATCH-001',
+      },
+    ],
+  };
+}
 
 // ==================== 工具函数 ====================
 
@@ -110,11 +112,15 @@ describe('Inbound Orders API', () => {
   beforeAll(async () => {
     testSupplier = await createTestSupplier();
     testProduct = await createTestProduct();
-    // 创建默认仓库
-    const warehouse = await prisma.warehouse.create({
-      data: {
+    // 创建或获取默认仓库（使用 upsert 避免重复）
+    const warehouse = await prisma.warehouse.upsert({
+      where: { code: 'default' },
+      create: {
         code: 'default',
         name: '默认仓库',
+        status: 'ACTIVE',
+      },
+      update: {
         status: 'ACTIVE',
       },
     });
@@ -139,18 +145,7 @@ describe('Inbound Orders API', () => {
 
   describe('POST /api/v1/inbound-orders', () => {
     it('应该成功创建入库单', async () => {
-      const inboundData = {
-        ...testInboundOrderData,
-        supplierId: testSupplier.id,
-        warehouseId: testWarehouse.id,
-        items: [
-          {
-            productId: testProduct.id,
-            expectedQuantity: 100,
-            unitPrice: 10.5,
-          },
-        ],
-      };
+      const inboundData = createTestInboundOrderData(testWarehouse.id, testSupplier.id, testProduct.id);
 
       const request = createMockRequest('/api/v1/inbound-orders', 'POST', inboundData);
       const response = await CREATE_INBOUND(request);
@@ -168,7 +163,7 @@ describe('Inbound Orders API', () => {
 
     it('应该验证必填字段 type', async () => {
       const invalidData = {
-        ...testInboundOrderData,
+        ...createTestInboundOrderData(testWarehouse.id, testSupplier.id, testProduct.id),
         type: undefined,
       };
 
@@ -196,7 +191,7 @@ describe('Inbound Orders API', () => {
 
     it('应该验证产品是否存在', async () => {
       const invalidData = {
-        ...testInboundOrderData,
+        ...createTestInboundOrderData(testWarehouse.id, testSupplier.id, 'invalid-id'),
         items: [
           {
             productId: 'invalid-id',
@@ -224,7 +219,7 @@ describe('Inbound Orders API', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data).toBeDefined();
-      expect(data.data.items).toBeInstanceOf(Array);
+      expect(Array.isArray(data.data.items)).toBe(true);
       expect(data.data.pagination).toBeDefined();
     });
 
@@ -314,17 +309,8 @@ describe('Inbound Orders API', () => {
   describe('POST /api/v1/inbound-orders/[id]/confirm', () => {
     it('应该确认入库单', async () => {
       // 创建一个新的入库单用于确认测试
-      const newInboundData = {
-        ...testInboundOrderData,
-        supplierId: testSupplier.id,
-        items: [
-          {
-            productId: testProduct.id,
-            expectedQuantity: 50,
-            unitPrice: 10.5,
-          },
-        ],
-      };
+      const newInboundData = createTestInboundOrderData(testWarehouse.id, testSupplier.id, testProduct.id);
+      newInboundData.items[0].expectedQuantity = 50;
 
       const createRequest = createMockRequest('/api/v1/inbound-orders', 'POST', newInboundData);
       const createResponse = await CREATE_INBOUND(createRequest);
@@ -357,17 +343,8 @@ describe('Inbound Orders API', () => {
   describe('POST /api/v1/inbound-orders/[id]/cancel', () => {
     it('应该取消入库单', async () => {
       // 创建一个新的入库单用于取消测试
-      const newInboundData = {
-        ...testInboundOrderData,
-        supplierId: testSupplier.id,
-        items: [
-          {
-            productId: testProduct.id,
-            expectedQuantity: 30,
-            unitPrice: 10.5,
-          },
-        ],
-      };
+      const newInboundData = createTestInboundOrderData(testWarehouse.id, testSupplier.id, testProduct.id);
+      newInboundData.items[0].expectedQuantity = 30;
 
       const createRequest = createMockRequest('/api/v1/inbound-orders', 'POST', newInboundData);
       const createResponse = await CREATE_INBOUND(createRequest);
