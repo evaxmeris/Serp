@@ -17,6 +17,10 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  UserCog,
+  LogIn,
+  UserPlus,
+  Key,
 } from 'lucide-react';
 
 // 模块开发进度数据
@@ -115,6 +119,12 @@ const quickLinks = [
   { name: '库存', path: '/inventory', icon: '📊' },
 ];
 
+const authLinks = [
+  { name: '登录', path: '/login', icon: '🔑', description: '访问系统' },
+  { name: '注册', path: '/register', icon: '✍️', description: '创建账号' },
+  { name: '用户管理', path: '/users', icon: '👤', description: '管理用户' },
+];
+
 export default function HomePage() {
   return (
     <div className="container mx-auto py-8 px-4">
@@ -191,6 +201,30 @@ export default function HomePage() {
                   <div className="text-sm font-medium">{item.name}</div>
                 </Link>
               </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 认证与用户管理 */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>🔐 认证与用户管理</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {authLinks.map((item) => (
+              <Card key={item.path} className="border-2 hover:border-primary transition-colors cursor-pointer">
+                <CardContent className="p-6">
+                  <Link href={item.path} className="flex items-center gap-4">
+                    <div className="text-4xl">{item.icon}</div>
+                    <div>
+                      <div className="font-semibold text-lg">{item.name}</div>
+                      <div className="text-sm text-muted-foreground">{item.description}</div>
+                    </div>
+                  </Link>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </CardContent>
