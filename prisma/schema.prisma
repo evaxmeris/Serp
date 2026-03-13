@@ -901,3 +901,452 @@ enum InventoryLogType {
   TRANSFER
   RETURN
 }
+
+// ============================================
+// 产品调研模块 Schema - Product Research Module
+// ============================================
+// 功能：动态属性系统、产品对比功能
+// 创建时间：2026-03-13
+// 作者：Trade ERP 开发团队
+// ============================================
+
+// ============================================
+// 1. 品类表 - Product Category
+// 用于管理产品的分类层级结构
+// ============================================
+model ProductCategory {
+  id          String   @id @default(cuid())
+  name        String // 品类名称（中文）
+  nameEn      String? // 品类名称（英文）
+  code        String   @unique // 品类编码
+  parentId    String? // 父品类 ID（支持多级分类）
+  level       Int      @default(1) // 分类层级
+  path        String? // 分类路径（如：1/2/5）
+  description String? // 品类描述
+  icon        String? // 品类图标
+  sortOrder   Int      @default(0) // 排序顺序
+  isActive    Boolean  @default(true) // 是否启用
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联关系
+  parent             ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children           ProductCategory[]   @relation("CategoryHierarchy")
+  templates          AttributeTemplate[]
+  products           ProductResearch[]
+  productComparisons ProductComparison[]
+  researchTasks      ResearchTask[]
+  marketResearches   MarketResearch[]
+
+  @@index([parentId])
+  @@index([code])
+  @@index([isActive])
+  @@map("product_categories")
+}
+
+// ============================================
+// 2. 属性模板表 - Attribute Template
+// 定义每个品类需要采集的属性字段
+// ============================================
+model AttributeTemplate {
+  id             String        @id @default(cuid())
+  name           String // 属性名称（如：颜色、尺寸、材质）
+  nameEn         String? // 属性名称（英文）
+  code           String        @unique // 属性编码
+  categoryId     String // 所属品类 ID
+  type           AttributeType @default(TEXT) // 属性类型
+  unit           String? // 单位（如：cm, kg, USD）
+  options        String[] // 可选项（用于 SELECT/MULTI_SELECT 类型）
+  isRequired     Boolean       @default(false) // 是否必填
+  isComparable   Boolean       @default(true) // 是否用于产品对比
+  sortOrder      Int           @default(0) // 排序顺序
+  description    String? // 属性描述/说明
+  validationRule String? // 验证规则（正则表达式）
+  defaultValue   String? // 默认值
+  placeholder    String? // 输入提示
+  isActive       Boolean       @default(true) // 是否启用
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // 关联关系
+  category ProductCategory         @relation(fields: [categoryId], references: [id])
+  values   ProductAttributeValue[]
+
+  @@index([categoryId])
+  @@index([code])
+  @@index([type])
+  @@index([isActive])
+  @@map("attribute_templates")
+}
+
+// ============================================
+// 3. 产品调研表 - Product Research
+// 核心表：存储产品调研的基本信息
+// ============================================
+model ProductResearch {
+  id             String         @id @default(cuid())
+  name           String // 产品名称
+  nameEn         String? // 产品名称（英文）
+  categoryId     String // 所属品类 ID
+  brand          String? // 品牌
+  brandEn        String? // 品牌（英文）
+  model          String? // 型号
+  manufacturer   String? // 生产厂家
+  manufacturerEn String? // 生产厂家（英文）
+  originCountry  String?        @default("CN") // 原产国
+  sourceUrl      String? // 来源链接（如：1688、淘宝）
+  sourcePlatform String? // 来源平台（如：1688、淘宝、拼多多）
+  mainImage      String? // 主图 URL
+  images         String[] // 图片 URLs
+  status         ResearchStatus @default(DRAFT) // 调研状态
+  priority       Priority       @default(MEDIUM) // 优先级
+  assignedTo     String? // 负责人
+  tags           String[] // 标签
+  notes          String? // 备注
+  conclusion     String? // 调研结论
+  rating         Decimal?       @db.Decimal(2, 1) // 评分（1-5 分）
+
+  // 价格信息
+  costPrice Decimal? @db.Decimal(10, 2) // 成本价
+  salePrice Decimal? @db.Decimal(10, 2) // 销售价
+  currency  String   @default("CNY") // 币种
+  moq       Int? // 最小起订量
+  leadTime  Int? // 交货期（天）
+
+  // 规格信息
+  specification String? // 规格描述
+  weight        Decimal? @db.Decimal(10, 2) // 重量（kg）
+  volume        Decimal? @db.Decimal(10, 2) // 体积（m³）
+  dimensions    String? // 尺寸（长 x 宽 x 高）
+
+  // 时间信息
+  researchedAt DateTime? // 调研时间
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // 关联关系
+  category               ProductCategory         @relation(fields: [categoryId], references: [id])
+  attributes             ProductAttributeValue[]
+  comparisons            ProductComparison[]
+  productComparisonItems ProductComparisonItem[]
+  researchTask           ResearchTask?           @relation(fields: [researchTaskId], references: [id])
+  researchTaskId         String?
+  researchAttachments    ResearchAttachment[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([createdAt])
+  @@index([brand])
+  @@map("product_research")
+}
+
+// ============================================
+// 4. 产品属性值表 - Product Attribute Value
+// 存储产品的动态属性值（EAV 模式）
+// ============================================
+model ProductAttributeValue {
+  id           String    @id @default(cuid())
+  productId    String // 产品调研 ID
+  attributeId  String // 属性模板 ID
+  valueText    String? // 文本值
+  valueNumber  Decimal?  @db.Decimal(20, 4) // 数值值
+  valueBoolean Boolean? // 布尔值
+  valueDate    DateTime? // 日期值
+  valueOptions String[] // 多选值
+  unit         String? // 单位
+  notes        String? // 备注
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  product   ProductResearch   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute AttributeTemplate @relation(fields: [attributeId], references: [id])
+
+  @@unique([productId, attributeId]) // 每个产品的每个属性只能有一个值
+  @@index([productId])
+  @@index([attributeId])
+  @@map("product_attribute_values")
+}
+
+// ============================================
+// 5. 产品对比表 - Product Comparison
+// 存储产品对比的结果和配置
+// ============================================
+model ProductComparison {
+  id          String           @id @default(cuid())
+  name        String // 对比名称
+  description String? // 对比描述
+  categoryId  String? // 对比的品类（可选）
+  comparedBy  String? // 对比人
+  status      ComparisonStatus @default(DRAFT) // 对比状态
+
+  // 对比配置
+  attributes    String[] // 对比的属性 IDs
+  highlightDiff Boolean  @default(true) // 是否高亮差异
+
+  // 对比结果
+  summary        String? // 对比总结
+  recommendation String? // 推荐建议
+  rating         Decimal? @db.Decimal(2, 1) // 综合评分
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  category            ProductCategory?        @relation(fields: [categoryId], references: [id])
+  products            ProductComparisonItem[]
+  productResearch     ProductResearch?        @relation(fields: [productResearchId], references: [id])
+  productResearchId   String?
+  researchAttachments ResearchAttachment[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([comparedBy])
+  @@map("product_comparisons")
+}
+
+// ============================================
+// 6. 产品对比项表 - Product Comparison Item
+// 存储对比中的每个产品信息
+// ============================================
+model ProductComparisonItem {
+  id            String   @id @default(cuid())
+  comparisonId  String // 对比 ID
+  productId     String // 产品调研 ID
+  sortOrder     Int      @default(0) // 排序顺序
+  isRecommended Boolean  @default(false) // 是否推荐
+  score         Decimal? @db.Decimal(3, 1) // 单项评分
+  pros          String[] // 优点
+  cons          String[] // 缺点
+  notes         String? // 备注
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  comparison ProductComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  product    ProductResearch   @relation(fields: [productId], references: [id])
+
+  @@unique([comparisonId, productId]) // 同一对比中产品不重复
+  @@index([comparisonId])
+  @@index([productId])
+  @@map("product_comparison_items")
+}
+
+// ============================================
+// 7. 调研任务表 - Research Task
+// 管理产品调研的任务分配和进度
+// ============================================
+model ResearchTask {
+  id          String     @id @default(cuid())
+  title       String // 任务标题
+  description String? // 任务描述
+  categoryId  String? // 相关品类
+  assignedTo  String // 负责人
+  status      TaskStatus @default(TODO) // 任务状态
+  priority    Priority   @default(MEDIUM) // 优先级
+  dueDate     DateTime? // 截止日期
+  completedAt DateTime? // 完成时间
+
+  // 任务要求
+  targetProducts Int? // 目标产品数量
+  requirements   String? // 调研要求
+  budgetRange    String? // 预算范围
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  category            ProductCategory?     @relation(fields: [categoryId], references: [id])
+  researches          ProductResearch[] // 关联的调研产品
+  researchAttachments ResearchAttachment[]
+
+  @@index([assignedTo])
+  @@index([status])
+  @@index([dueDate])
+  @@map("research_tasks")
+}
+
+// ============================================
+// 8. 竞品分析表 - Competitor Analysis
+// 存储竞争对手的产品信息
+// ============================================
+model CompetitorAnalysis {
+  id               String         @id @default(cuid())
+  competitorName   String // 竞争对手名称
+  competitorNameEn String? // 竞争对手名称（英文）
+  website          String? // 官网
+  country          String?        @default("CN") // 国家
+  type             CompetitorType @default(DOMESTIC) // 类型
+
+  // 产品信息
+  productName    String // 产品名称
+  productModel   String? // 产品型号
+  category       String? // 产品品类
+  price          Decimal? @db.Decimal(10, 2) // 价格
+  currency       String   @default("CNY") // 币种
+  specifications Json? // 规格参数（JSON）
+  features       String[] // 产品特点
+  images         String[] // 产品图片
+
+  // 分析信息
+  strengths      String[] // 优势
+  weaknesses     String[] // 劣势
+  marketShare    String? // 市场份额
+  targetCustomer String? // 目标客户
+
+  // 对比分析
+  vsOurProduct String? // 与我方产品对比
+  suggestion   String? // 应对建议
+
+  analyzedBy String? // 分析人
+  analyzedAt DateTime? // 分析时间
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([competitorName])
+  @@index([type])
+  @@index([analyzedAt])
+  @@map("competitor_analyses")
+}
+
+// ============================================
+// 9. 市场调研表 - Market Research
+// 存储市场趋势和行业动态
+// ============================================
+model MarketResearch {
+  id         String             @id @default(cuid())
+  title      String // 调研标题
+  categoryId String? // 相关品类
+  type       MarketResearchType @default(TREND) // 调研类型
+
+  // 市场数据
+  marketSize     String? // 市场规模
+  growthRate     String? // 增长率
+  trendDirection TrendDirection @default(STABLE) // 趋势方向
+
+  // 内容
+  summary     String? // 摘要
+  content     String? // 详细内容（Markdown）
+  sources     String[] // 数据来源
+  attachments String[] // 附件
+
+  // 时间信息
+  researchPeriod String? // 调研周期（如：2026 Q1）
+  publishedAt    DateTime? // 发布时间
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // 关联关系
+  category ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([type])
+  @@index([publishedAt])
+  @@map("market_researches")
+}
+
+// ============================================
+// 10. 调研附件表 - Research Attachment
+// 存储调研相关的文件和图片
+// ============================================
+model ResearchAttachment {
+  id           String   @id @default(cuid())
+  productId    String? // 关联产品调研 ID
+  taskId       String? // 关联任务 ID
+  comparisonId String? // 关联对比 ID
+  fileName     String // 文件名
+  originalName String // 原始文件名
+  fileType     String // 文件类型（image, document, etc.）
+  mimeType     String // MIME 类型
+  fileSize     Int // 文件大小（字节）
+  url          String // 文件 URL
+  thumbnailUrl String? // 缩略图 URL
+  description  String? // 文件描述
+  uploadedBy   String? // 上传人
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 关联关系
+  product    ProductResearch?   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  task       ResearchTask?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comparison ProductComparison? @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([taskId])
+  @@index([comparisonId])
+  @@index([fileType])
+  @@map("research_attachments")
+}
+
+// ============================================
+// 枚举类型定义
+// ============================================
+
+// 属性类型
+enum AttributeType {
+  TEXT // 文本
+  NUMBER // 数字
+  DECIMAL // 小数
+  BOOLEAN // 布尔
+  DATE // 日期
+  SELECT // 单选
+  MULTI_SELECT // 多选
+  LONG_TEXT // 长文本
+  URL // 链接
+  IMAGE // 图片
+  FILE // 文件
+}
+
+// 调研状态
+enum ResearchStatus {
+  DRAFT // 草稿
+  IN_PROGRESS // 进行中
+  REVIEW // 审核中
+  APPROVED // 已批准
+  REJECTED // 已拒绝
+  ARCHIVED // 已归档
+}
+
+// 对比状态
+enum ComparisonStatus {
+  DRAFT // 草稿
+  IN_PROGRESS // 进行中
+  COMPLETED // 已完成
+  ARCHIVED // 已归档
+}
+
+// 任务状态
+enum TaskStatus {
+  TODO // 待办
+  IN_PROGRESS // 进行中
+  REVIEW // 审核中
+  DONE // 已完成
+  CANCELLED // 已取消
+}
+
+// 优先级
+// 竞争对手类型
+enum CompetitorType {
+  DOMESTIC // 国内
+  OVERSEAS // 海外
+}
+
+// 市场调研类型
+enum MarketResearchType {
+  TREND // 趋势分析
+  COMPETITOR // 竞品分析
+  CUSTOMER // 客户调研
+  PRICE // 价格调研
+  TECHNOLOGY // 技术调研
+}
+
+// 趋势方向
+enum TrendDirection {
+  GROWING // 增长
+  STABLE // 稳定
+  DECLINING // 下降
+  VOLATILE // 波动
+}
