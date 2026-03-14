@@ -93,6 +93,7 @@ model Product {
   orderItems         OrderItem[]
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
+  outboundOrderItems OutboundOrderItem[]
 
   @@map("products")
 }
@@ -210,6 +211,7 @@ model Order {
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
+  outboundOrders  OutboundOrder[] @relation("SalesOrder")
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -682,25 +684,28 @@ model Inventory {
 }
 
 model InventoryLog {
-  id             String           @id @default(cuid())
-  productId      String
-  warehouseId    String
-  inboundOrderId String?
-  type           InventoryLogType @default(IN)
-  quantity       Int
-  beforeQuantity Int
-  afterQuantity  Int
-  referenceType  String?
-  referenceId    String?
-  note           String?
-  createdAt      DateTime         @default(now())
-  inventoryId    String?
-  inboundOrder   InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
-  inventory      Inventory?       @relation(fields: [inventoryId], references: [id])
-  product        Product          @relation(fields: [productId], references: [id])
+  id              String           @id @default(cuid())
+  productId       String
+  warehouseId     String
+  inboundOrderId  String?
+  outboundOrderId String?
+  type            InventoryLogType @default(IN)
+  quantity        Int
+  beforeQuantity  Int
+  afterQuantity   Int
+  referenceType   String?
+  referenceId     String?
+  note            String?
+  createdAt       DateTime         @default(now())
+  inventoryId     String?
+  inboundOrder    InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
+  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
+  inventory       Inventory?       @relation(fields: [inventoryId], references: [id])
+  product         Product          @relation(fields: [productId], references: [id])
 
   @@index([createdAt])
   @@index([inboundOrderId])
+  @@index([outboundOrderId])
   @@index([productId])
   @@index([type])
   @@index([warehouseId])
@@ -1250,4 +1255,41 @@ enum TrendDirection {
   STABLE
   DECLINING
   VOLATILE
+}
+
+
+// ==================== Sprint 5: 出库订单模型 ====================
+
+model OutboundOrder {
+  id            String            @id @default(cuid())
+  outboundNo    String            @unique @default(cuid())
+  orderId       String            // 关联销售订单
+  warehouseId   String            // 关联仓库
+  status        String            // draft/pending/confirmed/cancelled
+  totalAmount   Decimal?
+  items         OutboundOrderItem[]
+  shipment      Shipment?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String          @id @default(cuid())
+  outboundOrderId String
+  productId       String
+  quantity        Int
+  shippedQuantity Int             @default(0)
+  unitPrice       Decimal?
+  outboundOrder   OutboundOrder   @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id])
+
+  @@index([outboundOrderId])
+  @@index([productId])
+  @@map("outbound_order_items")
 }
