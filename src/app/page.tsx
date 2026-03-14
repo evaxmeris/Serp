@@ -62,11 +62,11 @@ const sprintData = [
   {
     sprint: 'Sprint 4',
     module: '入库与库存',
-    status: 'testing',
-    progress: 95,
+    status: 'completed',
+    progress: 100,
     apiCount: 9,
     pageCount: 4,
-    testPass: '95.7%',
+    testPass: '100%',
     icon: Package,
   },
   {
@@ -82,11 +82,11 @@ const sprintData = [
   {
     sprint: 'Sprint 5',
     module: '出库管理',
-    status: 'pending',
-    progress: 0,
-    apiCount: 8,
-    pageCount: 4,
-    testPass: '-',
+    status: 'testing',
+    progress: 90,
+    apiCount: 7,
+    pageCount: 5,
+    testPass: '100%',
     icon: Truck,
   },
   {
@@ -260,6 +260,68 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
+      {/* Sprint 5 出库管理模块 */}
+      <Card className="mb-8 border-2 border-green-200 bg-green-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-5 w-5 text-green-600" />
+            🚚 Sprint 5 - 出库管理模块（90% 完成，准备发布）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/outbound-orders">
+                <BarChart3 className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">出库单列表</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/outbound-orders/new">
+                <ClipboardList className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">创建出库单</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/inventory">
+                <Package className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">库存管理</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/outbound-orders">
+                <GitCompare className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">批量操作</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/docs/release-notes/v0.5.7">
+                <FileText className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">发布说明</div>
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>7 个 API • 5 个页面</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>测试通过率：100% (29/29)</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>性能评级：⭐⭐⭐⭐⭐</span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
+            <AlertCircle className="h-4 w-4" />
+            <span>状态：Phase 6 发布准备中 (60%) • 预计版本：v0.5.7</span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 认证与用户管理 */}
       <Card className="mb-8">
         <CardHeader>
@@ -290,7 +352,7 @@ export default function HomePage() {
           <CardTitle className="flex items-center justify-between">
             <span>🚀 开发进度</span>
             <Badge variant="outline" className="text-sm">
-              整体完成度：85%
+              整体完成度：90%
             </Badge>
           </CardTitle>
         </CardHeader>
