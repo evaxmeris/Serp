@@ -426,8 +426,8 @@ describe('Outbound Integration Tests', () => {
       });
 
       // 验证销售订单项的已出库数量
-      const item1 = updatedOrder!.items.find((i: any) => i.productId === testProduct1.id);
-      const item2 = updatedOrder!.items.find((i: any) => i.productId === testProduct2.id);
+      const item1 = updatedOrder!.items.find((i: any) => i.productId === testProduct1.id)!;
+      const item2 = updatedOrder!.items.find((i: any) => i.productId === testProduct2.id)!;
 
       expect(item1.shippedQty).toBe(20);
       expect(item2.shippedQty).toBe(15);

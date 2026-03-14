@@ -56,7 +56,7 @@ function createMockRequest(
  */
 function createMockParams(id: string) {
   return {
-    params: { id },
+    params: Promise.resolve({ id }),
   };
 }
 

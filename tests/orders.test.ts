@@ -74,7 +74,6 @@ describe('Orders API', () => {
         sku: `PROD_ORDER_${Date.now()}`,
         name: '测试产品',
         specification: '标准规格',
-        category: '测试类目',
         unit: 'PCS',
         costPrice: 50,
         salePrice: 100,
