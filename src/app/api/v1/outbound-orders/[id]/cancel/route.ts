@@ -1,0 +1,131 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import {
+  successResponse,
+  errorResponse,
+  notFoundResponse,
+  conflictResponse,
+  validationErrorResponse,
+  extractZodErrors,
+} from '@/lib/api-response';
+import { z } from 'zod';
+
+/**
+ * 出库单取消 API
+ * 将出库单取消，并恢复库存
+ */
+
+const CancelSchema = z.object({
+  reason: z.string().optional(), // 取消原因
+});
+
+/**
+ * POST /api/v1/outbound-orders/[id]/cancel
+ * 取消出库单
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json().catch(() => ({}));
+    const validationResult = CancelSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      return validationErrorResponse(extractZodErrors(validationResult.error));
+    }
+
+    const { reason } = validationResult.data;
+
+    // 检查出库单是否存在
+    const outboundOrder = await prisma.outboundOrder.findUnique({
+      where: { id },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        order: true,
+      },
+    });
+
+    if (!outboundOrder) {
+      return notFoundResponse('出库单');
+    }
+
+    // 只有草稿或待确认状态的出库单可以取消
+    if (!['DRAFT', 'PENDING'].includes(outboundOrder.status)) {
+      return conflictResponse(`当前状态为 ${outboundOrder.status}，无法取消`);
+    }
+
+    // 取消出库单并恢复库存
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // 更新出库单状态
+      const order = await tx.outboundOrder.update({
+        where: { id },
+        data: { 
+          status: 'CANCELLED',
+        },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+          order: true,
+        },
+      });
+
+      // 恢复库存（如果是待确认状态，说明库存已被扣减）
+      if (outboundOrder.status === 'PENDING') {
+        for (const item of outboundOrder.items) {
+          await tx.inventory.update({
+            where: {
+              productId_warehouseId: {
+                productId: item.productId,
+                warehouseId: item.warehouseId,
+              },
+            },
+            data: {
+              quantity: { increment: item.quantity },
+              availableQuantity: { increment: item.quantity },
+            },
+          });
+
+          // 创建库存日志
+          const inventory = await tx.inventory.findUnique({
+            where: {
+              productId_warehouseId: {
+                productId: item.productId,
+                warehouseId: item.warehouseId,
+              },
+            },
+          });
+
+          await tx.inventoryLog.create({
+            data: {
+              productId: item.productId,
+              warehouseId: item.warehouseId,
+              type: 'RETURN',
+              quantity: item.quantity,
+              beforeQuantity: inventory ? inventory.quantity - item.quantity : 0,
+              afterQuantity: inventory?.quantity || 0,
+              referenceType: 'OUTBOUND_ORDER',
+              referenceId: id,
+              note: `出库单取消恢复库存：${outboundOrder.outboundNo}${reason ? `，原因：${reason}` : ''}`,
+            },
+          });
+        }
+      }
+
+      return order;
+    });
+
+    return successResponse(updatedOrder, '出库单已取消');
+  } catch (error) {
+    console.error('Error cancelling outbound order:', error);
+    return errorResponse('取消出库单失败');
+  }
+}

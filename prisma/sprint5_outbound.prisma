@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Sprint 5: 出库管理模块
+// ============================================
+
+model OutboundOrder {
+  id            String              @id @default(cuid())
+  outboundNo    String              @unique
+  orderId       String              // 关联销售订单
+  status        OutboundOrderStatus @default(DRAFT)
+  items         OutboundOrderItem[]
+  shipment      ShipmentOutbound?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String    @id @default(cuid())
+  outboundOrderId String
+  productId       String
+  quantity        Int       // 出库数量
+  warehouseId     String    // 出库仓库
+  batchNo         String?   // 批次号
+  location        String?   // 库位
+  unitPrice       Decimal   @db.Decimal(10, 2) // 单价
+  amount          Decimal   @db.Decimal(12, 2) // 总金额
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([outboundOrderId])
+  @@index([productId])
+  @@map("outbound_order_items")
+}
+
+model ShipmentOutbound {
+  id               String         @id @default(cuid())
+  outboundOrderId  String         @unique
+  logisticsCompany String?        // 物流公司
+  trackingNo       String?        // 物流单号
+  shippedAt        DateTime?      // 发货时间
+  deliveryAddress  String?        // 收货地址
+  receiverName     String?        // 收货人
+  receiverPhone    String?        // 收货人电话
+  packages         Int?           // 包裹数
+  grossWeight      Decimal?       @db.Decimal(10, 2) // 毛重
+  volume           Decimal?       @db.Decimal(10, 2) // 体积
+  shippingCost     Decimal?       @db.Decimal(10, 2) // 运费
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  outboundOrder    OutboundOrder  @relation(fields: [outboundOrderId], references: [id])
+
+  @@index([outboundOrderId])
+  @@index([trackingNo])
+  @@map("shipments_outbound")
+}

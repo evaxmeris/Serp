@@ -211,7 +211,6 @@ model Order {
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
-  outboundOrders  OutboundOrder[] @relation("SalesOrder")
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -699,7 +698,7 @@ model InventoryLog {
   createdAt       DateTime         @default(now())
   inventoryId     String?
   inboundOrder    InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
-  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id], name: "OutboundOrderInventoryLogs")
+  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
   inventory       Inventory?       @relation(fields: [inventoryId], references: [id])
   product         Product          @relation(fields: [productId], references: [id])
 
@@ -1265,31 +1264,27 @@ model OutboundOrder {
   outboundNo    String            @unique @default(cuid())
   orderId       String            // 关联销售订单
   warehouseId   String            // 关联仓库
-  status        String            // DRAFT/PENDING/SHIPPED/CANCELLED
+  status        String            // draft/pending/confirmed/cancelled
   totalAmount   Decimal?
   items         OutboundOrderItem[]
-  inventoryLogs InventoryLog[] @relation(name: "OutboundOrderInventoryLogs")
+  shipment      Shipment?
+  inventoryLogs InventoryLog[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
-  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade, name: "SalesOrder")
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
   @@map("outbound_orders")
 }
-
 model OutboundOrderItem {
   id              String          @id @default(cuid())
   outboundOrderId String
   productId       String
-  warehouseId     String          // 仓库 ID
   quantity        Int
   shippedQuantity Int             @default(0)
   unitPrice       Decimal?
-  batchNo         String?         // 批次号
-  location        String?         // 库位
-  notes           String?         // 备注
   outboundOrder   OutboundOrder   @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
   product         Product         @relation(fields: [productId], references: [id])
 
