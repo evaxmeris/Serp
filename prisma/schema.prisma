@@ -70,7 +70,8 @@ model Product {
   sku                String              @unique
   name               String
   nameEn             String?
-  category           String?
+  categoryId         String?             // 关联产品品类
+  category           ProductCategory?    @relation(fields: [categoryId], references: [id], name: "FormalProductToCategory")
   specification      String?
   unit               String              @default("PCS")
   costPrice          Decimal             @db.Decimal(10, 2)
@@ -84,6 +85,7 @@ model Product {
   moq                Int?
   leadTime           Int?
   status             ProductStatus       @default(ACTIVE)
+  sourceResearchId   String?             // 来源调研产品 ID（一键转化时记录）
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   inboundOrderItems  InboundOrderItem[]
@@ -94,7 +96,10 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
   outboundOrderItems OutboundOrderItem[]
+  attributes         ProductAttributeValue[] @relation(name: "ProductAttributeValues")
 
+  @@index([categoryId])
+  @@index([sourceResearchId])
   @@map("products")
 }
 
@@ -746,7 +751,8 @@ model ProductCategory {
   parent             ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children           ProductCategory[]   @relation("CategoryHierarchy")
   productComparisons ProductComparison[]
-  products           ProductResearch[]
+  researchProducts   ProductResearch[]   @relation(name: "ProductToCategory")  // 调研产品
+  products           Product[]           @relation(name: "FormalProductToCategory")  // 正式产品
   researchTasks      ResearchTask[]
 
   @@index([parentId])
@@ -819,10 +825,10 @@ model ProductResearch {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   researchTaskId         String?
-  attributes             ProductAttributeValue[]
+  attributes             ProductAttributeValue[] @relation(name: "ProductAttributeValues")
   productComparisonItems ProductComparisonItem[]
   comparisons            ProductComparison[]
-  category               ProductCategory         @relation(fields: [categoryId], references: [id])
+  category               ProductCategory         @relation(fields: [categoryId], references: [id], name: "ProductToCategory")
   researchTask           ResearchTask?           @relation(fields: [researchTaskId], references: [id])
   researchAttachments    ResearchAttachment[]
 
@@ -836,8 +842,10 @@ model ProductResearch {
 
 model ProductAttributeValue {
   id           String            @id @default(cuid())
-  productId    String
   attributeId  String
+  // 支持两种产品来源：调研产品 或 正式产品（二选一）
+  researchProductId String?       // 调研产品 ID
+  productId    String?            // 正式产品 ID
   valueText    String?
   valueNumber  Decimal?          @db.Decimal(20, 4)
   valueBoolean Boolean?
@@ -848,9 +856,12 @@ model ProductAttributeValue {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   attribute    AttributeTemplate @relation(fields: [attributeId], references: [id])
-  product      ProductResearch   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  researchProduct ProductResearch? @relation(fields: [researchProductId], references: [id], onDelete: Cascade, name: "ProductAttributeValues")
+  product      Product?          @relation(fields: [productId], references: [id], onDelete: Cascade, name: "ProductAttributeValues")
 
+  @@unique([researchProductId, attributeId])
   @@unique([productId, attributeId])
+  @@index([researchProductId])
   @@index([productId])
   @@index([attributeId])
   @@map("product_attribute_values")

@@ -38,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Edit, Trash2, Save, X, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Save, X, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 
 // ============================================
 // 类型定义
@@ -152,6 +152,11 @@ export default function ProductDetailPage() {
 
   // 删除确认对话框
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // 转化确认对话框
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertedProductId, setConvertedProductId] = useState<string | null>(null);
 
   // 编辑表单数据
   const [formData, setFormData] = useState({
@@ -389,6 +394,37 @@ export default function ProductDetailPage() {
   };
 
   // ============================================
+  // 一键转化为正式产品
+  // ============================================
+
+  const handleConvertToProduct = async () => {
+    try {
+      setConverting(true);
+      const response = await fetch('/api/v1/products/convert-from-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ researchProductId: productId }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        setConvertedProductId(result.data.productId);
+        // 重新加载产品数据（状态会变为 ARCHIVED）
+        await loadProduct();
+        alert(`转化成功！正式产品 SKU: ${result.data.sku}`);
+      } else {
+        alert('转化失败：' + result.error);
+      }
+    } catch (error) {
+      console.error('转化失败:', error);
+      alert('转化失败，请重试');
+    } finally {
+      setConverting(false);
+      setIsConvertDialogOpen(false);
+    }
+  };
+
+  // ============================================
   // 辅助函数
   // ============================================
 
@@ -499,6 +535,17 @@ export default function ProductDetailPage() {
 
         {mode === 'view' ? (
           <div className="flex gap-2">
+            {/* 一键转化按钮 - 仅 APPROVED 状态显示 */}
+            {product.status === 'APPROVED' && (
+              <Button
+                variant="default"
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => setIsConvertDialogOpen(true)}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                转为正式产品
+              </Button>
+            )}
             <Button variant="outline" onClick={handleEdit}>
               <Edit className="w-4 h-4 mr-2" />
               编辑
@@ -920,6 +967,79 @@ export default function ProductDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 转化确认对话框 */}
+      <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>转为正式产品</DialogTitle>
+            <DialogDescription>
+              确定要将调研产品"{product.name}"转为正式产品吗？
+              <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>转化后将：</strong>
+                </p>
+                <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                  <li>• 生成正式产品 SKU</li>
+                  <li>• 复制所有属性和价格信息</li>
+                  <li>• 调研产品状态变为"已归档"</li>
+                </ul>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsConvertDialogOpen(false)}
+              disabled={converting}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleConvertToProduct}
+              disabled={converting}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {converting ? '转化中...' : '确认转化'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 转化成功提示 */}
+      {convertedProductId && (
+        <Dialog open={!!convertedProductId} onOpenChange={() => setConvertedProductId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="w-6 h-6" />
+                转化成功
+              </DialogTitle>
+              <DialogDescription>
+                调研产品已成功转为正式产品！
+                <div className="mt-4 p-3 bg-green-50 rounded-md">
+                  <p className="text-sm text-green-800">
+                    正式产品 ID: <strong>{convertedProductId}</strong>
+                  </p>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setConvertedProductId(null);
+                  router.push(`/products/${convertedProductId}`);
+                }}
+              >
+                查看正式产品
+              </Button>
+              <Button variant="outline" onClick={() => setConvertedProductId(null)}>
+                关闭
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
