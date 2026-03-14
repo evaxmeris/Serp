@@ -157,23 +157,23 @@ export const ProductResearchQuerySchema = z.object({
   /** 每页数量 */
   limit: z.coerce.number().int().positive().max(100).default(20),
   /** 搜索关键词 */
-  search: z.string().max(100, '搜索关键词不能超过 100 个字符').optional(),
+  search: z.string().max(100, '搜索关键词不能超过 100 个字符').optional().or(z.literal('')).transform(v => v || undefined),
   /** 品类 ID */
-  categoryId: z.string().cuid('品类 ID 格式不正确').optional(),
+  categoryId: z.string().cuid('品类 ID 格式不正确').optional().or(z.literal('')).transform(v => v || undefined),
   /** 状态 */
-  status: ProductResearchStatusSchema.or(z.literal('all')).optional(),
+  status: ProductResearchStatusSchema.or(z.literal('all')).optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
   /** 品牌 */
-  brand: z.string().max(100, '品牌名称不能超过 100 个字符').optional(),
+  brand: z.string().max(100, '品牌名称不能超过 100 个字符').optional().or(z.literal('')).transform(v => v || undefined),
   /** 负责人 */
-  assignedTo: z.string().max(100, '负责人名称不能超过 100 个字符').optional(),
+  assignedTo: z.string().max(100, '负责人名称不能超过 100 个字符').optional().or(z.literal('')).transform(v => v || undefined),
   /** 优先级 */
-  priority: ProductResearchPrioritySchema.optional(),
+  priority: ProductResearchPrioritySchema.optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
   /** 结论 */
-  conclusion: ProductResearchConclusionQuerySchema,
+  conclusion: ProductResearchConclusionQuerySchema.transform(v => v === '' ? undefined : v),
   /** 开始日期 */
-  dateFrom: z.string().datetime('日期格式不正确').optional(),
+  dateFrom: z.string().datetime('日期格式不正确').optional().or(z.literal('')).transform(v => v || undefined),
   /** 结束日期 */
-  dateTo: z.string().datetime('日期格式不正确').optional(),
+  dateTo: z.string().datetime('日期格式不正确').optional().or(z.literal('')).transform(v => v || undefined),
 });
 
 /**
