@@ -77,6 +77,8 @@ interface ProductResearch {
   assignedTo: string | null;
   createdAt: string;
   updatedAt: string;
+  convertedProductId?: string | null; // 已转化的正式产品 ID
+  convertedAt?: string | null; // 转化时间
 }
 
 /**
@@ -146,6 +148,9 @@ export default function ProductResearchPage() {
   // 批量操作状态
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertedCount, setConvertedCount] = useState(0);
 
   // 新建对话框状态
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -300,6 +305,64 @@ export default function ProductResearchPage() {
     setIsDeleteDialogOpen(false);
   };
 
+  // 批量转化为正式产品
+  const handleBatchConvert = async () => {
+    if (selectedIds.size === 0) {
+      alert('请选择要转化的产品');
+      return;
+    }
+
+    // 过滤出已批准且未转化的产品
+    const approvedProducts = products.filter(
+      p => selectedIds.has(p.id) && p.status === 'APPROVED' && !p.convertedProductId
+    );
+
+    if (approvedProducts.length === 0) {
+      alert('选中的产品中没有可转化的产品（需状态为"已完成"且未转化过）');
+      return;
+    }
+
+    setConverting(true);
+    setConvertedCount(0);
+
+    try {
+      const results = await Promise.all(
+        approvedProducts.map(async (product) => {
+          try {
+            const response = await fetch('/api/v1/products/convert-from-research', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ researchProductId: product.id }),
+            });
+            return await response.json();
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : '网络错误' };
+          }
+        })
+      );
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      setConvertedCount(successCount);
+      
+      let message = `转化完成！成功：${successCount}, 失败：${failCount}`;
+      if (failCount > 0) {
+        message += '\n\n失败原因可能是产品已被转化或状态不符合要求。';
+      }
+
+      alert(message);
+      setSelectedIds(new Set());
+      fetchProducts(); // 重新加载列表
+    } catch (error) {
+      console.error('批量转化失败:', error);
+      alert('批量转化失败');
+    } finally {
+      setConverting(false);
+      setIsConvertDialogOpen(false);
+    }
+  };
+
   // ============================================
   // 单个产品操作
   // ============================================
@@ -437,6 +500,14 @@ export default function ProductResearchPage() {
               {/* 批量操作按钮 */}
               {selectedIds.size > 0 && (
                 <>
+                  <Button
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={handleBatchConvert}
+                    disabled={converting}
+                  >
+                    {converting ? `转化中 (${convertedCount})` : `转为正式产品 (${selectedIds.size})`}
+                  </Button>
                   <Button
                     variant="destructive"
                     onClick={() => setIsDeleteDialogOpen(true)}
@@ -742,6 +813,7 @@ export default function ProductResearchPage() {
                       <TableHead>品类</TableHead>
                       <TableHead>状态</TableHead>
                       <TableHead>结论</TableHead>
+                      <TableHead>已转化</TableHead>
                       <TableHead>创建时间</TableHead>
                       <TableHead>操作</TableHead>
                     </TableRow>
@@ -755,6 +827,7 @@ export default function ProductResearchPage() {
                             onCheckedChange={(checked) =>
                               handleSelectOne(product.id, checked as boolean)
                             }
+                            disabled={!!product.convertedProductId}
                           />
                         </TableCell>
                         <TableCell className="font-medium">
@@ -784,6 +857,15 @@ export default function ProductResearchPage() {
                         </TableCell>
                         <TableCell>
                           {renderConclusionBadge(product.conclusion)}
+                        </TableCell>
+                        <TableCell>
+                          {product.convertedProductId ? (
+                            <Badge className="bg-green-100 text-green-800">
+                              ✅ 已转化
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
                           {new Date(product.createdAt).toLocaleDateString('zh-CN')}

@@ -268,6 +268,10 @@ export default function HomePage() {
             <CheckCircle className="h-4 w-4" />
             <span>Phase 2 已完成：6 个页面 • 13 个 API • 7,468 行代码</span>
           </div>
+          <div className="mt-2 flex items-center gap-2 text-sm text-blue-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>✨ 支持批量转化：调研产品 → 正式产品（一键生成 SKU + 复制属性）</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -280,7 +284,7 @@ export default function HomePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
               <Link href="/outbound-orders">
                 <BarChart3 className="h-8 w-8 text-green-600" />
@@ -305,12 +309,6 @@ export default function HomePage() {
                 <div className="text-sm font-medium">库存管理</div>
               </Link>
             </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
-              <Link href="/product-research/products">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-                <div className="text-sm font-medium">一键转化</div>
-              </Link>
-            </Button>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="flex items-center gap-2 text-sm text-green-700">
@@ -329,62 +327,6 @@ export default function HomePage() {
           <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
             <CheckCircle className="h-4 w-4" />
             <span>状态：✅ 已完成 | 整体进度：100% (6/6 阶段) | 2026-03-15 发布</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Phase 3 产品一键转化功能 */}
-      <Card className="mb-8 border-2 border-purple-200 bg-purple-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-purple-600" />
-            🎯 Phase 3 - 产品一键转化功能（新增）
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/product-research/products">
-                <FlaskConical className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">产品调研</div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/products">
-                <Package className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">正式产品</div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/product-research/categories">
-                <ClipboardList className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">品类管理</div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/product-research/templates">
-                <FlaskConical className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">属性模板</div>
-              </Link>
-            </Button>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            <div className="flex items-center gap-2 text-sm text-purple-700">
-              <CheckCircle className="h-4 w-4" />
-              <span>2 个 API • 1 个页面</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-purple-700">
-              <CheckCircle className="h-4 w-4" />
-              <span>SKU 自动生成</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-purple-700">
-              <CheckCircle className="h-4 w-4" />
-              <span>属性完整复制</span>
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-2 text-sm text-purple-700">
-            <CheckCircle className="h-4 w-4" />
-            <span>功能：调研产品 → 正式产品 | 状态：✅ 已完成 | 2026-03-15 上线</span>
           </div>
         </CardContent>
       </Card>

@@ -174,9 +174,25 @@ export async function GET(request: Request) {
       prisma.productResearch.count({ where }),
     ]);
 
+    // 查询每个产品是否已转化为正式产品
+    const productsWithConversion = await Promise.all(
+      products.map(async (product) => {
+        const convertedProduct = await prisma.product.findFirst({
+          where: { sourceResearchId: product.id },
+          select: { id: true, createdAt: true },
+        });
+
+        return {
+          ...product,
+          convertedProductId: convertedProduct?.id || null,
+          convertedAt: convertedProduct?.createdAt.toISOString() || null,
+        };
+      })
+    );
+
     return NextResponse.json({
       success: true,
-      data: products,
+      data: productsWithConversion,
       pagination: {
         page,
         limit,
