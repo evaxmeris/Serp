@@ -38,6 +38,17 @@ export const ProductResearchConclusionSchema = z.enum([
 ]);
 
 /**
+ * 产品调研结论（兼容前端小写）
+ */
+export const ProductResearchConclusionQuerySchema = z.union([
+  ProductResearchConclusionSchema,
+  z.literal('recommended'),
+  z.literal('alternative'),
+  z.literal('eliminated'),
+  z.literal('all'),
+]).optional();
+
+/**
  * 货币类型枚举
  */
 export const CurrencySchema = z.enum(['CNY', 'USD', 'EUR', 'GBP']);
@@ -158,7 +169,7 @@ export const ProductResearchQuerySchema = z.object({
   /** 优先级 */
   priority: ProductResearchPrioritySchema.optional(),
   /** 结论 */
-  conclusion: ProductResearchConclusionSchema.optional(),
+  conclusion: ProductResearchConclusionQuerySchema,
   /** 开始日期 */
   dateFrom: z.string().datetime('日期格式不正确').optional(),
   /** 结束日期 */
