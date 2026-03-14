@@ -175,60 +175,63 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 生成入库单号
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    
-    const count = await prisma.inboundOrder.count({
-      where: {
-        createdAt: {
-          gte: new Date(year, now.getMonth(), now.getDate()),
-        },
-      },
-    });
-    
-    const inboundNo = `IN-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
-
     // 计算总金额
     const totalAmount = data.items.reduce((sum, item) => {
       return sum + (item.expectedQuantity * item.unitPrice);
     }, 0);
 
-    // 创建入库单
-    const inboundOrder = await prisma.inboundOrder.create({
-      data: {
-        inboundNo,
-        type: data.type,
-        status: 'PENDING',
-        purchaseOrderId: data.purchaseOrderId,
-        supplierId: data.supplierId,
-        warehouseId: data.warehouseId,
-        expectedDate: data.expectedDate ? new Date(data.expectedDate) : undefined,
-        totalAmount,
-        note: data.note,
-        items: {
-          create: data.items.map(item => ({
-            productId: item.productId,
-            expectedQuantity: item.expectedQuantity,
-            actualQuantity: 0,
-            unitPrice: item.unitPrice,
-            amount: item.expectedQuantity * item.unitPrice,
-            batchNo: item.batchNo,
-            productionDate: item.productionDate ? new Date(item.productionDate) : undefined,
-            expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,
-          })),
-        },
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
+    // 修复 P0 问题 #4：使用事务保证入库单号生成的并发安全性
+    const inboundOrder = await prisma.$transaction(async (tx) => {
+      // 在事务中生成入库单号，避免并发冲突
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      
+      const count = await tx.inboundOrder.count({
+        where: {
+          createdAt: {
+            gte: new Date(year, now.getMonth(), now.getDate()),
           },
         },
-        supplier: true,
-      },
+      });
+      
+      const inboundNo = `IN-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+
+      // 创建入库单
+      return await tx.inboundOrder.create({
+        data: {
+          inboundNo,
+          type: data.type,
+          status: 'PENDING',
+          purchaseOrderId: data.purchaseOrderId,
+          supplierId: data.supplierId,
+          warehouseId: data.warehouseId,
+          expectedDate: data.expectedDate ? new Date(data.expectedDate) : undefined,
+          totalAmount,
+          note: data.note,
+          items: {
+            create: data.items.map(item => ({
+              productId: item.productId,
+              expectedQuantity: item.expectedQuantity,
+              actualQuantity: 0,
+              unitPrice: item.unitPrice,
+              amount: item.expectedQuantity * item.unitPrice,
+              batchNo: item.batchNo,
+              productionDate: item.productionDate ? new Date(item.productionDate) : undefined,
+              expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,
+            })),
+          },
+        },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+          supplier: true,
+        },
+      });
     });
 
     return successResponse(inboundOrder, '入库单创建成功', 'CREATED');

@@ -55,120 +55,130 @@ export async function POST(
 
     const data = validationResult.data;
 
-    // 更新入库单状态和实际入库日期
+    // 准备更新数据
     const updateData: any = {
       status: 'COMPLETED',
       actualDate: data.actualDate ? new Date(data.actualDate) : new Date(),
     };
 
-    // 如果有提供入库明细，更新实际入库数量
+    // 收集所有入库明细项
+    let itemsToUpdate: Array<{ itemId: string; actualQuantity: number }> = [];
+
     if (data.items && data.items.length > 0) {
+      // 如果提供了入库明细，验证并准备更新
       for (const item of data.items) {
-        await prisma.inboundOrderItem.update({
+        const orderItem = await prisma.inboundOrderItem.findUnique({
+          where: { id: item.itemId },
+        });
+        
+        if (!orderItem || orderItem.inboundOrderId !== id) {
+          return notFoundResponse('入库明细项');
+        }
+        
+        itemsToUpdate.push({
+          itemId: item.itemId,
+          actualQuantity: item.actualQuantity,
+        });
+      }
+    } else {
+      // 如果没有提供明细，默认全部入库
+      const allItems = await prisma.inboundOrderItem.findMany({
+        where: { inboundOrderId: id },
+      });
+      
+      itemsToUpdate = allItems.map(item => ({
+        itemId: item.id,
+        actualQuantity: item.expectedQuantity,
+      }));
+    }
+
+    // 使用完整事务包裹所有操作
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // 1. 更新入库明细项的实际入库数量
+      for (const item of itemsToUpdate) {
+        await tx.inboundOrderItem.update({
           where: { id: item.itemId },
           data: {
             actualQuantity: item.actualQuantity,
           },
         });
       }
-    } else {
-      // 如果没有提供明细，默认全部入库
-      await prisma.inboundOrderItem.updateMany({
-        where: { inboundOrderId: id },
-        data: {
-          actualQuantity: {
-            set: 0,
+
+      // 2. 更新入库单状态
+      const order = await tx.inboundOrder.update({
+        where: { id },
+        data: updateData,
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
       });
-      
-      // 手动设置实际入库数量为预期数量
-      const items = await prisma.inboundOrderItem.findMany({
-        where: { inboundOrderId: id },
-      });
-      
-      for (const item of items) {
-        await prisma.inboundOrderItem.update({
-          where: { id: item.id },
+
+      // 3. 更新库存（在事务中）
+      const warehouseId = order.warehouseId || 'default';
+
+      for (const item of order.items) {
+        const actualQty = item.actualQuantity || item.expectedQuantity;
+
+        // 查找或创建库存记录
+        let inventory = await tx.inventory.findUnique({
+          where: {
+            productId_warehouseId: {
+              productId: item.productId,
+              warehouseId,
+            },
+          },
+        });
+
+        if (!inventory) {
+          inventory = await tx.inventory.create({
+            data: {
+              productId: item.productId,
+              warehouseId,
+              quantity: 0,
+              availableQuantity: 0,
+              lockedQuantity: 0,
+            },
+          });
+        }
+
+        // 更新库存数量
+        const beforeQuantity = inventory.quantity;
+        const afterQuantity = beforeQuantity + actualQty;
+
+        await tx.inventory.update({
+          where: { id: inventory.id },
           data: {
-            actualQuantity: item.expectedQuantity,
+            quantity: afterQuantity,
+            availableQuantity: {
+              increment: actualQty,
+            },
+            lastInboundDate: new Date(),
+          },
+        });
+
+        // 创建库存流水
+        await tx.inventoryLog.create({
+          data: {
+            productId: item.productId,
+            warehouseId,
+            inboundOrderId: id,
+            type: 'IN',
+            quantity: actualQty,
+            beforeQuantity,
+            afterQuantity,
+            referenceType: 'INBOUND_ORDER',
+            referenceId: id,
+            note: `入库单 ${order.inboundNo} 入库`,
           },
         });
       }
-    }
 
-    // 更新入库单
-    const updatedOrder = await prisma.inboundOrder.update({
-      where: { id },
-      data: updateData,
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      return order;
     });
-
-    // 更新库存
-    const warehouseId = order.warehouseId || 'default';
-
-    for (const item of updatedOrder.items) {
-      const actualQty = item.actualQuantity || item.expectedQuantity;
-
-      // 查找或创建库存记录
-      let inventory = await prisma.inventory.findUnique({
-        where: {
-          productId_warehouseId: {
-            productId: item.productId,
-            warehouseId,
-          },
-        },
-      });
-
-      if (!inventory) {
-        inventory = await prisma.inventory.create({
-          data: {
-            productId: item.productId,
-            warehouseId,
-            quantity: 0,
-            availableQuantity: 0,
-            lockedQuantity: 0,
-          },
-        });
-      }
-
-      // 更新库存数量
-      const beforeQuantity = inventory.quantity;
-      const afterQuantity = beforeQuantity + actualQty;
-
-      await prisma.inventory.update({
-        where: { id: inventory.id },
-        data: {
-          quantity: afterQuantity,
-          availableQuantity: {
-            increment: actualQty,
-          },
-          lastInboundDate: new Date(),
-        },
-      });
-
-      // 创建库存流水
-      await prisma.inventoryLog.create({
-        data: {
-          productId: item.productId,
-          warehouseId,
-          inboundOrderId: id,
-          type: 'IN',
-          quantity: actualQty,
-          beforeQuantity,
-          afterQuantity,
-          referenceType: 'INBOUND_ORDER',
-          referenceId: id,
-          note: `入库单 ${order.inboundNo} 入库`,
-        },
-      });
-    }
 
     return successResponse(updatedOrder, '入库确认成功');
   } catch (error) {
