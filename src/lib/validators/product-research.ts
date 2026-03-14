@@ -169,7 +169,14 @@ export const ProductResearchQuerySchema = z.object({
   /** 优先级 */
   priority: ProductResearchPrioritySchema.optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
   /** 结论 */
-  conclusion: ProductResearchConclusionQuerySchema.optional().transform(v => !v ? undefined : v),
+  conclusion: z.union([
+    ProductResearchConclusionSchema,
+    z.literal('recommended'),
+    z.literal('alternative'),
+    z.literal('eliminated'),
+    z.literal('all'),
+    z.literal(''),
+  ]).transform(v => v === '' ? undefined : v).optional(),
   /** 开始日期 */
   dateFrom: z.string().datetime('日期格式不正确').optional().or(z.literal('')).transform(v => v || undefined),
   /** 结束日期 */
