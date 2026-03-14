@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search, Eye, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, XCircle, AlertCircle, Download, MoreHorizontal } from 'lucide-react';
 
 interface OutboundOrder {
   id: string;
@@ -98,6 +98,11 @@ export default function OutboundOrdersPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  
+  // 批量操作状态
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [showBatchMenu, setShowBatchMenu] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -193,16 +198,201 @@ export default function OutboundOrdersPage() {
     }
   };
 
+  // 批量操作相关函数
+  const toggleSelectAll = (currentPageOrderIds: string[]) => {
+    const allSelected = currentPageOrderIds.every(id => selectedIds.has(id));
+    const newSelected = new Set(selectedIds);
+    
+    if (allSelected) {
+      currentPageOrderIds.forEach(id => newSelected.delete(id));
+    } else {
+      currentPageOrderIds.forEach(id => newSelected.add(id));
+    }
+    
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBatchConfirm = async () => {
+    if (selectedIds.size === 0) {
+      alert('请选择要操作的出库单');
+      return;
+    }
+
+    if (!confirm(`确认要批量发货选中的 ${selectedIds.size} 个出库单吗？`)) return;
+
+    setBatchProcessing(true);
+    try {
+      const response = await fetch('/api/v1/outbound-orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          action: 'confirm',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`批量确认完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
+        if (result.data.failed.length > 0) {
+          console.error('失败的出库单:', result.data.failed);
+        }
+        setSelectedIds(new Set());
+        fetchOrders();
+      } else {
+        alert(`操作失败：${result.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to batch confirm:', error);
+      alert('操作失败，请重试');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBatchCancel = async () => {
+    if (selectedIds.size === 0) {
+      alert('请选择要操作的出库单');
+      return;
+    }
+
+    if (!confirm(`确认要批量取消选中的 ${selectedIds.size} 个出库单吗？`)) return;
+
+    setBatchProcessing(true);
+    try {
+      const response = await fetch('/api/v1/outbound-orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          action: 'cancel',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`批量取消完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
+        if (result.data.failed.length > 0) {
+          console.error('失败的出库单:', result.data.failed);
+        }
+        setSelectedIds(new Set());
+        fetchOrders();
+      } else {
+        alert(`操作失败：${result.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to batch cancel:', error);
+      alert('操作失败，请重试');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBatchExport = async () => {
+    if (selectedIds.size === 0) {
+      alert('请选择要导出的出库单');
+      return;
+    }
+
+    setBatchProcessing(true);
+    try {
+      const response = await fetch('/api/v1/outbound-orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          action: 'export',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // 下载 CSV 文件
+        const blob = new Blob([result.data.data], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `出库单导出_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        alert(`成功导出 ${result.data.count} 条记录`);
+      } else {
+        alert(`导出失败：${result.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to batch export:', error);
+      alert('导出失败，请重试');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl">出库单管理</CardTitle>
-            <Button onClick={() => router.push('/outbound-orders/new')}>
-              <Plus className="mr-2 h-4 w-4" />
-              创建出库单
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 mr-4">
+                  <span className="text-sm text-muted-foreground">
+                    已选择 {selectedIds.size} 个
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBatchConfirm}
+                    disabled={batchProcessing}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1 text-green-600" />
+                    批量确认
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBatchCancel}
+                    disabled={batchProcessing}
+                  >
+                    <XCircle className="h-4 w-4 mr-1 text-red-600" />
+                    批量取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBatchExport}
+                    disabled={batchProcessing}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    批量导出
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    取消选择
+                  </Button>
+                </div>
+              )}
+              <Button onClick={() => router.push('/outbound-orders/new')}>
+                <Plus className="mr-2 h-4 w-4" />
+                创建出库单
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -240,6 +430,14 @@ export default function OutboundOrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <input
+                      type="checkbox"
+                      checked={orders.length > 0 && orders.every(o => selectedIds.has(o.id))}
+                      onChange={() => toggleSelectAll(orders.map(o => o.id))}
+                      className="rounded border-gray-300"
+                    />
+                  </TableHead>
                   <TableHead>出库单号</TableHead>
                   <TableHead>销售订单</TableHead>
                   <TableHead>仓库</TableHead>
@@ -253,19 +451,27 @@ export default function OutboundOrdersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       加载中...
                     </TableCell>
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       暂无出库单
                     </TableCell>
                   </TableRow>
                 ) : (
                   orders.map((order) => (
-                    <TableRow key={order.id}>
+                    <TableRow key={order.id} className={selectedIds.has(order.id) ? 'bg-muted' : ''}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(order.id)}
+                          onChange={() => toggleSelect(order.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{order.outboundNo}</TableCell>
                       <TableCell>
                         {order.order?.orderNo || '-'}
