@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 // ============================================
 // GET /api/product-research/templates
@@ -21,7 +22,8 @@ export async function GET(request: Request) {
     const isActive = searchParams.get('isActive'); // 是否只获取启用的模板
     const isComparable = searchParams.get('isComparable'); // 是否只获取可对比的属性
 
-    const where: any = {};
+    // 构建查询条件（使用 Prisma 类型）
+    const where: Prisma.AttributeTemplateWhereInput = {};
 
     // 按品类过滤
     if (categoryId) {
@@ -30,7 +32,7 @@ export async function GET(request: Request) {
 
     // 按类型过滤
     if (type) {
-      where.type = type;
+      where.type = type as any;
     }
 
     // 按状态过滤

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import type { InquiryStatus, Priority } from '@prisma/client';
 
 // GET /api/inquiries - 获取询盘列表
 export async function GET(request: Request) {
@@ -10,14 +11,18 @@ export async function GET(request: Request) {
     const status = searchParams.get('status') || '';
     const priority = searchParams.get('priority') || '';
 
-    const where: any = {};
+    // 构建查询条件
+    const where: {
+      status?: InquiryStatus;
+      priority?: Priority;
+    } = {};
     
     if (status) {
-      where.status = status;
+      where.status = status as InquiryStatus;
     }
     
     if (priority) {
-      where.priority = priority;
+      where.priority = priority as Priority;
     }
 
     const [inquiries, total] = await Promise.all([
@@ -103,7 +108,7 @@ export async function POST(request: Request) {
         currency: currency || 'USD',
         requirements,
         deadline: deadline ? new Date(deadline) : null,
-        priority: priority || 'MEDIUM',
+        priority: (priority || 'MEDIUM') as Priority,
         status: 'NEW',
       },
     });

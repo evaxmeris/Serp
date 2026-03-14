@@ -8,6 +8,12 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import type { ResearchStatus, Priority } from '@prisma/client';
+import { 
+  CreateProductResearchSchema, 
+  ProductResearchQuerySchema,
+  formatValidationError 
+} from '@/lib/validators/product-research';
 
 // ============================================
 // GET /api/product-research/products
@@ -16,16 +22,67 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const search = searchParams.get('search') || '';
-    const categoryId = searchParams.get('categoryId') || '';
-    const status = searchParams.get('status') || '';
-    const brand = searchParams.get('brand') || '';
-    const assignedTo = searchParams.get('assignedTo') || '';
-    const priority = searchParams.get('priority') || '';
+    
+    // 验证查询参数
+    const queryValidation = ProductResearchQuerySchema.safeParse({
+      page: searchParams.get('page') || '1',
+      limit: searchParams.get('limit') || '20',
+      search: searchParams.get('search') || '',
+      categoryId: searchParams.get('categoryId') || '',
+      status: searchParams.get('status') || '',
+      brand: searchParams.get('brand') || '',
+      assignedTo: searchParams.get('assignedTo') || '',
+      priority: searchParams.get('priority') || '',
+      conclusion: searchParams.get('conclusion') || '',
+      dateFrom: searchParams.get('dateFrom') || undefined,
+      dateTo: searchParams.get('dateTo') || undefined,
+    });
 
-    const where: any = {};
+    if (!queryValidation.success) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: '查询参数验证失败',
+          details: formatValidationError(queryValidation.error)
+        },
+        { status: 400 }
+      );
+    }
+
+    const { 
+      page, 
+      limit, 
+      search, 
+      categoryId, 
+      status, 
+      brand, 
+      assignedTo, 
+      priority, 
+      conclusion,
+      dateFrom,
+      dateTo 
+    } = queryValidation.data;
+
+    // 构建查询条件
+    const where: {
+      OR?: Array<{
+        name?: { contains: string };
+        nameEn?: { contains: string };
+        brand?: { contains: string };
+        model?: { contains: string };
+        manufacturer?: { contains: string };
+      }>;
+      categoryId?: string;
+      status?: ResearchStatus;
+      brand?: { contains: string };
+      assignedTo?: string;
+      priority?: Priority;
+      conclusion?: string;
+      createdAt?: {
+        gte?: Date;
+        lte?: Date;
+      };
+    } = {};
 
     // 搜索条件（产品名称、品牌、型号）
     if (search) {
@@ -38,14 +95,14 @@ export async function GET(request: Request) {
       ];
     }
 
-    // 按品类过滤
-    if (categoryId) {
+    // 按品类过滤（'all' 表示不过滤）
+    if (categoryId && categoryId !== 'all') {
       where.categoryId = categoryId;
     }
 
-    // 按状态过滤
-    if (status) {
-      where.status = status;
+    // 按状态过滤（'all' 表示不过滤）
+    if (status && status !== 'all') {
+      where.status = status as ResearchStatus;
     }
 
     // 按品牌过滤
@@ -60,7 +117,26 @@ export async function GET(request: Request) {
 
     // 按优先级过滤
     if (priority) {
-      where.priority = priority;
+      where.priority = priority as Priority;
+    }
+
+    // 按结论过滤
+    if (conclusion) {
+      where.conclusion = conclusion;
+    }
+
+    // 按创建时间范围过滤
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) {
+        where.createdAt.gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        // 包含结束日期的整天
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endDate;
+      }
     }
 
     // 查询产品调研列表
@@ -128,57 +204,26 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const {
-      name,
-      nameEn,
-      categoryId,
-      brand,
-      brandEn,
-      model,
-      manufacturer,
-      manufacturerEn,
-      originCountry,
-      sourceUrl,
-      sourcePlatform,
-      mainImage,
-      images,
-      status,
-      priority,
-      assignedTo,
-      tags,
-      notes,
-      
-      // 价格信息
-      costPrice,
-      salePrice,
-      currency,
-      moq,
-      leadTime,
-      
-      // 规格信息
-      specification,
-      weight,
-      volume,
-      dimensions,
-      
-      // 属性值（动态属性）
-      attributes,
-    } = body;
 
-    // 验证必填字段
-    if (!name || !categoryId) {
+    // 验证请求体
+    const validationResult = CreateProductResearchSchema.safeParse(body);
+
+    if (!validationResult.success) {
       return NextResponse.json(
         { 
           success: false, 
-          error: '产品名称和所属品类为必填项' 
+          error: '请求数据验证失败',
+          details: formatValidationError(validationResult.error)
         },
-        { status: 400 }
+        { status: 422 }
       );
     }
 
+    const data = validationResult.data;
+
     // 验证品类是否存在
     const category = await prisma.productCategory.findUnique({
-      where: { id: categoryId },
+      where: { id: data.categoryId },
     });
 
     if (!category) {
@@ -194,39 +239,37 @@ export async function POST(request: Request) {
     // 创建产品调研（使用事务确保数据一致性）
     const product = await prisma.productResearch.create({
       data: {
-        name,
-        nameEn: nameEn || null,
-        categoryId,
-        brand: brand || null,
-        brandEn: brandEn || null,
-        model: model || null,
-        manufacturer: manufacturer || null,
-        manufacturerEn: manufacturerEn || null,
-        originCountry: originCountry || 'CN',
-        sourceUrl: sourceUrl || null,
-        sourcePlatform: sourcePlatform || null,
-        mainImage: mainImage || null,
-        images: images || [],
-        status: status || 'DRAFT',
-        priority: priority || 'MEDIUM',
-        assignedTo: assignedTo || null,
-        tags: tags || [],
-        notes: notes || null,
+        name: data.name,
+        nameEn: data.nameEn || null,
+        categoryId: data.categoryId,
+        brand: data.brand || null,
+        brandEn: data.brandEn || null,
+        model: data.model || null,
+        manufacturer: data.manufacturer || null,
+        manufacturerEn: data.manufacturerEn || null,
+        originCountry: data.originCountry || 'CN',
+        sourceUrl: data.sourceUrl || null,
+        sourcePlatform: data.sourcePlatform || null,
+        mainImage: data.mainImage || null,
+        images: data.images || [],
+        status: (data.status || 'DRAFT') as ResearchStatus,
+        priority: (data.priority || 'MEDIUM') as Priority,
+        assignedTo: data.assignedTo || null,
+        tags: data.tags || [],
+        notes: data.notes || null,
         
         // 价格信息
-        costPrice: costPrice ? parseFloat(costPrice) : null,
-        salePrice: salePrice ? parseFloat(salePrice) : null,
-        currency: currency || 'CNY',
-        moq: moq || null,
-        leadTime: leadTime || null,
+        costPrice: data.costPrice || null,
+        salePrice: data.salePrice || null,
+        currency: data.currency || 'CNY',
+        moq: data.moq || null,
+        leadTime: data.leadTime || null,
         
         // 规格信息
-        specification: specification || null,
-        weight: weight ? parseFloat(weight) : null,
-        volume: volume ? parseFloat(volume) : null,
-        dimensions: dimensions || null,
-        
-        // 属性值在创建后通过单独的 API 添加
+        specification: data.specification || null,
+        weight: data.weight || null,
+        volume: data.volume || null,
+        dimensions: data.dimensions || null,
       },
       include: {
         category: {
@@ -240,13 +283,13 @@ export async function POST(request: Request) {
     });
 
     // 如果提供了属性值，批量创建
-    if (attributes && Array.isArray(attributes) && attributes.length > 0) {
+    if (data.attributes && data.attributes.length > 0) {
       await prisma.productAttributeValue.createMany({
-        data: attributes.map((attr: any) => ({
+        data: data.attributes.map((attr) => ({
           productId: product.id,
           attributeId: attr.attributeId,
           valueText: attr.valueText || null,
-          valueNumber: attr.valueNumber ? parseFloat(attr.valueNumber) : null,
+          valueNumber: attr.valueNumber || null,
           valueBoolean: attr.valueBoolean || null,
           valueDate: attr.valueDate ? new Date(attr.valueDate) : null,
           valueOptions: attr.valueOptions || [],

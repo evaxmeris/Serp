@@ -3,6 +3,65 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ============================================
+// 类型定义
+// ============================================
+
+/** 销售核心指标 */
+interface SalesMetrics {
+  totalOrders: number;
+  totalRevenue: number;
+  avgOrderValue: number;
+  activeCustomers: number;
+  growth: number;
+}
+
+/** 客户核心指标 */
+interface CustomerMetrics {
+  totalCustomers: number;
+  newCustomers: number;
+  activeCustomers: number;
+}
+
+/** 产品核心指标 */
+interface ProductMetrics {
+  totalProducts: number;
+  activeProducts: number;
+  newProducts: number;
+}
+
+/** 转化指标 */
+interface ConversionMetrics {
+  totalInquiries: number;
+  totalQuotations: number;
+  totalOrders: number;
+  inquiryToQuotationRate: number;
+  quotationToOrderRate: number;
+}
+
+/** 预警数据 */
+interface AlertData {
+  lowStockItems: number;
+  pendingOrders: number;
+}
+
+/** 时间周期 */
+interface PeriodData {
+  days: number;
+  startDate: string;
+  endDate: string;
+}
+
+/** API 响应数据结构 */
+interface OverviewDashboardData {
+  sales: SalesMetrics;
+  customers: CustomerMetrics;
+  products: ProductMetrics;
+  conversion: ConversionMetrics;
+  alerts: AlertData;
+  period: PeriodData;
+}
+
 /**
  * 数据看板总览 API
  * GET /api/dashboard/overview
@@ -19,7 +78,12 @@ export async function GET(request: Request) {
     startDate.setDate(endDate.getDate() - days);
 
     // 销售核心指标
-    const salesMetrics = await prisma.$queryRaw<any[]>`
+    const salesMetrics = await prisma.$queryRaw<Array<{
+      totalorders: string;
+      totalrevenue: string;
+      avgordervalue: string;
+      activecustomers: string;
+    }>>`
       SELECT 
         COUNT(*) as totalOrders,
         SUM("totalAmount") as totalRevenue,
@@ -30,7 +94,11 @@ export async function GET(request: Request) {
     `;
 
     // 客户核心指标
-    const customerMetrics = await prisma.$queryRaw<any[]>`
+    const customerMetrics = await prisma.$queryRaw<Array<{
+      totalcustomers: string;
+      newcustomers: string;
+      activecustomers: string;
+    }>>`
       SELECT 
         COUNT(*) as totalCustomers,
         COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newCustomers,
@@ -39,7 +107,11 @@ export async function GET(request: Request) {
     `;
 
     // 产品核心指标
-    const productMetrics = await prisma.$queryRaw<any[]>`
+    const productMetrics = await prisma.$queryRaw<Array<{
+      totalproducts: string;
+      activeproducts: string;
+      newproducts: string;
+    }>>`
       SELECT 
         COUNT(*) as totalProducts,
         COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeProducts,
@@ -48,7 +120,11 @@ export async function GET(request: Request) {
     `;
 
     // 询盘/报价转化指标
-    const conversionMetrics = await prisma.$queryRaw<any[]>`
+    const conversionMetrics = await prisma.$queryRaw<Array<{
+      totalinquiries: string;
+      totalquotations: string;
+      totalorders: string;
+    }>>`
       SELECT 
         (SELECT COUNT(*) FROM "inquiries" WHERE "createdAt" >= ${startDate}) as totalInquiries,
         (SELECT COUNT(*) FROM "quotations" WHERE "createdAt" >= ${startDate}) as totalQuotations,
@@ -56,7 +132,9 @@ export async function GET(request: Request) {
     `;
 
     // 库存预警数量
-    const inventoryAlert = await prisma.$queryRaw<any[]>`
+    const inventoryAlert = await prisma.$queryRaw<Array<{
+      alertcount: string;
+    }>>`
       SELECT COUNT(*) as alertCount
       FROM "inventory_items" i
       JOIN "products" p ON i."productId" = p.id
@@ -64,74 +142,85 @@ export async function GET(request: Request) {
     `;
 
     // 待处理订单数量
-    const pendingOrders = await prisma.$queryRaw<any[]>`
+    const pendingOrders = await prisma.$queryRaw<Array<{
+      pendingcount: string;
+    }>>`
       SELECT COUNT(*) as pendingCount
       FROM "orders"
       WHERE status IN ('PENDING', 'CONFIRMED')
     `;
 
     // 计算转化率
-    const convData = conversionMetrics[0] as any;
-    const inquiryToQuotationRate = convData.totalinquiries > 0 
-      ? (parseFloat(convData.totalquotations) / parseFloat(convData.totalinquiries)) * 100 
+    const convData = conversionMetrics[0];
+    const totalInquiries = convData ? parseInt(convData.totalinquiries) : 0;
+    const totalQuotations = convData ? parseInt(convData.totalquotations) : 0;
+    const totalOrdersCount = convData ? parseInt(convData.totalorders) : 0;
+
+    const inquiryToQuotationRate = totalInquiries > 0 
+      ? (totalQuotations / totalInquiries) * 100 
       : 0;
-    const quotationToOrderRate = convData.totalquotations > 0 
-      ? (parseFloat(convData.totalorders) / parseFloat(convData.totalquotations)) * 100 
+    const quotationToOrderRate = totalQuotations > 0 
+      ? (totalOrdersCount / totalQuotations) * 100 
       : 0;
 
     // 计算环比增长（与上一个周期对比）
     const prevStartDate = new Date(startDate);
     prevStartDate.setDate(prevStartDate.getDate() - days);
 
-    const prevSales = await prisma.$queryRaw<any[]>`
+    const prevSales = await prisma.$queryRaw<Array<{
+      prevrevenue: string;
+    }>>`
       SELECT SUM("totalAmount") as prevRevenue
       FROM "orders"
       WHERE "createdAt" >= ${prevStartDate} AND "createdAt" < ${startDate}
     `;
 
-    const currentRevenue = parseFloat(salesMetrics[0].totalrevenue || 0);
-    const prevRevenue = parseFloat(prevSales[0].prevrevenue || 0);
+    const currentRevenue = salesMetrics[0] ? parseFloat(salesMetrics[0].totalrevenue) : 0;
+    const prevRevenue = prevSales[0] ? parseFloat(prevSales[0].prevrevenue) : 0;
     const revenueGrowth = prevRevenue > 0 
       ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 
       : 0;
 
+    // 构建响应数据
+    const responseData: OverviewDashboardData = {
+      sales: {
+        totalOrders: salesMetrics[0] ? parseInt(salesMetrics[0].totalorders) : 0,
+        totalRevenue: currentRevenue,
+        avgOrderValue: salesMetrics[0] ? parseFloat(salesMetrics[0].avgordervalue) : 0,
+        activeCustomers: salesMetrics[0] ? parseInt(salesMetrics[0].activecustomers) : 0,
+        growth: parseFloat(revenueGrowth.toFixed(2)),
+      },
+      customers: {
+        totalCustomers: customerMetrics[0] ? parseInt(customerMetrics[0].totalcustomers) : 0,
+        newCustomers: customerMetrics[0] ? parseInt(customerMetrics[0].newcustomers) : 0,
+        activeCustomers: customerMetrics[0] ? parseInt(customerMetrics[0].activecustomers) : 0,
+      },
+      products: {
+        totalProducts: productMetrics[0] ? parseInt(productMetrics[0].totalproducts) : 0,
+        activeProducts: productMetrics[0] ? parseInt(productMetrics[0].activeproducts) : 0,
+        newProducts: productMetrics[0] ? parseInt(productMetrics[0].newproducts) : 0,
+      },
+      conversion: {
+        totalInquiries,
+        totalQuotations,
+        totalOrders: totalOrdersCount,
+        inquiryToQuotationRate: parseFloat(inquiryToQuotationRate.toFixed(2)),
+        quotationToOrderRate: parseFloat(quotationToOrderRate.toFixed(2)),
+      },
+      alerts: {
+        lowStockItems: inventoryAlert[0] ? parseInt(inventoryAlert[0].alertcount) : 0,
+        pendingOrders: pendingOrders[0] ? parseInt(pendingOrders[0].pendingcount) : 0,
+      },
+      period: {
+        days,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      },
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        sales: {
-          totalOrders: parseInt(salesMetrics[0].totalorders),
-          totalRevenue: parseFloat(salesMetrics[0].totalrevenue),
-          avgOrderValue: parseFloat(salesMetrics[0].avgordervalue),
-          activeCustomers: parseInt(salesMetrics[0].activecustomers),
-          growth: parseFloat(revenueGrowth.toFixed(2)),
-        },
-        customers: {
-          totalCustomers: parseInt(customerMetrics[0].totalcustomers),
-          newCustomers: parseInt(customerMetrics[0].newcustomers),
-          activeCustomers: parseInt(customerMetrics[0].activecustomers),
-        },
-        products: {
-          totalProducts: parseInt(productMetrics[0].totalproducts),
-          activeProducts: parseInt(productMetrics[0].activeproducts),
-          newProducts: parseInt(productMetrics[0].newproducts),
-        },
-        conversion: {
-          totalInquiries: parseInt(convData.totalinquiries),
-          totalQuotations: parseInt(convData.totalquotations),
-          totalOrders: parseInt(convData.totalorders),
-          inquiryToQuotationRate: parseFloat(inquiryToQuotationRate.toFixed(2)),
-          quotationToOrderRate: parseFloat(quotationToOrderRate.toFixed(2)),
-        },
-        alerts: {
-          lowStockItems: parseInt(inventoryAlert[0].alertcount),
-          pendingOrders: parseInt(pendingOrders[0].pendingcount),
-        },
-        period: {
-          days,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-        },
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error('Dashboard overview API error:', error);

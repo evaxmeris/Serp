@@ -3,6 +3,63 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ============================================
+// 类型定义
+// ============================================
+
+/** 产品汇总统计数据 */
+interface ProductSummary {
+  totalProducts: number;
+  activeProducts: number;
+  inactiveProducts: number;
+  newProducts: number;
+}
+
+/** 产品分类统计 */
+interface CategoryStat {
+  category: string;
+  productCount: number;
+  totalQuantity: number;
+  totalRevenue: number;
+}
+
+/** 畅销产品数据 */
+interface TopProduct {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  salePrice: number;
+  orderCount: number;
+  totalQuantity: number;
+  totalRevenue: number;
+}
+
+/** 库存预警产品 */
+interface LowStockProduct {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  currentStock: number;
+  minStock: number;
+}
+
+/** 价格区间统计 */
+interface PriceRangeStat {
+  priceRange: string;
+  productCount: number;
+}
+
+/** API 响应数据结构 */
+interface ProductDashboardData {
+  summary: ProductSummary;
+  categoryStats: CategoryStat[];
+  topProducts: TopProduct[];
+  lowStockProducts: LowStockProduct[];
+  priceRangeStats: PriceRangeStat[];
+}
+
 /**
  * 产品统计数据 API
  * GET /api/dashboard/products
@@ -20,7 +77,12 @@ export async function GET(request: Request) {
     startDate.setDate(endDate.getDate() - days);
 
     // 产品汇总统计
-    const summary = await prisma.$queryRaw<any[]>`
+    const summary = await prisma.$queryRaw<Array<{
+      totalproducts: string;
+      activeproducts: string;
+      inactiveproducts: string;
+      newproducts: string;
+    }>>`
       SELECT 
         COUNT(*) as totalProducts,
         COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeProducts,
@@ -30,7 +92,12 @@ export async function GET(request: Request) {
     `;
 
     // 产品分类统计
-    const categoryStats = await prisma.$queryRaw<any[]>`
+    const categoryStats = await prisma.$queryRaw<Array<{
+      category: string;
+      productcount: string;
+      totalquantity: string;
+      totalrevenue: string;
+    }>>`
       SELECT 
         COALESCE("category", 'Uncategorized') as category,
         COUNT(*) as productCount,
@@ -44,7 +111,16 @@ export async function GET(request: Request) {
     `;
 
     // 畅销产品 TOP 10
-    const topProducts = await prisma.$queryRaw<any[]>`
+    const topProducts = await prisma.$queryRaw<Array<{
+      id: string;
+      sku: string;
+      name: string;
+      category: string;
+      saleprice: string;
+      ordercount: string;
+      totalquantity: string;
+      totalrevenue: string;
+    }>>`
       SELECT 
         p.id,
         p."sku",
@@ -64,7 +140,14 @@ export async function GET(request: Request) {
     `;
 
     // 库存预警产品
-    const lowStockProducts = await prisma.$queryRaw<any[]>`
+    const lowStockProducts = await prisma.$queryRaw<Array<{
+      id: string;
+      sku: string;
+      name: string;
+      category: string;
+      currentstock: string;
+      minstock: string;
+    }>>`
       SELECT 
         p.id,
         p."sku",
@@ -82,7 +165,10 @@ export async function GET(request: Request) {
     `;
 
     // 产品价格区间统计
-    const priceRangeStats = await prisma.$queryRaw<any[]>`
+    const priceRangeStats = await prisma.$queryRaw<Array<{
+      pricerange: string;
+      productcount: string;
+    }>>`
       SELECT 
         CASE 
           WHEN "salePrice" < 10 THEN '0-10'
@@ -97,44 +183,52 @@ export async function GET(request: Request) {
       ORDER BY MIN("salePrice")
     `;
 
+    // 构建响应数据
+    const responseData: ProductDashboardData = {
+      summary: summary[0] ? {
+        totalProducts: parseInt(summary[0].totalproducts),
+        activeProducts: parseInt(summary[0].activeproducts),
+        inactiveProducts: parseInt(summary[0].inactiveproducts),
+        newProducts: parseInt(summary[0].newproducts),
+      } : {
+        totalProducts: 0,
+        activeProducts: 0,
+        inactiveProducts: 0,
+        newProducts: 0,
+      },
+      categoryStats: categoryStats.map((item) => ({
+        category: item.category,
+        productCount: parseInt(item.productcount),
+        totalQuantity: parseInt(item.totalquantity),
+        totalRevenue: parseFloat(item.totalrevenue),
+      })),
+      topProducts: topProducts.map((item) => ({
+        id: item.id,
+        sku: item.sku,
+        name: item.name,
+        category: item.category,
+        salePrice: parseFloat(item.saleprice),
+        orderCount: parseInt(item.ordercount),
+        totalQuantity: parseInt(item.totalquantity),
+        totalRevenue: parseFloat(item.totalrevenue),
+      })),
+      lowStockProducts: lowStockProducts.map((item) => ({
+        id: item.id,
+        sku: item.sku,
+        name: item.name,
+        category: item.category,
+        currentStock: parseInt(item.currentstock),
+        minStock: parseInt(item.minstock),
+      })),
+      priceRangeStats: priceRangeStats.map((item) => ({
+        priceRange: item.pricerange,
+        productCount: parseInt(item.productcount),
+      })),
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        summary: summary[0] || {
-          totalProducts: 0,
-          activeProducts: 0,
-          inactiveProducts: 0,
-          newProducts: 0,
-        },
-        categoryStats: categoryStats.map((item: any) => ({
-          category: item.category,
-          productCount: parseInt(item.productcount),
-          totalQuantity: parseInt(item.totalquantity),
-          totalRevenue: parseFloat(item.totalrevenue),
-        })),
-        topProducts: topProducts.map((item: any) => ({
-          id: item.id,
-          sku: item.sku,
-          name: item.name,
-          category: item.category,
-          salePrice: parseFloat(item.saleprice),
-          orderCount: parseInt(item.ordercount),
-          totalQuantity: parseInt(item.totalquantity),
-          totalRevenue: parseFloat(item.totalrevenue),
-        })),
-        lowStockProducts: lowStockProducts.map((item: any) => ({
-          id: item.id,
-          sku: item.sku,
-          name: item.name,
-          category: item.category,
-          currentStock: parseInt(item.currentstock),
-          minStock: parseInt(item.minstock),
-        })),
-        priceRangeStats: priceRangeStats.map((item: any) => ({
-          priceRange: item.pricerange,
-          productCount: parseInt(item.productcount),
-        })),
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error('Product dashboard API error:', error);

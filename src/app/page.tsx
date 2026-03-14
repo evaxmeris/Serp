@@ -21,6 +21,10 @@ import {
   LogIn,
   UserPlus,
   Key,
+  FlaskConical,
+  ClipboardList,
+  GitCompare,
+  LayoutDashboard,
 } from 'lucide-react';
 
 // 模块开发进度数据
@@ -64,6 +68,16 @@ const sprintData = [
     pageCount: 4,
     testPass: '95.7%',
     icon: Package,
+  },
+  {
+    sprint: 'Phase 2',
+    module: '产品调研（新增）',
+    status: 'completed',
+    progress: 100,
+    apiCount: 13,
+    pageCount: 6,
+    testPass: '100%',
+    icon: FlaskConical,
   },
   {
     sprint: 'Sprint 5',
@@ -117,6 +131,15 @@ const quickLinks = [
   { name: '产品', path: '/products', icon: '📦' },
   { name: '入库单', path: '/inbound-orders', icon: '📥' },
   { name: '库存', path: '/inventory', icon: '📊' },
+];
+
+// Phase 2 产品调研模块快捷入口
+const researchLinks = [
+  { name: '品类管理', path: '/product-research/categories', icon: ClipboardList },
+  { name: '属性模板', path: '/product-research/templates', icon: FlaskConical },
+  { name: '产品列表', path: '/product-research/products', icon: Package },
+  { name: '产品对比', path: '/product-research/comparisons', icon: GitCompare },
+  { name: '数据看板', path: '/product-research/dashboard', icon: LayoutDashboard },
 ];
 
 const authLinks = [
@@ -206,6 +229,37 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
+      {/* Phase 2 产品调研模块 */}
+      <Card className="mb-8 border-2 border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-blue-600" />
+            🔬 Phase 2 - 产品调研模块（已完成）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {researchLinks.map((item) => (
+              <Button
+                key={item.path}
+                variant="outline"
+                className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-blue-100"
+                asChild
+              >
+                <Link href={item.path}>
+                  <item.icon className="h-8 w-8 text-blue-600" />
+                  <div className="text-sm font-medium">{item.name}</div>
+                </Link>
+              </Button>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-sm text-blue-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>Phase 2 已完成：6 个页面 • 13 个 API • 7,468 行代码</span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 认证与用户管理 */}
       <Card className="mb-8">
         <CardHeader>
@@ -236,7 +290,7 @@ export default function HomePage() {
           <CardTitle className="flex items-center justify-between">
             <span>🚀 开发进度</span>
             <Badge variant="outline" className="text-sm">
-              整体完成度：80%
+              整体完成度：85%
             </Badge>
           </CardTitle>
         </CardHeader>

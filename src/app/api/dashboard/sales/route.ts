@@ -3,6 +3,49 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ============================================
+// 类型定义
+// ============================================
+
+/** 销售汇总数据 */
+interface SalesSummary {
+  totalOrders: number;
+  totalRevenue: number;
+  avgOrderValue: number;
+  totalCustomers: number;
+}
+
+/** 销售趋势数据 */
+interface SalesTrendItem {
+  date: string;
+  orderCount: number;
+  totalAmount: number;
+  avgAmount: number;
+}
+
+/** 客户统计数据 */
+interface CustomerStatItem {
+  date: string;
+  customerCount: number;
+  orderCount: number;
+}
+
+/** 产品统计数据 */
+interface ProductStatItem {
+  productName: string;
+  category: string;
+  quantity: number;
+  revenue: number;
+}
+
+/** API 响应数据结构 */
+interface SalesDashboardData {
+  summary: SalesSummary;
+  trends: SalesTrendItem[];
+  customers: CustomerStatItem[];
+  topProducts: ProductStatItem[];
+}
+
 /**
  * 销售统计数据 API
  * GET /api/dashboard/sales
@@ -22,33 +65,13 @@ export async function GET(request: Request) {
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
 
-    // 按周期分组统计
-    let dateGrouping: any;
-    switch (period) {
-      case 'day':
-        dateGrouping = {
-          year: { $year: '$createdAt' },
-          month: { $month: '$createdAt' },
-          day: { $dayOfMonth: '$createdAt' },
-        };
-        break;
-      case 'week':
-        dateGrouping = {
-          year: { $year: '$createdAt' },
-          week: { $week: '$createdAt' },
-        };
-        break;
-      case 'month':
-      default:
-        dateGrouping = {
-          year: { $year: '$createdAt' },
-          month: { $month: '$createdAt' },
-        };
-        break;
-    }
-
     // 获取订单统计数据
-    const orderStats = await prisma.$queryRaw<any[]>`
+    const orderStats = await prisma.$queryRaw<Array<{
+      date: Date;
+      ordercount: string;
+      totalamount: string;
+      avgamount: string;
+    }>>`
       SELECT 
         DATE_TRUNC(${period}, "createdAt") as date,
         COUNT(*) as orderCount,
@@ -61,7 +84,11 @@ export async function GET(request: Request) {
     `;
 
     // 获取客户统计数据
-    const customerStats = await prisma.$queryRaw<any[]>`
+    const customerStats = await prisma.$queryRaw<Array<{
+      date: Date;
+      customercount: string;
+      ordercount: string;
+    }>>`
       SELECT 
         DATE_TRUNC(${period}, "createdAt") as date,
         COUNT(DISTINCT "customerId") as customerCount,
@@ -73,7 +100,12 @@ export async function GET(request: Request) {
     `;
 
     // 获取产品统计数据
-    const productStats = await prisma.$queryRaw<any[]>`
+    const productStats = await prisma.$queryRaw<Array<{
+      productname: string;
+      category: string;
+      quantity: string;
+      revenue: string;
+    }>>`
       SELECT 
         p."name" as productName,
         p."category",
@@ -89,7 +121,12 @@ export async function GET(request: Request) {
     `;
 
     // 汇总数据
-    const summary = await prisma.$queryRaw<any[]>`
+    const summary = await prisma.$queryRaw<Array<{
+      totalorders: string;
+      totalrevenue: string;
+      avgordervalue: string;
+      totalcustomers: string;
+    }>>`
       SELECT 
         COUNT(*) as totalOrders,
         SUM("totalAmount") as totalRevenue,
@@ -99,33 +136,41 @@ export async function GET(request: Request) {
       WHERE "createdAt" >= ${startDate}
     `;
 
+    // 构建响应数据
+    const responseData: SalesDashboardData = {
+      summary: summary[0] ? {
+        totalOrders: parseInt(summary[0].totalorders),
+        totalRevenue: parseFloat(summary[0].totalrevenue),
+        avgOrderValue: parseFloat(summary[0].avgordervalue),
+        totalCustomers: parseInt(summary[0].totalcustomers),
+      } : {
+        totalOrders: 0,
+        totalRevenue: 0,
+        avgOrderValue: 0,
+        totalCustomers: 0,
+      },
+      trends: orderStats.map((item) => ({
+        date: new Date(item.date).toISOString(),
+        orderCount: parseInt(item.ordercount),
+        totalAmount: parseFloat(item.totalamount),
+        avgAmount: parseFloat(item.avgamount),
+      })),
+      customers: customerStats.map((item) => ({
+        date: new Date(item.date).toISOString(),
+        customerCount: parseInt(item.customercount),
+        orderCount: parseInt(item.ordercount),
+      })),
+      topProducts: productStats.map((item) => ({
+        productName: item.productname,
+        category: item.category,
+        quantity: parseInt(item.quantity),
+        revenue: parseFloat(item.revenue),
+      })),
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        summary: summary[0] || {
-          totalOrders: 0,
-          totalRevenue: 0,
-          avgOrderValue: 0,
-          totalCustomers: 0,
-        },
-        trends: orderStats.map((item: any) => ({
-          date: new Date(item.date).toISOString(),
-          orderCount: parseInt(item.ordercount),
-          totalAmount: parseFloat(item.totalamount),
-          avgAmount: parseFloat(item.avgamount),
-        })),
-        customers: customerStats.map((item: any) => ({
-          date: new Date(item.date).toISOString(),
-          customerCount: parseInt(item.customercount),
-          orderCount: parseInt(item.ordercount),
-        })),
-        topProducts: productStats.map((item: any) => ({
-          productName: item.productname,
-          category: item.category,
-          quantity: parseInt(item.quantity),
-          revenue: parseFloat(item.revenue),
-        })),
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error('Sales dashboard API error:', error);

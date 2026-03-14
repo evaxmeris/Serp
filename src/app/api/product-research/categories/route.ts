@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 // ============================================
 // GET /api/product-research/categories
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
     const isActive = searchParams.get('isActive'); // 是否只获取启用品类
     const includeChildren = searchParams.get('includeChildren') === 'true'; // 是否包含子品类
 
-    const where: any = {};
+    // 构建查询条件（使用 Prisma 类型）
+    const where: Prisma.ProductCategoryWhereInput = {};
 
     // 按父品类过滤
     if (parentId !== null) {
@@ -127,7 +129,7 @@ export async function POST(request: Request) {
 
     // 如果指定了父品类，验证父品类是否存在
     let calculatedLevel = level || 1;
-    let calculatedPath = null;
+    let calculatedPath: string | null = null;
 
     if (parentId) {
       const parentCategory = await prisma.productCategory.findUnique({
