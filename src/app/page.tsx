@@ -82,12 +82,22 @@ const sprintData = [
   {
     sprint: 'Sprint 5',
     module: '出库管理',
-    status: 'testing',
-    progress: 90,
+    status: 'completed',
+    progress: 100,
     apiCount: 7,
     pageCount: 5,
     testPass: '100%',
     icon: Truck,
+  },
+  {
+    sprint: 'Phase 3',
+    module: '产品一键转化（新增）',
+    status: 'completed',
+    progress: 100,
+    apiCount: 2,
+    pageCount: 1,
+    testPass: '100%',
+    icon: CheckCircle,
   },
   {
     sprint: 'Sprint 6',
@@ -131,6 +141,7 @@ const quickLinks = [
   { name: '产品', path: '/products', icon: '📦' },
   { name: '入库单', path: '/inbound-orders', icon: '📥' },
   { name: '库存', path: '/inventory', icon: '📊' },
+  { name: '出库单', path: '/outbound-orders', icon: '🚚' },
 ];
 
 // Phase 2 产品调研模块快捷入口
@@ -265,7 +276,7 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5 text-green-600" />
-            🚚 Sprint 5 - 出库管理模块（90% 完成，准备发布）
+            🚚 Sprint 5 - 出库管理模块（✅ 已完成 - v0.5.7 已发布）
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -283,28 +294,28 @@ export default function HomePage() {
               </Link>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
+              <Link href="/outbound-orders">
+                <GitCompare className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">编辑/发货</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
               <Link href="/inventory">
                 <Package className="h-8 w-8 text-green-600" />
                 <div className="text-sm font-medium">库存管理</div>
               </Link>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
-              <Link href="/outbound-orders">
-                <GitCompare className="h-8 w-8 text-green-600" />
-                <div className="text-sm font-medium">批量操作</div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-green-100" asChild>
-              <Link href="/docs/release-notes/v0.5.7">
-                <FileText className="h-8 w-8 text-green-600" />
-                <div className="text-sm font-medium">发布说明</div>
+              <Link href="/product-research/products">
+                <CheckCircle className="h-8 w-8 text-green-600" />
+                <div className="text-sm font-medium">一键转化</div>
               </Link>
             </Button>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="flex items-center gap-2 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
-              <span>7 个 API • 5 个页面</span>
+              <span>7 个 API • 5 个页面 • v0.5.7</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
@@ -316,8 +327,64 @@ export default function HomePage() {
             </div>
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
-            <AlertCircle className="h-4 w-4" />
-            <span>状态：Phase 6 发布准备中 (60%) • 预计版本：v0.5.7</span>
+            <CheckCircle className="h-4 w-4" />
+            <span>状态：✅ 已完成 | 整体进度：100% (6/6 阶段) | 2026-03-15 发布</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Phase 3 产品一键转化功能 */}
+      <Card className="mb-8 border-2 border-purple-200 bg-purple-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-purple-600" />
+            🎯 Phase 3 - 产品一键转化功能（新增）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/product-research/products">
+                <FlaskConical className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">产品调研</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/products">
+                <Package className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">正式产品</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/product-research/categories">
+                <ClipboardList className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">品类管理</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/product-research/templates">
+                <FlaskConical className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">属性模板</div>
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>2 个 API • 1 个页面</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>SKU 自动生成</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>属性完整复制</span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-sm text-purple-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>功能：调研产品 → 正式产品 | 状态：✅ 已完成 | 2026-03-15 上线</span>
           </div>
         </CardContent>
       </Card>
@@ -352,7 +419,7 @@ export default function HomePage() {
           <CardTitle className="flex items-center justify-between">
             <span>🚀 开发进度</span>
             <Badge variant="outline" className="text-sm">
-              整体完成度：90%
+              整体完成度：95%
             </Badge>
           </CardTitle>
         </CardHeader>
