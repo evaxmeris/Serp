@@ -115,22 +115,15 @@ async function getInventoryData(params: {
       ...(!includeZero && { quantity: { gt: 0 } })
     },
     include: {
-      product: true,
-      inventoryLogs: {
-        orderBy: { createdAt: 'asc' },
-        take: 1  // 获取最早的入库记录（FIFO）
-      }
+      product: true
     }
   });
 
   // 计算库龄分析
   const now = new Date();
   const itemsWithAging = inventoryItems.map(item => {
-    // BUG-S6-001 修复：使用正确的日期字段计算库龄
-    // FIFO 算法：使用最早的入库时间（firstInDate）计算库龄天数
-    const firstInDate = item.inventoryLogs.length > 0 
-      ? new Date(item.inventoryLogs[0].createdAt)  // 使用 createdAt 作为入库时间
-      : new Date(item.createdAt);  // 如果没有入库记录，使用创建时间
+    // 使用创建时间计算库龄天数
+    const firstInDate = new Date(item.createdAt);
     
     // 计算库龄天数
     const agingDays = Math.floor((now.getTime() - firstInDate.getTime()) / (1000 * 60 * 60 * 24));
