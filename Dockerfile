@@ -25,11 +25,11 @@ ENV PORT=3001
 RUN npx next build
 
 # 暴露端口
-EXPOSE 3001
+EXPOSE 3000
 
 # 设置环境变量
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=3000
 
 # 启动生产服务器
 CMD ["npm", "start"]
