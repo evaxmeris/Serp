@@ -111,7 +111,7 @@ async function getInventoryData(params: {
     where: {
       ...(warehouseId && { warehouseId }),
       ...(productId && { productId }),
-      ...(categoryId && { product: { category } }),
+      ...(categoryId && { product: { category: categoryId } }),
       ...(!includeZero && { quantity: { gt: 0 } })
     },
     include: {
