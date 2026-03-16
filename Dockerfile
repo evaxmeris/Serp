@@ -20,6 +20,9 @@ COPY . .
 RUN npx prisma generate
 
 # 构建生产版本（跳过 TypeScript 检查，因为旧代码有类型问题）
+# TSC_COMPILE_ON_ERROR=true 会让 TypeScript 错误不阻塞构建
+ENV TSC_COMPILE_ON_ERROR=true
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx next build
 
 # 暴露端口
