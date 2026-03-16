@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         metrics: {
           grossProfit: profitData.grossProfit,
           netProfit: profitData.netProfit,
-          profitMargin: profitData.profitMargin
+          netProfitMargin: profitData.netProfitMargin
         }
       }
     });
