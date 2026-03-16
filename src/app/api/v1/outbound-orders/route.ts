@@ -19,10 +19,10 @@ import { z } from 'zod';
 // 创建出库单 Schema 验证
 const CreateOutboundOrderSchema = z.object({
   orderId: z.string().min(1, '销售订单 ID 不能为空'),
+  warehouseId: z.string().min(1, '仓库 ID 不能为空'), // 仓库 ID 在出库单级别
   items: z.array(z.object({
     productId: z.string().min(1, '产品 ID 不能为空'),
     quantity: z.number().int().positive('数量必须大于 0'),
-    warehouseId: z.string().min(1, '仓库 ID 不能为空'),
     batchNo: z.string().optional(),
     location: z.string().optional(),
     unitPrice: z.number().min(0, '单价不能为负'),
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         where: {
           productId_warehouseId: {
             productId: item.productId,
-            warehouseId: item.warehouseId,
+            warehouseId: data.warehouseId,
           },
         },
       });
@@ -195,13 +195,12 @@ export async function POST(request: NextRequest) {
         data: {
           outboundNo,
           orderId: data.orderId,
-          warehouseId: data.items[0].warehouseId, // 使用第一个商品的仓库 ID
+          warehouseId: data.warehouseId, // 使用出库单级别的仓库 ID
           status: 'PENDING',
           items: {
             create: data.items.map(item => ({
               productId: item.productId,
               quantity: item.quantity,
-              warehouseId: item.warehouseId,
               batchNo: item.batchNo,
               location: item.location,
               unitPrice: item.unitPrice,
@@ -219,12 +218,13 @@ export async function POST(request: NextRequest) {
       });
 
       // 扣减库存
+      const warehouseId = data.warehouseId; // 从出库单获取仓库 ID
       for (const item of data.items) {
         await tx.inventory.update({
           where: {
             productId_warehouseId: {
               productId: item.productId,
-              warehouseId: item.warehouseId,
+              warehouseId: warehouseId,
             },
           },
           data: {
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
           where: {
             productId_warehouseId: {
               productId: item.productId,
-              warehouseId: item.warehouseId,
+              warehouseId: warehouseId,
             },
           },
         });
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
         await tx.inventoryLog.create({
           data: {
             productId: item.productId,
-            warehouseId: item.warehouseId,
+            warehouseId: warehouseId,
             type: 'OUT',
             quantity: -item.quantity,
             beforeQuantity: inventory ? inventory.quantity + item.quantity : item.quantity,

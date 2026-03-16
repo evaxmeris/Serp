@@ -183,8 +183,8 @@ async function getInventoryData(params: {
   // 按仓库分组
   const byWarehouse = warehouseId 
     ? [] 
-    : Array.from(new Set(itemsWithAging.map(item => item.warehouseId))).map(warehouseId => {
-        const items = itemsWithAging.filter(item => item.warehouseId === warehouseId);
+    : Array.from(new Set(itemsWithAging.map(item => item.warehouse))).map(warehouseId => {
+        const items = itemsWithAging.filter(item => item.warehouse === warehouseId);
         return {
           warehouseId,
           warehouseName: items[0]?.warehouse?.name || '未知仓库',

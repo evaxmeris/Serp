@@ -132,7 +132,6 @@ export async function PUT(
               data: {
                 productId: item.productId,
                 quantity: item.quantity,
-                warehouseId: item.warehouseId,
                 batchNo: item.batchNo,
                 location: item.location,
                 unitPrice: item.unitPrice,
@@ -146,7 +145,6 @@ export async function PUT(
                 outboundOrderId: id,
                 productId: item.productId,
                 quantity: item.quantity || 1,
-                warehouseId: item.warehouseId || 'MAIN',
                 batchNo: item.batchNo,
                 location: item.location,
                 unitPrice: item.unitPrice || 0,

@@ -191,12 +191,13 @@ async function batchCancel(orders: any[]) {
 
       // 如果是 PENDING 状态，恢复库存
       if (order.status === 'PENDING') {
+        const warehouseId = order.warehouseId; // 从父对象获取仓库 ID
         for (const item of order.items) {
           await prisma.inventory.update({
             where: {
               productId_warehouseId: {
                 productId: item.productId,
-                warehouseId: item.warehouseId,
+                warehouseId: warehouseId,
               },
             },
             data: {
@@ -209,7 +210,7 @@ async function batchCancel(orders: any[]) {
             where: {
               productId_warehouseId: {
                 productId: item.productId,
-                warehouseId: item.warehouseId,
+                warehouseId: warehouseId,
               },
             },
           });
@@ -217,7 +218,7 @@ async function batchCancel(orders: any[]) {
           await prisma.inventoryLog.create({
             data: {
               productId: item.productId,
-              warehouseId: item.warehouseId,
+              warehouseId: warehouseId,
               type: 'RETURN',
               quantity: item.quantity,
               beforeQuantity: inventory ? inventory.quantity - item.quantity : 0,

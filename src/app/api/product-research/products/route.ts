@@ -183,11 +183,8 @@ export async function GET(request: Request) {
         //   select: { id: true, createdAt: true },
         // });
 
-        return {
-          ...product,
-          convertedProductId: convertedProduct?.id || null,
-          convertedAt: convertedProduct?.createdAt.toISOString() || null,
-        };
+        // 暂时不返回转换信息，待 Product 模型完善后添加
+        return product;
       })
     );
 

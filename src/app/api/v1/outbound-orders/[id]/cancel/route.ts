@@ -80,12 +80,13 @@ export async function POST(
 
       // 恢复库存（如果是待确认状态，说明库存已被扣减）
       if (outboundOrder.status === 'PENDING') {
+        const warehouseId = outboundOrder.warehouseId; // 从父对象获取仓库 ID
         for (const item of outboundOrder.items) {
           await tx.inventory.update({
             where: {
               productId_warehouseId: {
                 productId: item.productId,
-                warehouseId: item.warehouseId,
+                warehouseId: warehouseId,
               },
             },
             data: {
@@ -99,7 +100,7 @@ export async function POST(
             where: {
               productId_warehouseId: {
                 productId: item.productId,
-                warehouseId: item.warehouseId,
+                warehouseId: warehouseId,
               },
             },
           });
@@ -107,7 +108,7 @@ export async function POST(
           await tx.inventoryLog.create({
             data: {
               productId: item.productId,
-              warehouseId: item.warehouseId,
+              warehouseId: warehouseId,
               type: 'RETURN',
               quantity: item.quantity,
               beforeQuantity: inventory ? inventory.quantity - item.quantity : 0,
