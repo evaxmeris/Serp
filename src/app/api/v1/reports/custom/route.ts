@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // 只有 ADMIN 和 MANAGER 角色可以创建自定义报表
     const allowedRoles = ['ADMIN', 'MANAGER'];
-    if (!allowedRoles.includes(user.role)) {
+    if (!allowedRoles.includes(user.user.role)) {
       return NextResponse.json(
         { error: '权限不足，只有管理员或经理可以创建自定义报表' },
         { status: 403 }
