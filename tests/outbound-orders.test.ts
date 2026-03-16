@@ -116,7 +116,9 @@ async function prepareTestData() {
   // 创建测试库存
   await prisma.inventory.upsert({
     where: {
+      productId_warehouseId: {
         productId: testProduct.id,
+        warehouseId: testWarehouse.id,
       },
     },
     update: {
@@ -125,6 +127,7 @@ async function prepareTestData() {
     },
     create: {
       productId: testProduct.id,
+      warehouseId: testWarehouse.id,
       quantity: 1000,
       availableQuantity: 1000,
     },
@@ -187,7 +190,9 @@ async function cleanupTestData() {
     if (testProduct && testWarehouse) {
       await prisma.inventory.delete({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       }).catch(() => {});
@@ -240,6 +245,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 10,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
             notes: '测试出库',
           },
@@ -270,6 +276,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 10,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -318,6 +325,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 10,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -337,7 +345,9 @@ describe('Outbound Orders API', () => {
       // 先查询当前库存
       const inventory = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -349,6 +359,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: (inventory?.availableQuantity || 0) + 1,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -379,6 +390,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 5,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -416,7 +428,9 @@ describe('Outbound Orders API', () => {
       // 验证创建后库存已扣减
       const inventoryAfterCreate = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -433,7 +447,9 @@ describe('Outbound Orders API', () => {
       // 确认后库存不变（创建时已扣减）
       const inventoryAfterConfirm = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -451,6 +467,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 2,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -495,6 +512,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 3,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -537,6 +555,7 @@ describe('Outbound Orders API', () => {
           {
             productId: testProduct.id,
             quantity: 3,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -551,7 +570,9 @@ describe('Outbound Orders API', () => {
       // 创建时的库存（已扣减）
       const inventoryAfterCreate = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -570,7 +591,9 @@ describe('Outbound Orders API', () => {
       // 取消后的库存（应该恢复 3 个）
       const inventoryAfterCancel = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
