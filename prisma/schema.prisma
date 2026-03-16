@@ -70,8 +70,7 @@ model Product {
   sku                String              @unique
   name               String
   nameEn             String?
-  categoryId         String?             // 关联产品品类
-  category           ProductCategory?    @relation(fields: [categoryId], references: [id], name: "FormalProductToCategory")
+  category           String?
   specification      String?
   unit               String              @default("PCS")
   costPrice          Decimal             @db.Decimal(10, 2)
@@ -85,7 +84,6 @@ model Product {
   moq                Int?
   leadTime           Int?
   status             ProductStatus       @default(ACTIVE)
-  sourceResearchId   String?             // 来源调研产品 ID（一键转化时记录）
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   inboundOrderItems  InboundOrderItem[]
@@ -96,10 +94,7 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
   outboundOrderItems OutboundOrderItem[]
-  attributes         ProductAttributeValue[] @relation(name: "ProductAttributeValues")
 
-  @@index([categoryId])
-  @@index([sourceResearchId])
   @@map("products")
 }
 
@@ -216,7 +211,6 @@ model Order {
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
-  outboundOrders  OutboundOrder[] @relation("SalesOrder")
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -704,7 +698,7 @@ model InventoryLog {
   createdAt       DateTime         @default(now())
   inventoryId     String?
   inboundOrder    InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
-  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id], name: "OutboundOrderInventoryLogs")
+  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
   inventory       Inventory?       @relation(fields: [inventoryId], references: [id])
   product         Product          @relation(fields: [productId], references: [id])
 
@@ -751,8 +745,7 @@ model ProductCategory {
   parent             ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children           ProductCategory[]   @relation("CategoryHierarchy")
   productComparisons ProductComparison[]
-  researchProducts   ProductResearch[]   @relation(name: "ProductToCategory")  // 调研产品
-  products           Product[]           @relation(name: "FormalProductToCategory")  // 正式产品
+  products           ProductResearch[]
   researchTasks      ResearchTask[]
 
   @@index([parentId])
@@ -825,10 +818,10 @@ model ProductResearch {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   researchTaskId         String?
-  attributes             ProductAttributeValue[] @relation(name: "ProductAttributeValues")
+  attributes             ProductAttributeValue[]
   productComparisonItems ProductComparisonItem[]
   comparisons            ProductComparison[]
-  category               ProductCategory         @relation(fields: [categoryId], references: [id], name: "ProductToCategory")
+  category               ProductCategory         @relation(fields: [categoryId], references: [id])
   researchTask           ResearchTask?           @relation(fields: [researchTaskId], references: [id])
   researchAttachments    ResearchAttachment[]
 
@@ -842,10 +835,8 @@ model ProductResearch {
 
 model ProductAttributeValue {
   id           String            @id @default(cuid())
+  productId    String
   attributeId  String
-  // 支持两种产品来源：调研产品 或 正式产品（二选一）
-  researchProductId String?       // 调研产品 ID
-  productId    String?            // 正式产品 ID
   valueText    String?
   valueNumber  Decimal?          @db.Decimal(20, 4)
   valueBoolean Boolean?
@@ -856,12 +847,9 @@ model ProductAttributeValue {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   attribute    AttributeTemplate @relation(fields: [attributeId], references: [id])
-  researchProduct ProductResearch? @relation(fields: [researchProductId], references: [id], onDelete: Cascade, name: "ProductAttributeValues")
-  product      Product?          @relation(fields: [productId], references: [id], onDelete: Cascade, name: "ProductAttributeValues")
+  product      ProductResearch   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([researchProductId, attributeId])
   @@unique([productId, attributeId])
-  @@index([researchProductId])
   @@index([productId])
   @@index([attributeId])
   @@map("product_attribute_values")
@@ -1276,35 +1264,148 @@ model OutboundOrder {
   outboundNo    String            @unique @default(cuid())
   orderId       String            // 关联销售订单
   warehouseId   String            // 关联仓库
-  status        String            // DRAFT/PENDING/SHIPPED/CANCELLED
+  status        String            // draft/pending/confirmed/cancelled
   totalAmount   Decimal?
   items         OutboundOrderItem[]
-  inventoryLogs InventoryLog[] @relation(name: "OutboundOrderInventoryLogs")
+  shipment      Shipment?
+  inventoryLogs InventoryLog[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
-  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade, name: "SalesOrder")
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
   @@map("outbound_orders")
 }
-
 model OutboundOrderItem {
   id              String          @id @default(cuid())
   outboundOrderId String
   productId       String
-  warehouseId     String          // 仓库 ID
   quantity        Int
   shippedQuantity Int             @default(0)
   unitPrice       Decimal?
-  batchNo         String?         // 批次号
-  location        String?         // 库位
-  notes           String?         // 备注
   outboundOrder   OutboundOrder   @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
   product         Product         @relation(fields: [productId], references: [id])
 
   @@index([outboundOrderId])
   @@index([productId])
   @@map("outbound_order_items")
+}
+// ==================== Sprint 6: 财务报表模块 ====================
+
+// 报表定义表 - 存储报表的元数据和配置
+model ReportDefinition {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  type        String   // PROFIT/SALES/INVENTORY/PURCHASE/CASHFLOW/CUSTOM
+  description String?
+  config      Json     @default("{}")
+  columns     Json     @default("[]")
+  filters     Json     @default("[]")
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // 关联关系
+  data         ReportData[]
+  subscriptions ReportSubscription[]
+  exportLogs   ReportExportLog[]
+  schedules    ReportSchedule[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("report_definitions")
+}
+
+// 报表数据表 - 存储生成的报表数据
+model ReportData {
+  id          String   @id @default(cuid())
+  reportId    String
+  period      String   // 2026-03 / 2026-Q1 / 2026
+  periodStart DateTime
+  periodEnd   DateTime
+  data        Json     @default("{}")
+  metrics     Json     @default("{}")
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  
+  // 关联关系
+  report ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([period])
+  @@index([periodStart, periodEnd])
+  @@map("report_data")
+}
+
+// 订阅配置表 - 用户订阅报表推送
+model ReportSubscription {
+  id         String   @id @default(cuid())
+  reportId   String
+  userId     String
+  frequency  String   // DAILY/WEEKLY/MONTHLY
+  format     String   @default("pdf") // pdf/excel/csv
+  email      String?
+  isActive   Boolean  @default(true)
+  lastSentAt DateTime?
+  nextSendAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // 关联关系
+  report ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("report_subscriptions")
+}
+
+// 导出日志表 - 记录报表导出历史
+model ReportExportLog {
+  id          String   @id @default(cuid())
+  reportId    String
+  userId      String
+  exportType  String   // IMMEDIATE/SCHEDULED
+  format      String   // pdf/excel/csv
+  fileUrl     String?
+  fileSize    Int?
+  status      String   @default("pending") // pending/completed/failed
+  errorMessage String?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  // 关联关系
+  report ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([status])
+  @@map("report_export_logs")
+}
+
+// 定时任务表 - 报表自动生成调度
+model ReportSchedule {
+  id           String   @id @default(cuid())
+  reportId     String
+  name         String
+  cronExpression String
+  timezone     String   @default("Asia/Shanghai")
+  config       Json     @default("{}")
+  isActive     Boolean  @default(true)
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // 关联关系
+  report ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([isActive])
+  @@map("report_schedules")
 }
