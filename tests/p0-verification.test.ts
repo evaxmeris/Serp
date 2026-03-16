@@ -86,11 +86,9 @@ async function ensureDefaultWarehouse() {
   return warehouse;
 }
 
-async function createTestInboundOrder(warehouseId: string, supplierId: string, productId: string, quantity: number = 100) {
   const inboundData = {
     type: 'PURCHASE_IN' as const,
     supplierId: supplierId,
-    warehouseId: warehouseId,
     expectedDate: new Date().toISOString(),
     note: 'P0 验证测试入库单',
     items: [
@@ -403,9 +401,7 @@ describe('P0-3: 确认入库事务验证', () => {
     // 获取确认前的库存
     const inventoryBefore = await prisma.inventory.findUnique({
       where: {
-        productId_warehouseId: {
           productId: testProduct.id,
-          warehouseId: testWarehouse.id,
         },
       },
     });
@@ -422,9 +418,7 @@ describe('P0-3: 确认入库事务验证', () => {
     // 获取确认后的库存
     const inventoryAfter = await prisma.inventory.findUnique({
       where: {
-        productId_warehouseId: {
           productId: testProduct.id,
-          warehouseId: testWarehouse.id,
         },
       },
     });
@@ -501,9 +495,7 @@ describe('P0-3: 确认入库事务验证', () => {
     // 验证库存记录
     const inventory = await prisma.inventory.findUnique({
       where: {
-        productId_warehouseId: {
           productId: testProduct.id,
-          warehouseId: testWarehouse.id,
         },
       },
     });

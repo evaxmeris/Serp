@@ -38,11 +38,9 @@ function createMockParams(id: string) {
 
 // ==================== 测试数据工厂函数 ====================
 
-function createTestInboundOrderData(warehouseId: string, supplierId: string, productId: string) {
   return {
     type: 'PURCHASE_IN' as const,
     supplierId: supplierId,
-    warehouseId: warehouseId,
     expectedDate: new Date().toISOString(),
     note: '测试入库单',
     items: [
@@ -408,7 +406,6 @@ describe('Inventory API', () => {
     it('应该成功调整库存（增加）', async () => {
       const adjustData = {
         productId: testProduct.id,
-        warehouseId: testWarehouse.id,
         quantity: 100,
         type: 'IN' as const,
         note: '测试入库',
@@ -426,7 +423,6 @@ describe('Inventory API', () => {
     it('应该成功调整库存（减少）', async () => {
       const adjustData = {
         productId: testProduct.id,
-        warehouseId: testWarehouse.id,
         quantity: -20,
         type: 'OUT' as const,
         note: '测试出库',
@@ -444,7 +440,6 @@ describe('Inventory API', () => {
     it('应该返回 409 当调整后库存为负', async () => {
       const adjustData = {
         productId: testProduct.id,
-        warehouseId: testWarehouse.id,
         quantity: -1000,
         type: 'OUT' as const,
         note: '应该失败',
@@ -461,7 +456,6 @@ describe('Inventory API', () => {
     it('应该验证必填字段', async () => {
       const invalidData = {
         productId: undefined,
-        warehouseId: testWarehouse.id,
         quantity: 100,
       };
 

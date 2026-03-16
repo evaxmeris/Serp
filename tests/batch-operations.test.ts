@@ -72,9 +72,7 @@ async function prepareTestData() {
   // 创建测试库存
   await prisma.inventory.upsert({
     where: {
-      productId_warehouseId: {
         productId: testProduct.id,
-        warehouseId: testWarehouse.id,
       },
     },
     update: {
@@ -83,7 +81,6 @@ async function prepareTestData() {
     },
     create: {
       productId: testProduct.id,
-      warehouseId: testWarehouse.id,
       quantity: 1000,
       availableQuantity: 1000,
     },
@@ -118,12 +115,10 @@ async function prepareTestData() {
       data: {
         outboundNo: uniqueId('OB'),
         orderId: testOrder.id,
-        warehouseId: testWarehouse.id,
         status: 'PENDING',
         items: {
           create: {
             productId: testProduct.id,
-            warehouseId: testWarehouse.id,
             quantity: 10,
             unitPrice: 100,
           },
@@ -153,9 +148,7 @@ async function cleanupTestData() {
     // 删除库存
     await prisma.inventory.delete({
       where: {
-        productId_warehouseId: {
           productId: testProduct.id,
-          warehouseId: testWarehouse.id,
         },
       },
     }).catch(() => {});
@@ -234,12 +227,10 @@ describe('批量操作 API', () => {
             data: {
               outboundNo: uniqueId('OB-DRAFT'),
               orderId: testOrder.id,
-              warehouseId: testWarehouse.id,
               status: 'DRAFT',
               items: {
                 create: {
                   productId: testProduct.id,
-                  warehouseId: testWarehouse.id,
                   quantity: 5,
                   unitPrice: 100,
                 },
@@ -277,12 +268,10 @@ describe('批量操作 API', () => {
           data: {
             outboundNo: uniqueId('OB-SHIPPED'),
             orderId: testOrder.id,
-            warehouseId: testWarehouse.id,
             status: 'SHIPPED',
             items: {
               create: {
                 productId: testProduct.id,
-                warehouseId: testWarehouse.id,
                 quantity: 5,
                 unitPrice: 100,
               },
