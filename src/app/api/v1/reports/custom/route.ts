@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
         filters: filters || [],
         isSystem: false,
         isActive: true,
-        createdBy: user.id  // 记录创建者
+        createdBy: user.user.id  // 记录创建者
       }
     });
 
