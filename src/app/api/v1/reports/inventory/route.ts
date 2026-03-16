@@ -179,7 +179,7 @@ async function getInventoryData(params: {
         const items = itemsWithAging.filter(item => item.warehouse === warehouseId);
         return {
           warehouseId,
-          warehouseName: items[0]?.warehouse?.name || '未知仓库',
+          warehouseName: warehouseId,
           totalItems: items.length,
           totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
           totalValue: items.reduce((sum, item) => sum + (item.quantity * Number(item.product.costPrice || 0)), 0)
