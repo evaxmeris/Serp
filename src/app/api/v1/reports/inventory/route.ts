@@ -193,7 +193,7 @@ async function getInventoryData(params: {
         const items = itemsWithAging.filter(item => item.product.category === categoryId);
         return {
           categoryId,
-          categoryName: items[0]?.product.category?.name || '未知品类',
+          categoryName: items[0]?.product.category || '未知品类',
           totalItems: items.length,
           totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
           totalValue: items.reduce((sum, item) => sum + (item.quantity * Number(item.product.costPrice || 0)), 0)
