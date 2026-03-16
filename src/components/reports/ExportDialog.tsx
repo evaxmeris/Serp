@@ -17,12 +17,15 @@ export default function ExportDialog({ isOpen, onClose, reportId, reportName }: 
   const [format, setFormat] = useState('excel');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [taskId, setTaskId] = useState('');
 
   if (!isOpen) return null;
 
   async function handleExport() {
     setLoading(true);
     setMessage('');
+    setProgress(0);
     
     try {
       const response = await fetch('/api/v1/reports/export', {
@@ -38,20 +41,64 @@ export default function ExportDialog({ isOpen, onClose, reportId, reportName }: 
       const result = await response.json();
       
       if (response.ok) {
+        setTaskId(result.data.id);
         setMessage(`✅ ${result.message}`);
-        setTimeout(() => {
-          onClose();
-          setMessage('');
-        }, 3000);
+        
+        // 轮询导出进度
+        pollExportProgress(result.data.id);
       } else {
         setMessage(`❌ ${result.error}`);
+        setLoading(false);
       }
     } catch (error) {
       setMessage('❌ 导出失败，请稍后重试');
       console.error('导出失败:', error);
-    } finally {
       setLoading(false);
     }
+  }
+
+  async function pollExportProgress(id: string) {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/v1/reports/export/${id}`);
+        const result = await response.json();
+        
+        if (result.data) {
+          setProgress(result.data.progress || 0);
+          
+          if (result.data.status === 'completed') {
+            clearInterval(pollInterval);
+            setMessage(`✅ 导出完成！文件大小：${formatFileSize(result.data.fileSize)}`);
+            setLoading(false);
+            
+            // 自动下载
+            if (result.data.downloadUrl) {
+              window.open(result.data.downloadUrl, '_blank');
+            }
+            
+            setTimeout(() => {
+              onClose();
+              setMessage('');
+              setProgress(0);
+            }, 3000);
+          } else if (result.data.status === 'failed') {
+            clearInterval(pollInterval);
+            setMessage(`❌ 导出失败：${result.data.error}`);
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error('查询进度失败:', error);
+      }
+    }, 1000); // 每秒查询一次
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (!bytes) return '';
+    const mb = bytes / 1024 / 1024;
+    if (mb >= 1) return `${mb.toFixed(2)} MB`;
+    const kb = bytes / 1024;
+    return `${kb.toFixed(2)} KB`;
   }
 
   return (

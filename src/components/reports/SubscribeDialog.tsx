@@ -84,15 +84,82 @@ export default function SubscribeDialog({ isOpen, onClose, reportId, reportName 
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">接收邮箱</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="不填则使用默认邮箱"
-            className="w-full p-2 border rounded"
-          />
+          <label className="block text-sm font-medium mb-2">通知方式</label>
+          <div className="flex gap-4">
+            <label className="flex items-center">
+              <input
+                type="radio"
+                value="email"
+                checked={notifyMethod === 'email'}
+                onChange={(e) => setNotifyMethod(e.target.value)}
+                className="mr-2"
+              />
+              📧 邮箱
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                value="dingtalk"
+                checked={notifyMethod === 'dingtalk'}
+                onChange={(e) => setNotifyMethod(e.target.value)}
+                className="mr-2"
+              />
+              💬 钉钉
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                value="wechat"
+                checked={notifyMethod === 'wechat'}
+                onChange={(e) => setNotifyMethod(e.target.value)}
+                className="mr-2"
+              />
+              📱 企业微信
+            </label>
+          </div>
         </div>
+
+        {notifyMethod === 'email' && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">接收邮箱</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="不填则使用默认邮箱"
+              className="w-full p-2 border rounded"
+            />
+          </div>
+        )}
+
+        {notifyMethod === 'dingtalk' && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">钉钉 Webhook</label>
+            <input
+              type="url"
+              value={dingtalkWebhook}
+              onChange={(e) => setDingtalkWebhook(e.target.value)}
+              placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+              className="w-full p-2 border rounded font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              在钉钉群机器人设置中获取 Webhook 地址
+            </p>
+          </div>
+        )}
+
+        {notifyMethod === 'wechat' && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">企业微信 Webhook</label>
+            <input
+              type="url"
+              value={dingtalkWebhook}
+              onChange={(e) => setDingtalkWebhook(e.target.value)}
+              placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+              className="w-full p-2 border rounded font-mono text-sm"
+            />
+          </div>
+        )}
 
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">报表格式</label>

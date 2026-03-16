@@ -140,10 +140,34 @@ export default function ScheduleDialog({ isOpen, onClose, reportId, reportName }
           </div>
         )}
 
+        {!isValid && (
+          <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded text-sm">
+            <strong>Cron 表达式格式：</strong>分 时 日 月 星期
+            <br />
+            示例：0 8 * * * （每天 8:00）
+          </div>
+        )}
+
         <div className="flex gap-3">
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2 border rounded hover:bg-gray-50"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleCreateSchedule}
+            disabled={loading || !taskName}
+            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+          >
+            {loading ? '创建中...' : '创建任务'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+="flex-1 px-4 py-2 border rounded hover:bg-gray-50"
           >
             取消
           </button>
