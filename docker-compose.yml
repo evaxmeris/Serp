@@ -10,7 +10,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=3001
       - DATABASE_URL=postgresql://trade_erp:trade_erp_password@host.docker.internal:5432/trade_erp?schema=public
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -18,7 +18,7 @@ services:
     networks:
       - trade-erp-network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
