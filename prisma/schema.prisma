@@ -211,6 +211,7 @@ model Order {
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
+  outboundOrders    OutboundOrder[]    @relation(name: "OrderOutboundOrders")
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -333,9 +334,9 @@ model Payment {
 }
 
 model Shipment {
-  id              String         @id @default(cuid())
+  id              String          @id @default(cuid())
   orderId         String
-  shipmentNo      String         @unique
+  shipmentNo      String          @unique
   carrier         String?
   trackingNo      String?
   etd             DateTime?
@@ -345,13 +346,14 @@ model Shipment {
   containerNo     String?
   sealNo          String?
   packages        Int?
-  grossWeight     Decimal?       @db.Decimal(10, 2)
-  volume          Decimal?       @db.Decimal(10, 2)
-  status          ShipmentStatus @default(PENDING)
+  grossWeight     Decimal?        @db.Decimal(10, 2)
+  volume          Decimal?        @db.Decimal(10, 2)
+  status          ShipmentStatus  @default(PENDING)
   notes           String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  order           Order          @relation(fields: [orderId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  order           Order           @relation(fields: [orderId], references: [id])
+  outboundOrders  OutboundOrder[]
 
   @@map("shipments")
 }
@@ -1256,42 +1258,44 @@ enum TrendDirection {
   VOLATILE
 }
 
-
 // ==================== Sprint 5: 出库订单模型 ====================
 
 model OutboundOrder {
-  id            String            @id @default(cuid())
-  outboundNo    String            @unique @default(cuid())
-  orderId       String            // 关联销售订单
-  warehouseId   String            // 关联仓库
-  status        String            // draft/pending/confirmed/cancelled
+  id            String              @id @default(cuid())
+  outboundNo    String              @unique @default(cuid())
+  orderId       String // 关联销售订单
+  warehouseId   String // 关联仓库
+  status        String // draft/pending/confirmed/cancelled
   totalAmount   Decimal?
   items         OutboundOrderItem[]
-  shipment      Shipment?
+  shipment      Shipment?           @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
   inventoryLogs InventoryLog[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade, name: "OrderOutboundOrders")
+  shipmentId    String?
 
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
   @@map("outbound_orders")
 }
+
 model OutboundOrderItem {
-  id              String          @id @default(cuid())
+  id              String        @id @default(cuid())
   outboundOrderId String
   productId       String
   quantity        Int
-  shippedQuantity Int             @default(0)
+  shippedQuantity Int           @default(0)
   unitPrice       Decimal?
-  outboundOrder   OutboundOrder   @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
-  product         Product         @relation(fields: [productId], references: [id])
+  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
 
   @@index([outboundOrderId])
   @@index([productId])
   @@map("outbound_order_items")
 }
+
 // ==================== Sprint 6: 财务报表模块 ====================
 
 // 报表定义表 - 存储报表的元数据和配置
@@ -1299,7 +1303,7 @@ model ReportDefinition {
   id          String   @id @default(cuid())
   name        String
   code        String   @unique
-  type        String   // PROFIT/SALES/INVENTORY/PURCHASE/CASHFLOW/CUSTOM
+  type        String // PROFIT/SALES/INVENTORY/PURCHASE/CASHFLOW/CUSTOM
   description String?
   config      Json     @default("{}")
   columns     Json     @default("[]")
@@ -1309,12 +1313,12 @@ model ReportDefinition {
   createdBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   // 关联关系
-  data         ReportData[]
+  data          ReportData[]
   subscriptions ReportSubscription[]
-  exportLogs   ReportExportLog[]
-  schedules    ReportSchedule[]
+  exportLogs    ReportExportLog[]
+  schedules     ReportSchedule[]
 
   @@index([type])
   @@index([isActive])
@@ -1325,14 +1329,14 @@ model ReportDefinition {
 model ReportData {
   id          String   @id @default(cuid())
   reportId    String
-  period      String   // 2026-03 / 2026-Q1 / 2026
+  period      String // 2026-03 / 2026-Q1 / 2026
   periodStart DateTime
   periodEnd   DateTime
   data        Json     @default("{}")
   metrics     Json     @default("{}")
   generatedAt DateTime @default(now())
   createdAt   DateTime @default(now())
-  
+
   // 关联关系
   report ReportDefinition @relation(fields: [reportId], references: [id])
 
@@ -1344,18 +1348,18 @@ model ReportData {
 
 // 订阅配置表 - 用户订阅报表推送
 model ReportSubscription {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   reportId   String
   userId     String
-  frequency  String   // DAILY/WEEKLY/MONTHLY
-  format     String   @default("pdf") // pdf/excel/csv
+  frequency  String // DAILY/WEEKLY/MONTHLY
+  format     String    @default("pdf") // pdf/excel/csv
   email      String?
-  isActive   Boolean  @default(true)
+  isActive   Boolean   @default(true)
   lastSentAt DateTime?
   nextSendAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
   // 关联关系
   report ReportDefinition @relation(fields: [reportId], references: [id])
 
@@ -1367,18 +1371,18 @@ model ReportSubscription {
 
 // 导出日志表 - 记录报表导出历史
 model ReportExportLog {
-  id          String   @id @default(cuid())
-  reportId    String
-  userId      String
-  exportType  String   // IMMEDIATE/SCHEDULED
-  format      String   // pdf/excel/csv
-  fileUrl     String?
-  fileSize    Int?
-  status      String   @default("pending") // pending/completed/failed
+  id           String    @id @default(cuid())
+  reportId     String
+  userId       String
+  exportType   String // IMMEDIATE/SCHEDULED
+  format       String // pdf/excel/csv
+  fileUrl      String?
+  fileSize     Int?
+  status       String    @default("pending") // pending/completed/failed
   errorMessage String?
-  createdAt   DateTime @default(now())
-  completedAt DateTime?
-  
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
   // 关联关系
   report ReportDefinition @relation(fields: [reportId], references: [id])
 
@@ -1390,18 +1394,18 @@ model ReportExportLog {
 
 // 定时任务表 - 报表自动生成调度
 model ReportSchedule {
-  id           String   @id @default(cuid())
-  reportId     String
-  name         String
+  id             String    @id @default(cuid())
+  reportId       String
+  name           String
   cronExpression String
-  timezone     String   @default("Asia/Shanghai")
-  config       Json     @default("{}")
-  isActive     Boolean  @default(true)
-  lastRunAt    DateTime?
-  nextRunAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+  timezone       String    @default("Asia/Shanghai")
+  config         Json      @default("{}")
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
   // 关联关系
   report ReportDefinition @relation(fields: [reportId], references: [id])
 
