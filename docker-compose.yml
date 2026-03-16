@@ -10,7 +10,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3000
       - DATABASE_URL=postgresql://trade_erp:trade_erp_password@host.docker.internal:5432/trade_erp?schema=public
     extra_hosts:
       - "host.docker.internal:host-gateway"
