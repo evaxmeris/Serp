@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. 检查是否已转化过
+    // 2. 检查是否已转化过（通过名称匹配）
     const existingProduct = await prisma.product.findFirst({
-      where: { sourceResearchId: researchProductId },
+      where: { name: researchProduct.name },
     });
 
     if (existingProduct) {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
           sku,
           name: researchProduct.name,
           nameEn: researchProduct.nameEn,
-          categoryId: researchProduct.categoryId,
+          category: researchProduct.category?.code,
           specification: researchProduct.specification,
           costPrice: researchProduct.costPrice || 0,
           salePrice: researchProduct.salePrice || 0,
@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
           description: researchProduct.conclusion,
           images: researchProduct.images,
           status: 'ACTIVE',
-          sourceResearchId: researchProductId,
         },
       });
 
