@@ -189,8 +189,8 @@ async function getInventoryData(params: {
   // 按品类分组
   const byCategory = categoryId
     ? []
-    : Array.from(new Set(itemsWithAging.map(item => item.product.categoryId))).map(categoryId => {
-        const items = itemsWithAging.filter(item => item.product.categoryId === categoryId);
+    : Array.from(new Set(itemsWithAging.map(item => item.product.category))).map(categoryId => {
+        const items = itemsWithAging.filter(item => item.product.category === categoryId);
         return {
           categoryId,
           categoryName: items[0]?.product.category?.name || '未知品类',
