@@ -173,3 +173,15 @@ export function isAdmin(session: AuthSession | null): boolean {
 export function isManager(session: AuthSession | null): boolean {
   return session?.user.role === 'ADMIN' || session?.user.role === 'MANAGER';
 }
+
+/**
+ * 获取当前用户（兼容旧代码）
+ * 
+ * @param request Next.js 请求对象
+ * @returns 用户会话或 null
+ * 
+ * @说明 getCurrentUser 是 getSession 的别名，用于兼容旧代码
+ */
+export async function getCurrentUser(request: NextRequest): Promise<AuthSession | null> {
+  return getSession(request);
+}
