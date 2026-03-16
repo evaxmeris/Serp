@@ -156,10 +156,10 @@ async function getInventoryData(params: {
   const summary = {
     totalItems: itemsWithAging.length,
     totalQuantity: itemsWithAging.reduce((sum, item) => sum + item.quantity, 0),
-    totalValue: itemsWithAging.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0),
-    lowStockItems: itemsWithAging.filter(item => item.quantity <= item.reorderPoint).length,
+    totalValue: itemsWithAging.reduce((sum, item) => sum + (item.quantity * item.product.costPrice), 0),
+    lowStockItems: itemsWithAging.filter(item => item.quantity <= 0).length,
     outOfStockItems: itemsWithAging.filter(item => item.quantity === 0).length,
-    overstockItems: itemsWithAging.filter(item => item.quantity > item.maxStockLevel).length
+    overstockItems: itemsWithAging.filter(item => item.quantity > 999999).length
   };
 
   // 按库龄区间统计
@@ -182,7 +182,7 @@ async function getInventoryData(params: {
           warehouseName: items[0]?.warehouse?.name || '未知仓库',
           totalItems: items.length,
           totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
-          totalValue: items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0)
+          totalValue: items.reduce((sum, item) => sum + (item.quantity * item.product.costPrice), 0)
         };
       });
 
@@ -196,7 +196,7 @@ async function getInventoryData(params: {
           categoryName: items[0]?.product.category?.name || '未知品类',
           totalItems: items.length,
           totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
-          totalValue: items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0)
+          totalValue: items.reduce((sum, item) => sum + (item.quantity * item.product.costPrice), 0)
         };
       });
 
