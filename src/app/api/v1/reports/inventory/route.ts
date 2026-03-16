@@ -116,7 +116,6 @@ async function getInventoryData(params: {
     },
     include: {
       product: true,
-      warehouse: true,
       inventoryLogs: {
         orderBy: { createdAt: 'asc' },
         take: 1  // 获取最早的入库记录（FIFO）
