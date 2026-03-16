@@ -132,10 +132,7 @@ export async function PUT(
               data: {
                 productId: item.productId,
                 quantity: item.quantity,
-                batchNo: item.batchNo,
-                location: item.location,
                 unitPrice: item.unitPrice,
-                notes: item.notes,
               },
             });
           } else if (item.productId) {
@@ -145,10 +142,7 @@ export async function PUT(
                 outboundOrderId: id,
                 productId: item.productId,
                 quantity: item.quantity || 1,
-                batchNo: item.batchNo,
-                location: item.location,
                 unitPrice: item.unitPrice || 0,
-                notes: item.notes,
               },
             });
           }

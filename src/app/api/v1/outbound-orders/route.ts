@@ -201,10 +201,7 @@ export async function POST(request: NextRequest) {
             create: data.items.map(item => ({
               productId: item.productId,
               quantity: item.quantity,
-              batchNo: item.batchNo,
-              location: item.location,
               unitPrice: item.unitPrice,
-              notes: item.notes,
             })),
           },
         },
