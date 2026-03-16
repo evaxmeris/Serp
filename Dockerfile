@@ -20,7 +20,7 @@ COPY . .
 RUN npx prisma generate
 
 # 构建生产版本（跳过 TypeScript 检查，因为旧代码有类型问题）
-RUN npx next build --no-lint
+RUN npx next build
 
 # 暴露端口
 EXPOSE 3000
