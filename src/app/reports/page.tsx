@@ -106,6 +106,19 @@ export default function ReportsPage() {
     }
   }
 
+  // 快速操作函数
+  function handleExport() {
+    alert('导出功能开发中...\n\n将支持：\n- Excel 格式导出\n- CSV 格式导出\n- PDF 格式导出');
+  }
+
+  function handleSubscribe() {
+    alert('订阅功能开发中...\n\n将支持：\n- 邮件订阅\n- 钉钉推送\n- 微信通知');
+  }
+
+  function handleSchedule() {
+    alert('定时任务功能开发中...\n\n将支持：\n- 定时生成报表\n- 定时发送订阅\n- 定时备份数据');
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -165,13 +178,22 @@ export default function ReportsPage() {
       <div className="mt-8 bg-white rounded-lg shadow-md p-6 border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h2>
         <div className="flex flex-wrap gap-3">
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+          <button
+            onClick={handleExport}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
             📥 导出报表
           </button>
-          <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+          <button
+            onClick={handleSubscribe}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
             📧 设置订阅
           </button>
-          <button className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors">
+          <button
+            onClick={handleSchedule}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
             ⏰ 定时任务
           </button>
         </div>
