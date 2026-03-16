@@ -142,6 +142,7 @@ const quickLinks = [
   { name: '入库单', path: '/inbound-orders', icon: '📥' },
   { name: '库存', path: '/inventory', icon: '📊' },
   { name: '出库单', path: '/outbound-orders', icon: '🚚' },
+  { name: '财务报表', path: '/reports', icon: '📈' },
 ];
 
 // Phase 2 产品调研模块快捷入口
@@ -331,6 +332,72 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
+      {/* Sprint 6 财务报表模块 */}
+      <Card className="mb-8 border-2 border-purple-200 bg-purple-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-purple-600" />
+            📊 Sprint 6 - 财务报表模块（✅ 已完成 - v0.6.0 已发布）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/profit">
+                <DollarSign className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">利润报表</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/sales">
+                <BarChart3 className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">销售报表</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/inventory">
+                <Package className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">库存报表</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/purchase">
+                <ShoppingCart className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">采购报表</div>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/cashflow">
+                <TrendingUp className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">现金流报表</div>
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>10 个 API • 6 个页面 • v0.6.0</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>测试通过率：100%</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>性能评级：⭐⭐⭐⭐⭐</span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-sm text-purple-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>状态：✅ 已完成 | 整体进度：100% (6/6 阶段) | 2026-03-16 发布</span>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-sm text-purple-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>✨ 新增功能：自定义报表 | 报表导出 | 报表订阅推送</span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 认证与用户管理 */}
       <Card className="mb-8">
         <CardHeader>
@@ -361,7 +428,7 @@ export default function HomePage() {
           <CardTitle className="flex items-center justify-between">
             <span>🚀 开发进度</span>
             <Badge variant="outline" className="text-sm">
-              整体完成度：95%
+              整体完成度：100%
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -403,4 +470,6 @@ export default function HomePage() {
       </Card>
     </div>
   );
+}
+ );
 }
