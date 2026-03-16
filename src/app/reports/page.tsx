@@ -7,6 +7,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import ExportDialog from '@/components/reports/ExportDialog';
+import SubscribeDialog from '@/components/reports/SubscribeDialog';
+import ScheduleDialog from '@/components/reports/ScheduleDialog';
 
 // 报表类型定义
 interface ReportType {
@@ -179,24 +182,49 @@ export default function ReportsPage() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h2>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={handleExport}
+            onClick={() => handleExport()}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            📥 导出报表
+            📥 导出全部报表
           </button>
           <button
-            onClick={handleSubscribe}
+            onClick={() => handleSubscribe()}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
           >
-            📧 设置订阅
+            📧 批量订阅
           </button>
           <button
-            onClick={handleSchedule}
+            onClick={() => handleSchedule()}
             className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
           >
             ⏰ 定时任务
           </button>
         </div>
+      </div>
+
+      {/* 对话框 */}
+      <ExportDialog
+        isOpen={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
+      <SubscribeDialog
+        isOpen={subscribeDialogOpen}
+        onClose={() => setSubscribeDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
+      <ScheduleDialog
+        isOpen={scheduleDialogOpen}
+        onClose={() => setScheduleDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
+    </div>
+  );
+}
+       </div>
       </div>
     </div>
   );
