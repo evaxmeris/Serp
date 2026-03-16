@@ -18,10 +18,12 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER';
  * 用户会话接口
  */
 export interface AuthSession {
+  user: {
   id: string;
   email: string;
   name?: string;
-  role: UserRole;
+    role: UserRole;
+  };
 }
 
 /**
