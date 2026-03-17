@@ -167,19 +167,3 @@ export default function ScheduleDialog({ isOpen, onClose, reportId, reportName }
     </div>
   );
 }
-="flex-1 px-4 py-2 border rounded hover:bg-gray-50"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleCreateSchedule}
-            disabled={loading || !taskName}
-            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-          >
-            {loading ? '创建中...' : '创建任务'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
