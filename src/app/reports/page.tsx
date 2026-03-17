@@ -92,6 +92,12 @@ const REPORT_TYPES: ReportType[] = [
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<ReportType[]>([]);
+  
+  // 对话框状态
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
 
   useEffect(() => {
     // 加载报表列表
@@ -110,16 +116,19 @@ export default function ReportsPage() {
   }
 
   // 快速操作函数
-  function handleExport() {
-    alert('导出功能开发中...\n\n将支持：\n- Excel 格式导出\n- CSV 格式导出\n- PDF 格式导出');
+  function handleExport(report?: ReportType) {
+    setSelectedReport(report || null);
+    setExportDialogOpen(true);
   }
 
-  function handleSubscribe() {
-    alert('订阅功能开发中...\n\n将支持：\n- 邮件订阅\n- 钉钉推送\n- 微信通知');
+  function handleSubscribe(report?: ReportType) {
+    setSelectedReport(report || null);
+    setSubscribeDialogOpen(true);
   }
 
-  function handleSchedule() {
-    alert('定时任务功能开发中...\n\n将支持：\n- 定时生成报表\n- 定时发送订阅\n- 定时备份数据');
+  function handleSchedule(report?: ReportType) {
+    setSelectedReport(report || null);
+    setScheduleDialogOpen(true);
   }
 
   if (loading) {
