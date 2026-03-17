@@ -17,6 +17,8 @@ export default function SubscribeDialog({ isOpen, onClose, reportId, reportName 
   const [frequency, setFrequency] = useState('WEEKLY');
   const [email, setEmail] = useState('');
   const [format, setFormat] = useState('pdf');
+  const [notifyMethod, setNotifyMethod] = useState('email');
+  const [dingtalkWebhook, setDingtalkWebhook] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -32,10 +34,12 @@ export default function SubscribeDialog({ isOpen, onClose, reportId, reportName 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId: reportId || 'all',
-          userId: 'current-user', // TODO: 从 session 获取
+          userId: 'current-user',
           frequency,
           format,
-          email: email || undefined,
+          email: notifyMethod === 'email' ? email : undefined,
+          notifyMethod,
+          dingtalkWebhook: notifyMethod === 'dingtalk' ? dingtalkWebhook : undefined,
           isActive: true
         })
       });
