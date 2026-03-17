@@ -19,6 +19,7 @@ export default function ScheduleDialog({ isOpen, onClose, reportId, reportName }
   const [timezone, setTimezone] = useState('Asia/Shanghai');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [isValid, setIsValid] = useState(true);
 
   if (!isOpen) return null;
 
