@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import Navbar from "@/components/Navbar";
 
 // 使用系统字体，避免 Google Fonts 网络问题
 const systemFont = `
@@ -21,8 +22,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body style={{ fontFamily: systemFont }} className="antialiased">
-        <Providers>{children}</Providers>
+      <body style={{ fontFamily: systemFont }} className="antialiased bg-zinc-50 dark:bg-zinc-950">
+        <Providers>
+          <Navbar />
+          <main>{children}</main>
+        </Providers>
       </body>
     </html>
   );

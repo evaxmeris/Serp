@@ -1,60 +1,59 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+/**
+ * 登录 API - 简化认证方案
+ * 
+ * @文件说明 处理用户登录请求
+ * @作者 Trade ERP 团队
+ * @创建日期 2026-03-23
+ */
 
-// POST /api/auth/login - 用户登录
+import { NextResponse } from 'next/server';
+import { login } from '@/lib/auth-simple';
+import { rateLimit } from '@/lib/rate-limit';
+
+/**
+ * POST /api/auth/login - 用户登录
+ */
 export async function POST(request: Request) {
   try {
+    // 速率限制：5 次/15 分钟
+    const rateLimitError = rateLimit(request as any, {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    
+    if (rateLimitError) {
+      return rateLimitError;
+    }
+
     const body = await request.json();
     const { email, password } = body;
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: '邮箱和密码不能为空' },
         { status: 400 }
       );
     }
 
-    // 查找用户
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    // 调用简化认证
+    const result = await login(email, password);
 
-    if (!user || !user.passwordHash) {
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        user: result.user,
+        message: '登录成功',
+      });
+    } else {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
+        { error: result.error },
         { status: 401 }
       );
     }
-
-    // 验证密码
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
-    // 返回用户信息（不包含密码）
-    const userWithoutPassword = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-
-    return NextResponse.json({
-      user: userWithoutPassword,
-      message: 'Login successful',
-    });
   } catch (error) {
-    console.error('Error logging in user:', error);
+    console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'Failed to login' },
+      { error: '登录失败，请稍后重试' },
       { status: 500 }
     );
   }

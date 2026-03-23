@@ -32,45 +32,26 @@ export interface AuthSession {
  * @param request Next.js 请求对象
  * @returns 用户会话或 null
  * 
- * @说明 从请求头或 Cookie 中提取用户会话信息
- * @注意 当前为占位实现，需要集成 NextAuth 或 JWT
+ * @说明 从 Cookie 中提取 JWT 并验证，返回用户会话信息
  */
 export async function getSession(request: NextRequest): Promise<AuthSession | null> {
-  // TODO: 实现真实的会话获取逻辑
-  // 当前返回一个默认的 ADMIN 用户用于开发测试
-  
   try {
-    // 从请求头获取 Authorization
-    const authHeader = request.headers.get('Authorization');
+    // 使用简化认证获取当前用户
+    const { getCurrentUser } = await import('@/lib/auth-simple');
+    const user = await getCurrentUser();
     
-    if (!authHeader) {
-      // 开发环境返回默认用户
-      if (process.env.NODE_ENV === 'development') {
-        return {
-          user: {
-            id: 'dev-user',
-            email: 'dev@trade-erp.com',
-            name: '开发用户',
-            role: 'ADMIN'
-          }
-        };
-      }
-      return null;
+    if (user) {
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role as UserRole,
+        }
+      };
     }
     
-    // TODO: 解析 JWT token
-    // const token = authHeader.replace('Bearer ', '');
-    // const session = await verifyToken(token);
-    
-    // 开发环境返回默认用户
-    return {
-      user: {
-        id: 'dev-user',
-        email: 'dev@trade-erp.com',
-        name: '开发用户',
-        role: 'ADMIN'
-      }
-    };
+    return null;
   } catch (error) {
     console.error('获取会话失败:', error);
     return null;

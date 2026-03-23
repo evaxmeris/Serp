@@ -1,11 +1,42 @@
-import { NextResponse } from 'next/server';
+/**
+ * 获取当前用户信息 API
+ * 
+ * @文件说明 获取已登录用户的详细信息
+ * @作者 Trade ERP 团队
+ * @创建日期 2026-03-23
+ */
 
-// GET /api/auth/me - 获取当前用户信息
+import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth-simple';
+
+/**
+ * GET /api/auth/me - 获取当前用户信息
+ */
 export async function GET() {
-  // 简单实现，从 localStorage 读取（实际生产环境应该从 token 解析）
-  // 这里返回一个示例响应
-  return NextResponse.json({
-    user: null,
-    message: 'User information not available. Please login.',
-  });
+  try {
+    const user = await getCurrentUser();
+
+    if (user) {
+      return NextResponse.json({
+        authenticated: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      });
+    } else {
+      return NextResponse.json(
+        { authenticated: false },
+        { status: 401 }
+      );
+    }
+  } catch (error) {
+    console.error('Get user error:', error);
+    return NextResponse.json(
+      { authenticated: false, error: '获取用户信息失败' },
+      { status: 500 }
+    );
+  }
 }

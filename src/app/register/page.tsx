@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import Link from 'next/link';
 import {
   Select,
   SelectContent,
@@ -13,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { UserPlus } from 'lucide-react';
+import Link from 'next/link';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function RegisterPage() {
     setError('');
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError('两次输入的密码不一致');
       setLoading(false);
       return;
     }
@@ -54,32 +55,42 @@ export default function RegisterPage() {
       if (res.ok) {
         router.push('/login');
       } else {
-        setError(data.error || 'Registration failed');
+        setError(data.error || '注册失败');
       }
     } catch (error) {
-      setError('Network error');
+      setError('网络错误，请重试');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-900">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">注册账户</CardTitle>
-          <CardDescription>创建您的 Trade ERP 账户</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+      
+      <Card className="w-full max-w-md shadow-xl border-0 ring-1 ring-zinc-200 dark:ring-zinc-800">
+        <CardHeader className="text-center space-y-4 pb-2">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <UserPlus className="h-8 w-8 text-white" />
+          </div>
+          <div className="space-y-1">
+            <CardTitle className="text-3xl font-bold">创建账户</CardTitle>
+            <CardDescription className="text-base">
+              开始使用 Trade ERP
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
+        
+        <CardContent className="pt-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50 rounded">
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
                 {error}
               </div>
             )}
             
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="email">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="email">
                 邮箱
               </label>
               <Input
@@ -90,26 +101,29 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                className="h-11"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="name">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="name">
                 姓名
               </label>
               <Input
                 id="name"
-                placeholder="Your Name"
+                placeholder="你的姓名"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
+                className="h-11"
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="role">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="role">
                 角色
               </label>
               <Select
@@ -118,7 +132,7 @@ export default function RegisterPage() {
                   setFormData({ ...formData, role: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-11">
                   <SelectValue placeholder="选择角色" />
                 </SelectTrigger>
                 <SelectContent>
@@ -130,7 +144,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="password">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="password">
                 密码
               </label>
               <Input
@@ -141,13 +155,14 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
+                className="h-11"
                 required
                 minLength={6}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="confirmPassword">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="confirmPassword">
                 确认密码
               </label>
               <Input
@@ -158,18 +173,26 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, confirmPassword: e.target.value })
                 }
+                className="h-11"
                 required
                 minLength={6}
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full h-11 text-base font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-md hover:shadow-lg transition-all" 
+              disabled={loading}
+            >
               {loading ? '注册中...' : '注册'}
             </Button>
 
-            <div className="text-center text-sm">
-              <Link href="/login" className="text-blue-600 hover:underline">
-                已有账户？立即登录
+            <div className="text-center text-sm pt-2">
+              <Link 
+                href="/login" 
+                className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors"
+              >
+                已有账户？立即登录 →
               </Link>
             </div>
           </form>
