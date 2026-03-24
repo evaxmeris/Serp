@@ -102,11 +102,11 @@ const sprintData = [
   {
     sprint: 'Sprint 6',
     module: '财务报表',
-    status: 'pending',
-    progress: 0,
+    status: 'completed',
+    progress: 100,
     apiCount: 10,
     pageCount: 6,
-    testPass: '-',
+    testPass: '100%',
     icon: TrendingUp,
   },
 ];

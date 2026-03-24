@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { DollarSign, BarChart3, Package } from 'lucide-react';
 
 interface DashboardData {
   sales: {
@@ -310,6 +313,51 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* 财务报表快捷入口 */}
+      <Card className="border-2 border-purple-200 bg-purple-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-purple-600" />
+            📊 财务报表中心（✅ 已上线）
+          </CardTitle>
+          <CardDescription>
+            快速访问常用财务报表，全面掌握企业经营状况
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/profit">
+                <DollarSign className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">利润报表</div>
+                <p className="text-xs text-muted-foreground text-center">分析企业利润状况</p>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/sales">
+                <BarChart3 className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">销售报表</div>
+                <p className="text-xs text-muted-foreground text-center">查看销售数据分析</p>
+              </Link>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
+              <Link href="/reports/inventory">
+                <Package className="h-8 w-8 text-purple-600" />
+                <div className="text-sm font-medium">库存报表</div>
+                <p className="text-xs text-muted-foreground text-center">监控库存周转情况</p>
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-4 flex items-center justify-center">
+            <Button variant="default" className="bg-purple-600 hover:bg-purple-700" asChild>
+              <Link href="/reports">
+                进入报表中心 →
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -80,27 +80,27 @@ export async function POST(
 
       // 恢复库存（如果是待确认状态，说明库存已被扣减）
       if (outboundOrder.status === 'PENDING') {
-        const warehouseId = outboundOrder.warehouseId; // 从父对象获取仓库 ID
+        const warehouseCode = outboundOrder.warehouseId; // 从父对象获取仓库 ID
         for (const item of outboundOrder.items) {
-          await tx.inventory.update({
+          await tx.inventoryItem.update({
             where: {
-              productId_warehouseId: {
+              productId_warehouse: {
                 productId: item.productId,
-                warehouseId: warehouseId,
+                warehouse: warehouseCode,
               },
             },
             data: {
               quantity: { increment: item.quantity },
-              availableQuantity: { increment: item.quantity },
+              availableQty: { increment: item.quantity },
             },
           });
 
           // 创建库存日志
-          const inventory = await tx.inventory.findUnique({
+          const inventoryItem = await tx.inventoryItem.findUnique({
             where: {
-              productId_warehouseId: {
+              productId_warehouse: {
                 productId: item.productId,
-                warehouseId: warehouseId,
+                warehouse: warehouseCode,
               },
             },
           });
@@ -108,11 +108,11 @@ export async function POST(
           await tx.inventoryLog.create({
             data: {
               productId: item.productId,
-              warehouseId: warehouseId,
+              warehouseId: warehouseCode,
               type: 'RETURN',
               quantity: item.quantity,
-              beforeQuantity: inventory ? inventory.quantity - item.quantity : 0,
-              afterQuantity: inventory?.quantity || 0,
+              beforeQuantity: inventoryItem ? inventoryItem.quantity - item.quantity : 0,
+              afterQuantity: inventoryItem?.quantity || 0,
               referenceType: 'OUTBOUND_ORDER',
               referenceId: id,
               note: `出库单取消恢复库存：${outboundOrder.outboundNo}${reason ? `，原因：${reason}` : ''}`,

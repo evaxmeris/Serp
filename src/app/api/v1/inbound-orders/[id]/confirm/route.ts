@@ -118,42 +118,42 @@ export async function POST(
       });
 
       // 3. 更新库存（在事务中）
-      const warehouseId = order.warehouseId || 'default';
+      const warehouseCode = order.warehouseId || 'MAIN';
 
       for (const item of order.items) {
         const actualQty = item.actualQuantity || item.expectedQuantity;
 
         // 查找或创建库存记录
-        let inventory = await tx.inventory.findUnique({
+        let inventoryItem = await tx.inventoryItem.findUnique({
           where: {
-            productId_warehouseId: {
+            productId_warehouse: {
               productId: item.productId,
-              warehouseId,
+              warehouse: warehouseCode,
             },
           },
         });
 
-        if (!inventory) {
-          inventory = await tx.inventory.create({
+        if (!inventoryItem) {
+          inventoryItem = await tx.inventoryItem.create({
             data: {
               productId: item.productId,
-              warehouseId,
+              warehouse: warehouseCode,
               quantity: 0,
-              availableQuantity: 0,
-              lockedQuantity: 0,
+              availableQty: 0,
+              reservedQty: 0,
             },
           });
         }
 
         // 更新库存数量
-        const beforeQuantity = inventory.quantity;
+        const beforeQuantity = inventoryItem.quantity;
         const afterQuantity = beforeQuantity + actualQty;
 
-        await tx.inventory.update({
-          where: { id: inventory.id },
+        await tx.inventoryItem.update({
+          where: { id: inventoryItem.id },
           data: {
             quantity: afterQuantity,
-            availableQuantity: {
+            availableQty: {
               increment: actualQty,
             },
             lastInboundDate: new Date(),
@@ -164,7 +164,7 @@ export async function POST(
         await tx.inventoryLog.create({
           data: {
             productId: item.productId,
-            warehouseId,
+            warehouseId: warehouseCode,
             inboundOrderId: id,
             type: 'IN',
             quantity: actualQty,

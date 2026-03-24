@@ -47,16 +47,8 @@ export async function login(email: string, password: string) {
       return { success: false, error: '账号或密码错误' };
     }
 
-    // 验证用户状态
-    if (user.status === 'PENDING_APPROVAL') {
-      return { success: false, error: '账户等待审批' };
-    }
-    if (user.status === 'SUSPENDED') {
-      return { success: false, error: '账户已暂停' };
-    }
-    if (user.status === 'DISABLED') {
-      return { success: false, error: '账户已禁用' };
-    }
+    // 验证用户状态（预留）
+    // User 模型目前没有 status 字段，暂时跳过状态检查
 
     // 生成 JWT token
     const token = await new SignJWT({ 

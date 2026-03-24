@@ -156,18 +156,18 @@ export async function POST(request: NextRequest) {
       }
 
       // 检查库存
-      const inventory = await prisma.inventory.findUnique({
+      const inventoryItem = await prisma.inventoryItem.findUnique({
         where: {
-          productId_warehouseId: {
+          productId_warehouse: {
             productId: item.productId,
-            warehouseId: data.warehouseId,
+            warehouse: data.warehouseId,
           },
         },
       });
 
-      if (!inventory || inventory.availableQuantity < item.quantity) {
+      if (!inventoryItem || inventoryItem.availableQty < item.quantity) {
         return conflictResponse(
-          `产品 ${product.name} 库存不足（可用：${inventory?.availableQuantity || 0}，需要：${item.quantity}）`
+          `产品 ${product.name} 库存不足（可用：${inventoryItem?.availableQty || 0}，需要：${item.quantity}）`
         );
       }
     }
@@ -215,28 +215,28 @@ export async function POST(request: NextRequest) {
       });
 
       // 扣减库存
-      const warehouseId = data.warehouseId; // 从出库单获取仓库 ID
+      const warehouseCode = data.warehouseId; // 从出库单获取仓库 ID
       for (const item of data.items) {
-        await tx.inventory.update({
+        await tx.inventoryItem.update({
           where: {
-            productId_warehouseId: {
+            productId_warehouse: {
               productId: item.productId,
-              warehouseId: warehouseId,
+              warehouse: warehouseCode,
             },
           },
           data: {
             quantity: { decrement: item.quantity },
-            availableQuantity: { decrement: item.quantity },
+            availableQty: { decrement: item.quantity },
             lastOutboundDate: now,
           },
         });
 
         // 创建库存日志
-        const inventory = await tx.inventory.findUnique({
+        const inventoryItem = await tx.inventoryItem.findUnique({
           where: {
-            productId_warehouseId: {
+            productId_warehouse: {
               productId: item.productId,
-              warehouseId: warehouseId,
+              warehouse: warehouseCode,
             },
           },
         });
@@ -244,11 +244,11 @@ export async function POST(request: NextRequest) {
         await tx.inventoryLog.create({
           data: {
             productId: item.productId,
-            warehouseId: warehouseId,
+            warehouseId: warehouseCode,
             type: 'OUT',
             quantity: -item.quantity,
-            beforeQuantity: inventory ? inventory.quantity + item.quantity : item.quantity,
-            afterQuantity: inventory?.quantity || 0,
+            beforeQuantity: inventoryItem ? inventoryItem.quantity + item.quantity : item.quantity,
+            afterQuantity: inventoryItem?.quantity || 0,
             referenceType: 'OUTBOUND_ORDER',
             referenceId: order.id,
             note: `出库单：${outboundNo}`,

@@ -8,23 +8,15 @@
 
 import { NextResponse } from 'next/server';
 import { login } from '@/lib/auth-simple';
-import { rateLimit } from '@/lib/rate-limit';
+
+// 失败登录计数 Map（只记录失败登录）
+const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
 
 /**
  * POST /api/auth/login - 用户登录
  */
 export async function POST(request: Request) {
   try {
-    // 速率限制：5 次/15 分钟
-    const rateLimitError = rateLimit(request as any, {
-      limit: 5,
-      windowMs: 15 * 60 * 1000,
-    });
-    
-    if (rateLimitError) {
-      return rateLimitError;
-    }
-
     const body = await request.json();
     const { email, password } = body;
 
@@ -45,6 +37,38 @@ export async function POST(request: Request) {
         message: '登录成功',
       });
     } else {
+      // 登录失败，计数
+      const ip = request.headers.get('x-forwarded-for') || 
+                 request.headers.get('x-real-ip') || 
+                 'unknown';
+      
+      const now = Date.now();
+      let record = failedLoginMap.get(ip);
+      
+      if (!record || now > record.resetTime) {
+        record = { count: 1, resetTime: now + 15 * 60 * 1000 };
+      } else {
+        record.count += 1;
+      }
+      
+      failedLoginMap.set(ip, record);
+      
+      // 检查是否超过限制
+      if (record.count > 5) {
+        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+        return NextResponse.json(
+          { 
+            error: '请求过于频繁，请稍后再试',
+            retryAfter: retryAfter,
+            message: `请在 ${retryAfter} 秒后重试`
+          },
+          { 
+            status: 429,
+            headers: { 'Retry-After': retryAfter.toString() }
+          }
+        );
+      }
+      
       return NextResponse.json(
         { error: result.error },
         { status: 401 }

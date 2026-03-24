@@ -191,26 +191,26 @@ async function batchCancel(orders: any[]) {
 
       // 如果是 PENDING 状态，恢复库存
       if (order.status === 'PENDING') {
-        const warehouseId = order.warehouseId; // 从父对象获取仓库 ID
+        const warehouseCode = order.warehouseId; // 从父对象获取仓库 ID
         for (const item of order.items) {
-          await prisma.inventory.update({
+          await prisma.inventoryItem.update({
             where: {
-              productId_warehouseId: {
+              productId_warehouse: {
                 productId: item.productId,
-                warehouseId: warehouseId,
+                warehouse: warehouseCode,
               },
             },
             data: {
               quantity: { increment: item.quantity },
-              availableQuantity: { increment: item.quantity },
+              availableQty: { increment: item.quantity },
             },
           });
 
-          const inventory = await prisma.inventory.findUnique({
+          const inventoryItem = await prisma.inventoryItem.findUnique({
             where: {
-              productId_warehouseId: {
+              productId_warehouse: {
                 productId: item.productId,
-                warehouseId: warehouseId,
+                warehouse: warehouseCode,
               },
             },
           });
@@ -218,11 +218,11 @@ async function batchCancel(orders: any[]) {
           await prisma.inventoryLog.create({
             data: {
               productId: item.productId,
-              warehouseId: warehouseId,
+              warehouseId: warehouseCode,
               type: 'RETURN',
               quantity: item.quantity,
-              beforeQuantity: inventory ? inventory.quantity - item.quantity : 0,
-              afterQuantity: inventory?.quantity || 0,
+              beforeQuantity: inventoryItem ? inventoryItem.quantity - item.quantity : 0,
+              afterQuantity: inventoryItem?.quantity || 0,
               referenceType: 'OUTBOUND_ORDER',
               referenceId: order.id,
               note: `批量取消出库单：${order.outboundNo}`,

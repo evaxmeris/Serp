@@ -1,23 +1,14 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { LogOut, Home, BarChart3 } from 'lucide-react';
+import { Home, BarChart3, TrendingUp } from 'lucide-react';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 
-// 导航栏组件 - 包含登出功能
+// 导航栏组件 - 包含用户头像下拉菜单
 export default function Navbar() {
-  const router = useRouter();
   const pathname = usePathname();
-
-  // 处理登出
-  const handleLogout = () => {
-    // 清除本地存储的用户信息
-    localStorage.removeItem('user');
-    // 跳转到登录页
-    router.push('/login');
-    router.refresh();
-  };
 
   // 获取当前用户信息
   const getUser = () => {
@@ -70,26 +61,34 @@ export default function Navbar() {
                   看板
                 </Link>
               </Button>
+              <Button
+                variant={pathname.startsWith('/reports') ? 'default' : 'ghost'}
+                size="sm"
+                asChild
+              >
+                <Link href="/reports">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  报表
+                </Link>
+              </Button>
             </div>
           </div>
 
-          {/* 右侧：用户信息 + 登出按钮 */}
+          {/* 右侧：用户头像下拉菜单 */}
           <div className="flex items-center gap-4">
             {user && (
-              <div className="hidden md:flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                <span>👤</span>
-                <span>{user.email}</span>
-              </div>
+              <UserAvatar
+                user={{
+                  name: user.name,
+                  email: user.email,
+                  avatarUrl: user.avatarUrl,
+                  status: 'online',
+                }}
+                size="md"
+                showStatus={true}
+                showName={true}
+              />
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-zinc-600 hover:text-red-600 hover:bg-red-50 dark:text-zinc-400 dark:hover:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              登出
-            </Button>
           </div>
         </div>
       </div>

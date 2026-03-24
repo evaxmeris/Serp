@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (warehouseId) {
-      where.warehouseId = warehouseId;
+      where.warehouse = warehouseId;
     }
 
     if (search) {
@@ -48,9 +48,9 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const total = await prisma.inventory.count({ where });
+    const total = await prisma.inventoryItem.count({ where });
 
-    const inventories = await prisma.inventory.findMany({
+    const inventories = await prisma.inventoryItem.findMany({
       where,
       include: {
         product: {
@@ -59,13 +59,6 @@ export async function GET(request: NextRequest) {
             name: true,
             sku: true,
             unit: true,
-          },
-        },
-        warehouse: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
           },
         },
       },
@@ -103,45 +96,30 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // 查找库存记录
-    let inventory = await prisma.inventory.findUnique({
+    // 查找或创建库存记录
+    let inventoryItem = await prisma.inventoryItem.findUnique({
       where: {
-        productId_warehouseId: {
+        productId_warehouse: {
           productId: data.productId,
-          warehouseId: data.warehouseId,
+          warehouse: data.warehouseId,
         },
       },
     });
 
     // 如果库存记录不存在，创建一个新的
-    if (!inventory) {
-      // 确保仓库存在
-      let warehouse = await prisma.warehouse.findUnique({
-        where: { id: data.warehouseId },
-      });
-
-      if (!warehouse) {
-        warehouse = await prisma.warehouse.create({
-          data: {
-            code: data.warehouseId,
-            name: data.warehouseId === 'default' ? '默认仓库' : data.warehouseId,
-            status: 'ACTIVE',
-          },
-        });
-      }
-
-      inventory = await prisma.inventory.create({
+    if (!inventoryItem) {
+      inventoryItem = await prisma.inventoryItem.create({
         data: {
           productId: data.productId,
-          warehouseId: data.warehouseId,
+          warehouse: data.warehouseId,
           quantity: 0,
-          availableQuantity: 0,
-          lockedQuantity: 0,
+          availableQty: 0,
+          reservedQty: 0,
         },
       });
     }
 
-    const beforeQuantity = inventory.quantity;
+    const beforeQuantity = inventoryItem.quantity;
     const afterQuantity = beforeQuantity + data.quantity;
 
     // 检查调整后库存是否为负
@@ -155,15 +133,15 @@ export async function POST(request: NextRequest) {
     };
 
     if (data.quantity > 0) {
-      updateData.availableQuantity = { increment: data.quantity };
+      updateData.availableQty = { increment: data.quantity };
       updateData.lastInboundDate = new Date();
     } else {
-      updateData.availableQuantity = { decrement: Math.abs(data.quantity) };
+      updateData.availableQty = { decrement: Math.abs(data.quantity) };
       updateData.lastOutboundDate = new Date();
     }
 
-    await prisma.inventory.update({
-      where: { id: inventory.id },
+    await prisma.inventoryItem.update({
+      where: { id: inventoryItem.id },
       data: updateData,
     });
 
@@ -183,7 +161,7 @@ export async function POST(request: NextRequest) {
     });
 
     return successResponse({
-      inventory,
+      inventoryItem,
       log,
       beforeQuantity,
       afterQuantity,

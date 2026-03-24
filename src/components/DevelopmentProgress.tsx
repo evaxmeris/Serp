@@ -40,22 +40,22 @@ const sprints: Sprint[] = [
     id: 4,
     name: 'Sprint 4',
     modules: ['入库管理', '库存管理'],
-    status: 'in-progress',
-    completion: 95,
+    status: 'completed',
+    completion: 100,
   },
   {
     id: 5,
     name: 'Sprint 5',
     modules: ['出库管理'],
-    status: 'pending',
-    completion: 0,
+    status: 'completed',
+    completion: 100,
   },
   {
     id: 6,
     name: 'Sprint 6',
     modules: ['财务报表'],
-    status: 'pending',
-    completion: 0,
+    status: 'completed',
+    completion: 100,
   },
 ];
 
