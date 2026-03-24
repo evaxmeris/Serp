@@ -119,7 +119,9 @@ describe('Outbound Integration Tests', () => {
     // 创建测试库存（产品 1: 500 个，产品 2: 300 个）
     await prisma.inventory.upsert({
       where: {
+        productId_warehouseId: {
           productId: testProduct1.id,
+          warehouseId: testWarehouse.id,
         },
       },
       update: {
@@ -128,6 +130,7 @@ describe('Outbound Integration Tests', () => {
       },
       create: {
         productId: testProduct1.id,
+        warehouseId: testWarehouse.id,
         quantity: 500,
         availableQuantity: 500,
       },
@@ -135,7 +138,9 @@ describe('Outbound Integration Tests', () => {
 
     await prisma.inventory.upsert({
       where: {
+        productId_warehouseId: {
           productId: testProduct2.id,
+          warehouseId: testWarehouse.id,
         },
       },
       update: {
@@ -144,6 +149,7 @@ describe('Outbound Integration Tests', () => {
       },
       create: {
         productId: testProduct2.id,
+        warehouseId: testWarehouse.id,
         quantity: 300,
         availableQuantity: 300,
       },
@@ -231,7 +237,9 @@ describe('Outbound Integration Tests', () => {
       if (testProduct1 && testWarehouse) {
         await prisma.inventory.delete({
           where: {
+            productId_warehouseId: {
               productId: testProduct1.id,
+              warehouseId: testWarehouse.id,
             },
           },
         }).catch(() => {});
@@ -240,7 +248,9 @@ describe('Outbound Integration Tests', () => {
       if (testProduct2 && testWarehouse) {
         await prisma.inventory.delete({
           where: {
+            productId_warehouseId: {
               productId: testProduct2.id,
+              warehouseId: testWarehouse.id,
             },
           },
         }).catch(() => {});
@@ -286,14 +296,18 @@ describe('Outbound Integration Tests', () => {
     it('应该记录初始库存', async () => {
       const inv1 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct1.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
 
       const inv2 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct2.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -314,12 +328,14 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: 20,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
             notes: '第一批出库',
           },
           {
             productId: testProduct2.id,
             quantity: 15,
+            warehouseId: testWarehouse.id,
             unitPrice: 80,
             notes: '第一批出库',
           },
@@ -347,14 +363,18 @@ describe('Outbound Integration Tests', () => {
     it('创建出库单后应该立即扣减库存', async () => {
       const inv1 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct1.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
 
       const inv2 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct2.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -446,14 +466,18 @@ describe('Outbound Integration Tests', () => {
       // 验证库存恢复
       const inv1 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct1.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
 
       const inv2 = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct2.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -524,6 +548,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: 50,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -560,6 +585,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: 50,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -626,6 +652,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: 10,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -648,6 +675,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: 'non-existent-product',
             quantity: 10,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -666,7 +694,9 @@ describe('Outbound Integration Tests', () => {
     it('应该拒绝库存不足的出库单', async () => {
       const inventory = await prisma.inventory.findUnique({
         where: {
+          productId_warehouseId: {
             productId: testProduct1.id,
+            warehouseId: testWarehouse.id,
           },
         },
       });
@@ -677,6 +707,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: (inventory?.availableQuantity || 0) + 1,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],
@@ -700,6 +731,7 @@ describe('Outbound Integration Tests', () => {
           {
             productId: testProduct1.id,
             quantity: 1,
+            warehouseId: testWarehouse.id,
             unitPrice: 100,
           },
         ],

@@ -21,6 +21,7 @@ RUN npx prisma generate
 
 # 构建生产版本（typescript.ignoreBuildErrors 会跳过类型检查）
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
 RUN npx next build
 
 # 暴露端口

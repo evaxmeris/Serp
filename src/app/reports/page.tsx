@@ -7,6 +7,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import ExportDialog from '@/components/reports/ExportDialog';
+import SubscribeDialog from '@/components/reports/SubscribeDialog';
+import ScheduleDialog from '@/components/reports/ScheduleDialog';
 
 // 报表类型定义
 interface ReportType {
@@ -89,6 +92,12 @@ const REPORT_TYPES: ReportType[] = [
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<ReportType[]>([]);
+  
+  // 对话框状态
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
 
   useEffect(() => {
     // 加载报表列表
@@ -104,6 +113,22 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // 快速操作函数
+  function handleExport(report?: ReportType) {
+    setSelectedReport(report || null);
+    setExportDialogOpen(true);
+  }
+
+  function handleSubscribe(report?: ReportType) {
+    setSelectedReport(report || null);
+    setSubscribeDialogOpen(true);
+  }
+
+  function handleSchedule(report?: ReportType) {
+    setSelectedReport(report || null);
+    setScheduleDialogOpen(true);
   }
 
   if (loading) {
@@ -165,17 +190,46 @@ export default function ReportsPage() {
       <div className="mt-8 bg-white rounded-lg shadow-md p-6 border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h2>
         <div className="flex flex-wrap gap-3">
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-            📥 导出报表
+          <button
+            onClick={() => handleExport()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            📥 导出全部报表
           </button>
-          <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-            📧 设置订阅
+          <button
+            onClick={() => handleSubscribe()}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
+            📧 批量订阅
           </button>
-          <button className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors">
+          <button
+            onClick={() => handleSchedule()}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
             ⏰ 定时任务
           </button>
         </div>
       </div>
+
+      {/* 对话框 */}
+      <ExportDialog
+        isOpen={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
+      <SubscribeDialog
+        isOpen={subscribeDialogOpen}
+        onClose={() => setSubscribeDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
+      <ScheduleDialog
+        isOpen={scheduleDialogOpen}
+        onClose={() => setScheduleDialogOpen(false)}
+        reportId={selectedReport?.id}
+        reportName={selectedReport?.name}
+      />
     </div>
   );
 }
