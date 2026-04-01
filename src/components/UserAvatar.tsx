@@ -76,10 +76,21 @@ export function UserAvatar({ user, size = 'md', showStatus = true, showName = fa
   const bgColor = stringToColor(user.name || user.email);
   const status = user.status || 'online';
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    router.push('/login');
-    router.refresh();
+  const handleLogout = async () => {
+    try {
+      // 调用后端登出 API 清除 cookie
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // 清除 localStorage 中的用户信息
+      localStorage.removeItem('user');
+      // 使用 Next.js router 跳转到登录页面
+      router.push('/login');
+      router.refresh();
+    }
   };
 
   const handleProfileClick = () => {

@@ -1,0 +1,717 @@
+// ============================================
+// Trade ERP v0.8.0 - Database Schema Changes (Update v2)
+// 新增：权限系统、多平台集成、海外仓、审批流程、财务模块
+// ============================================
+
+// ------------------------------
+// 1. RBAC 权限系统 - 用户角色权限
+// ------------------------------
+
+// 原 User 表保留，迁移扩展：
+// - 移除原 role 枚举字段，改用多角色关联
+// - 新增 status、lastLoginAt 等字段
+
+model Permission {
+  id          String    @id @default(cuid())
+  name        String    // 权限名称，如 "order:create"
+  code        String    @unique // 权限编码，如 order_create
+  description String?   // 权限描述
+  type        String    // 模块分类：system/user/order/product/warehouse/finance/platform
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  roles       Role[]    @relation("RolePermissions", manyToMany)
+
+  @@index([type])
+  @@index([code])
+  @@map("permissions")
+}
+
+model Role {
+  id          String         @id @default(cuid())
+  name        String         // 角色名称，如 "系统管理员"
+  code        String         @unique // 角色编码，如 "admin"
+  description String?        // 角色描述
+  isSystem    Boolean        @default(false) // 是否系统内置角色
+  isActive    Boolean        @default(true)
+  permissions Permission[]   @relation("RolePermissions", manyToMany)
+  users       User[]         @relation("UserRoles", manyToMany)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([isActive])
+  @@index([code])
+  @@map("roles")
+}
+
+model User {
+  // 保留原有字段，新增扩展
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String?
+  passwordHash   String?
+  avatar         String?
+  // --- 新增字段 ---
+  status         UserStatus      @default(PENDING_ACTIVATION)
+  lastLoginAt    DateTime?
+  lastLoginIp    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  // --- 关系 ---
+  roles          Role[]          @relation("UserRoles", manyToMany)
+  customers      Customer[]      @relation("Owner")
+  orders         Order[]         @relation("SalesRep")
+  purchaseOrders PurchaseOrder[] @relation("Purchaser")
+  suppliers      Supplier[]      @relation("Owner")
+  createdApprovals ApprovalFlow[] @relation("Creator")
+  approvalRecords ApprovalRecord[] @relation("Approver")
+
+  @@map("users")
+}
+
+enum UserStatus {
+  PENDING_ACTIVATION  // 待激活
+  ACTIVE              // 活跃
+  INACTIVE            // 非活跃
+  SUSPENDED           // 已停用
+}
+
+// ------------------------------
+// 2. 多平台账号集成
+// ------------------------------
+
+enum PlatformType {
+  ALIBABA     // 阿里国际站
+  AMZLON      // 亚马逊
+  TIKTOK      // TikTok Shop
+  SHOPIFY     // Shopify
+  DHOUSE      // 独立站
+  OTHER       // 其他
+}
+
+enum PlatformAccountStatus {
+  ACTIVE      // 正常
+  EXPIRED     // 过期
+  INVALID     // 失效
+  PENDING     // 待授权
+}
+
+model PlatformAccount {
+  id            String          @id @default(cuid())
+  platformType  PlatformType    // 平台类型
+  platformName  String          // 平台名称（显示用）
+  accountName   String          // 账号名称/店铺名
+  accountId     String          // 平台账号ID
+  sellerId      String?         // 卖家ID
+  authType      String          // 授权类型：oauth/refresh_token/api_key
+  appKey        String?         // App Key / Client ID
+  appSecret     String?         // App Secret（加密存储）
+  accessToken   String?         // Access Token（加密存储）
+  refreshToken  String?         // Refresh Token（加密存储）
+  tokenExpiresAt DateTime?      // Token 过期时间
+  region        String?         // 站点区域：US/CA/UK/AU etc.
+  currency      String          @default("USD")
+  status        PlatformAccountStatus @default(PENDING)
+  lastSyncAt    DateTime?       // 最后同步时间
+  lastSyncError  String?        // 最后同步错误信息
+  config        Json            @default("{}") // 其他配置
+  ownerId       String          // 账号负责人
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  // 关系
+  owner         User            @relation(fields: [ownerId], references: [id])
+  orders        PlatformOrder[]
+
+  @@index([platformType])
+  @@index([status])
+  @@index([ownerId])
+  @@index([accountId])
+  @@unique([platformType, accountId])
+  @@map("platform_accounts")
+}
+
+// ------------------------------
+// 3. 平台订单表
+// ------------------------------
+
+enum PlatformOrderStatus {
+  NEW           // 新订单
+  PROCESSING    // 处理中
+  SHIPPED       // 已发货
+  DELIVERED     // 已签收
+  CANCELLED     // 已取消
+  RETURNED      // 已退货
+}
+
+model PlatformOrder {
+  id                String              @id @default(cuid())
+  platformOrderId   String              // 平台订单ID
+  platformOrderNo   String?             // 平台订单号
+  platformAccountId String              // 关联平台账号
+  platformType      PlatformType        // 平台类型
+  buyerId           String?             // 买家ID
+  buyerName         String?             // 买家名称
+  buyerEmail        String?             // 买家邮箱
+  buyerPhone        String?             // 买家电话
+  status            PlatformOrderStatus // 订单状态
+  paymentStatus     String              // 支付状态
+  shipmentStatus    String              // 发货状态
+  currency          String              @default("USD")
+  totalAmount       Decimal             @db.Decimal(12, 2) // 订单总额
+  shippingFee       Decimal?            @db.Decimal(10, 2) // 运费
+  taxAmount         Decimal?            @db.Decimal(10, 2) // 税费
+  discountAmount    Decimal?            @db.Decimal(10, 2) // 折扣
+  netAmount         Decimal             @db.Decimal(12, 2) // 净金额
+  orderDate         DateTime            // 订单创建时间（平台）
+  paymentDate       DateTime?           // 支付时间
+  shipByDate        DateTime?           // 要求发货截止时间
+  shippingAddress   Json?               // 收货地址 JSON
+  trackingNumber    String?             // 追踪号
+  carrierCode       String?             // 承运人代码
+  notes             String?             // 买家留言
+  itemsCount        Int                 // 商品数量
+  linkedOrderId     String?             // 关联本地ERP订单ID
+  rawData           Json                @default("{}") // 原始数据 JSON
+  syncAt            DateTime            // 最后同步时间
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  // 关系
+  platformAccount   PlatformAccount     @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  items             PlatformOrderItem[]
+  linkedOrder       Order?              @relation(fields: [linkedOrderId], references: [id])
+
+  @@index([platformAccountId])
+  @@index([platformType])
+  @@index([status])
+  @@index([orderDate])
+  @@index([linkedOrderId])
+  @@unique([platformAccountId, platformOrderId])
+  @@map("platform_orders")
+}
+
+model PlatformOrderItem {
+  id                String          @id @default(cuid())
+  platformOrderId   String          // 平台订单ID
+  platformProductId String          // 平台商品ID
+  platformSku       String?         // 平台SKU
+  productId         String?         // 本地商品ID
+  productName       String          // 商品名称
+  variation         String?         // 变体信息
+  quantity          Int             // 数量
+  unitPrice         Decimal         @db.Decimal(10, 2) // 单价
+  totalPrice        Decimal         @db.Decimal(12, 2) // 总价
+  weight            Decimal?        @db.Decimal(10, 2)
+  imageUrl          String?         // 商品图片
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  // 关系
+  platformOrder     PlatformOrder   @relation(fields: [platformOrderId], references: [id], onDelete: Cascade)
+  product           Product?        @relation(fields: [productId], references: [id])
+
+  @@index([platformOrderId])
+  @@index([productId])
+  @@index([platformSku])
+  @@map("platform_order_items")
+}
+
+// ------------------------------
+// 4. 海外仓管理（含FBA）
+// ------------------------------
+
+enum OverseasWarehouseType {
+  FBA         // Amazon FBA
+  FBM         // 自发货海外仓
+  THIRD_PARTY // 第三方海外仓
+}
+
+enum OverseasWarehouseStatus {
+  ACTIVE      // 活跃
+  INACTIVE    // 停用
+}
+
+model OverseasWarehouse {
+  id          String                @id @default(cuid())
+  name        String                // 仓库名称
+  code        String                @unique // 仓库编码
+  type        OverseasWarehouseType // 仓库类型
+  country     String                // 国家
+  province    String?               // 省/州
+  city        String?               // 城市
+  address     String                // 详细地址
+  zipCode     String?               // 邮编
+  contactName String?               // 联系人
+  contactPhone String?              // 联系电话
+  email       String?               // 邮箱
+  isFba       Boolean               @default(false) // 是否FBA仓
+  fbaRegion   String?               // FBA区域编码
+  fbaWarehouseId String?            // FBA仓库ID
+  timezone    String                @default("UTC") // 时区
+  status      OverseasWarehouseStatus @default(ACTIVE)
+  config      Json                  @default("{}") // 配置信息
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  // 关系
+  inventories OverseasInventory[]
+  shipmentPlans OverseasShipmentPlan[]
+
+  @@index([type])
+  @@index([country])
+  @@index([status])
+  @@map("overseas_warehouses")
+}
+
+model OverseasInventory {
+  id                  String        @id @default(cuid())
+  warehouseId         String        // 海外仓ID
+  productId           String        // 产品ID
+  sku                 String        // SKU
+  fbaSku              String?       // FBA SKU
+  totalQty            Int           @default(0) // 总库存
+  availableQty        Int           @default(0) // 可售库存
+  reservedQty         Int           @default(0) // 预留库存
+  inboundQty          Int           @default(0) // 在途库存
+  lastSyncAt          DateTime?     // 最后同步时间
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  // 关系
+  warehouse           OverseasWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product             Product       @relation(fields: [productId], references: [id])
+  logs                OverseasInventoryLog[]
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([sku])
+  @@index([fbaSku])
+  @@map("overseas_inventory")
+}
+
+model OverseasInventoryLog {
+  id                  String              @id @default(cuid())
+  warehouseId         String              // 海外仓ID
+  inventoryId         String              // 库存ID
+  productId           String              // 产品ID
+  type                OverseasInventoryMovementType // 变动类型
+  changeQty           Int                 // 变动数量
+  beforeQty           Int                 // 变动前数量
+  afterQty            Int                 // 变动后数量
+  referenceType       String?             // 参考类型：shipment_plan/order/return/adjustment
+  referenceId         String?             // 参考ID
+  note                String?             // 备注
+  createdAt           DateTime            @default(now())
+  // 关系
+  inventory           OverseasInventory   @relation(fields: [inventoryId], references: [id])
+
+  @@index([inventoryId])
+  @@index([warehouseId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("overseas_inventory_logs")
+}
+
+enum OverseasInventoryMovementType {
+  RECEIVE     // 入库（自寄到仓）
+  SHIP        // 出库（订单发货）
+  RESERVE      // 预留
+  RELEASE      // 释放预留
+  TRANSFER_IN  // 调拨入
+  TRANSFER_OUT // 调拨出
+  ADJUSTMENT   // 盘点调整
+  RETURN       // 退货
+}
+
+// FBA 发货计划
+enum ShipmentPlanStatus {
+  DRAFT       // 草稿
+  CREATED     // 已创建
+  IN_TRANSIT  // 运输中
+  RECEIVED    // 已签收
+  CANCELLED   // 已取消
+}
+
+model OverseasShipmentPlan {
+  id                  String                @id @default(cuid())
+  planNo              String                @unique // 计划编号
+  warehouseId         String                // 目标海外仓ID
+  destinationCountry  String                // 目的国
+  shippingMode        String                // 运输方式：air/sea/express
+  carrier             String?               // 承运人
+  trackingNumber      String?               // 追踪号
+  status              ShipmentPlanStatus    @default(DRAFT)
+  estimatedDeparture  DateTime?             // 预计离港
+  estimatedArrival    DateTime?             // 预计到达
+  actualDeparture     DateTime?             // 实际离港
+  actualArrival       DateTime?             // 实际到达
+  totalQty            Int                   @default(0) // 总件数
+  totalWeight         Decimal?              @db.Decimal(10, 2) // 总重量
+  costEstimate        Decimal?              @db.Decimal(12, 2) // 预估运费
+  costActual          Decimal?              @db.Decimal(12, 2) // 实际运费
+  currency            String                @default("USD")
+  createdById         String                // 创建人ID
+  notes               String?               // 备注
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  // 关系
+  warehouse           OverseasWarehouse     @relation(fields: [warehouseId], references: [id])
+  createdBy           User                  @relation(fields: [createdById], references: [id])
+  items               OverseasShipmentPlanItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("overseas_shipment_plans")
+}
+
+model OverseasShipmentPlanItem {
+  id                  String                    @id @default(cuid())
+  shipmentPlanId      String                    // 发货计划ID
+  productId           String                    // 产品ID
+  quantity            Int                       // 发货数量
+  boxNo               String?                   // 箱号
+  weight              Decimal?                  @db.Decimal(10, 2)
+  receivedQty         Int                       @default(0) // 已签收数量
+  notes               String?
+  createdAt           DateTime                  @default(now())
+  // 关系
+  shipmentPlan        OverseasShipmentPlan      @relation(fields: [shipmentPlanId], references: [id], onDelete: Cascade)
+  product             Product                   @relation(fields: [productId], references: [id])
+
+  @@index([shipmentPlanId])
+  @@index([productId])
+  @@map("overseas_shipment_plan_items")
+}
+
+// ------------------------------
+// 5. 审批流程系统
+// ------------------------------
+
+enum ApprovalFlowStatus {
+  DRAFT       // 草稿
+  ACTIVE      // 启用
+  INACTIVE    // 停用
+}
+
+enum ApprovalNodeType {
+  USER        // 指定用户
+  ROLE        // 指定角色
+  SUPERVIOR   // 申请人上级
+  MANAGER     // 部门经理
+  CEO         // CEO
+}
+
+enum ApprovalAction {
+  PENDING     // 待处理
+  APPROVED    // 通过
+  REJECTED    // 拒绝
+  RETURNED    // 打回
+  TRANSFERRED // 转交
+}
+
+model ApprovalFlow {
+  id              String              @id @default(cuid())
+  name            String              // 流程名称：订单审批、采购审批、报销审批等
+  code            String              @unique // 流程编码
+  description     String?             // 描述
+  module          String              // 所属模块：order/purchase/finance/user
+  entityType      String              // 审批实体类型：order/po/reimbursement/user
+  status          ApprovalFlowStatus  @default(DRAFT)
+  isDefault       Boolean             @default(false)
+  config          Json                @default("{}") // 流程配置
+  nodes           Json                @default("[]") // 审批节点配置 JSON
+  condition       String?             // 触发条件
+  createdById     String              // 创建人
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // 关系
+  createdBy       User                @relation("Creator", fields: [createdById], references: [id])
+  records         ApprovalRecord[]
+
+  @@index([module])
+  @@index([status])
+  @@index([code])
+  @@map("approval_flows")
+}
+
+model ApprovalRecord {
+  id              String              @id @default(cuid())
+  flowId          String              // 审批流程ID
+  title           String              // 审批标题
+  entityType      String              // 实体类型
+  entityId        String              // 实体ID
+  currentStep     Int                 @default(1) // 当前步骤
+  totalSteps      Int                 // 总步骤
+  status          ApprovalAction      @default(PENDING)
+  createdById     String              // 申请人
+  createdByName   String?
+  approverId      String?             // 当前审批人
+  startedAt       DateTime            @default(now())
+  finishedAt      DateTime?           // 完成时间
+  result          String?             // 审批结果备注
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // 关系
+  flow            ApprovalFlow        @relation(fields: [flowId], references: [id])
+  createdBy       User                @relation("Creator", fields: [createdById], references: [id])
+  approver        User?               @relation("Approver", fields: [approverId], references: [id])
+  history         ApprovalHistory[]
+
+  @@index([flowId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([status])
+  @@index([createdById])
+  @@index([approverId])
+  @@index([createdAt])
+  @@map("approval_records")
+}
+
+model ApprovalHistory {
+  id              String              @id @default(cuid())
+  recordId        String              // 审批记录ID
+  step            Int                 // 步骤序号
+  nodeName        String              // 节点名称
+  nodeType        ApprovalNodeType    // 节点类型
+  approverId      String              // 审批人
+  action          ApprovalAction      // 操作
+  comment         String?             // 审批意见
+  actedAt         DateTime            @default(now())
+  // 关系
+  record          ApprovalRecord      @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  approver        User                @relation(fields: [approverId], references: [id])
+
+  @@index([recordId])
+  @@index([approverId])
+  @@index([actedAt])
+  @@map("approval_history")
+}
+
+// 用户注册审批表
+enum UserRegistrationStatus {
+  PENDING    // 待审核
+  APPROVED   // 已批准
+  REJECTED   // 已拒绝
+}
+
+model UserRegistration {
+  id              String                  @id @default(cuid())
+  email           String                  @unique
+  name            String
+  passwordHash    String
+  company         String?
+  phone           String?
+  position        String?
+  status          UserRegistrationStatus  @default(PENDING)
+  ipAddress       String?
+  userAgent       String?
+  approvalId      String?
+  approvedAt      DateTime?
+  approvedById   String?
+  rejectReason    String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  // 关系
+  approvedBy      User?                   @relation(fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("user_registrations")
+}
+
+// ------------------------------
+// 6. 财务模块
+// ------------------------------
+
+enum AccountType {
+  CASH            // 现金
+  BANK            // 银行账户
+  ALIPAY          // 支付宝
+  WECHAT          // 微信
+  PAYPAL          // PayPal
+  OTHER           // 其他
+}
+
+enum AccountStatus {
+  ACTIVE          // 活跃
+  INACTIVE        // 停用
+}
+
+// 账户表
+model Account {
+  id              String          @id @default(cuid())
+  name            String          // 账户名称
+  type            AccountType     // 账户类型
+  accountNumber   String?         // 账号
+  bankName        String?         // 银行名称
+  branchName      String?         // 支行名称
+  currency        String          @default("CNY")
+  openingBalance  Decimal         @db.Decimal(14, 2) @default(0) // 期初余额
+  currentBalance  Decimal         @db.Decimal(14, 2) @default(0) // 当前余额
+  isDefault       Boolean         @default(false)
+  status          AccountStatus   @default(ACTIVE)
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  // 关系
+  transactions    Transaction[]
+
+  @@index([type])
+  @@index([status])
+  @@index([currency])
+  @@map("accounts")
+}
+
+// 交易方向
+enum TransactionType {
+  INCOME          // 收入
+  EXPENSE         // 支出
+  TRANSFER_IN     // 转入
+  TRANSFER_OUT    // 转出
+  REFUND          // 退款
+}
+
+// 交易分类
+enum TransactionCategory {
+  SALES           // 销售收入
+  PURCHASE        // 采购支出
+  FREIGHT         // 运费
+  TAX             // 税费
+  SALARY          // 工资
+  RENT            // 租金
+  UTILITY         // 水电
+  MARKETING       // 营销推广
+  OFFICE          // 办公耗材
+  TRAVEL          // 差旅费
+  ENTERTAINMENT   // 业务招待
+  INSURANCE       // 保险
+  INTEREST        // 利息
+  OTHER           // 其他
+}
+
+enum TransactionStatus {
+  PENDING         // 待确认
+  CONFIRMED       // 已确认
+  CANCELLED       // 已取消
+}
+
+// 交易明细表
+model Transaction {
+  id              String              @id @default(cuid())
+  transactionNo   String              @unique // 交易编号
+  accountId       String              // 账户ID
+  type            TransactionType     // 交易类型
+  category        TransactionCategory // 交易分类
+  amount          Decimal             @db.Decimal(14, 2) // 金额
+  currency        String              @default("CNY")
+  exchangeRate    Decimal             @default(1) @db.Decimal(10, 6)
+  fee             Decimal             @default(0) @db.Decimal(10, 2) // 手续费
+  netAmount       Decimal             @db.Decimal(14, 2) // 净额
+  balanceAfter    Decimal             @db.Decimal(14, 2) // 交易后余额
+  transactionDate DateTime            // 交易日期
+  description     String?             // 描述
+  payee           String?             // 收款人
+  payer           String?             // 付款人
+  referenceType   String?             // 参考类型：order/po/reimbursement
+  referenceId     String?             // 参考ID
+  invoiceNo       String?             // 发票号
+  attachments     String[]            // 附件
+  status          TransactionStatus   @default(PENDING)
+  reconciled      Boolean             @default(false) // 是否已对账
+  reconciledAt    DateTime?
+  notes           String?
+  createdById     String              // 创建人
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // 关系
+  account         Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdBy       User                @relation(fields: [createdById], references: [id])
+
+  @@index([accountId])
+  @@index([type])
+  @@index([category])
+  @@index([transactionDate])
+  @@index([status])
+  @@index([reconciled])
+  @@index([referenceType, referenceId])
+  @@map("transactions")
+}
+
+// 费用报销表
+enum ReimbursementStatus {
+  DRAFT           // 草稿
+  PENDING         // 待审批
+  APPROVED        // 已批准
+  PAID            // 已支付
+  REJECTED        // 已拒绝
+  CANCELLED       // 已取消
+}
+
+model Expense {
+  id              String              @id @default(cuid())
+  expenseNo       String              @unique
+  claimantId      String              // 申请人
+  category        TransactionCategory // 费用分类
+  amount          Decimal             @db.Decimal(12, 2) // 金额
+  currency        String              @default("CNY")
+  expenseDate     DateTime            // 消费日期
+  description     String              // 费用说明
+  receipts        String[]            // 发票/收据附件
+  status          ReimbursementStatus @default(DRAFT)
+  approvalId      String?             // 关联审批记录
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  paymentAccountId String?            // 付款账户
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // 关系
+  claimant        User                @relation(fields: [claimantId], references: [id])
+  reimbursement   Reimbursement?
+  paymentAccount  Account?            @relation(fields: [paymentAccountId], references: [id])
+
+  @@index([claimantId])
+  @@index([category])
+  @@index([status])
+  @@index([expenseDate])
+  @@map("expenses")
+}
+
+model Reimbursement {
+  id              String              @id @default(cuid())
+  reimbursementNo String              @unique
+  claimantId      String              // 申请人
+  totalAmount     Decimal             @db.Decimal(12, 2) // 总金额
+  currency        String              @default("CNY")
+  status          ReimbursementStatus @default(DRAFT)
+  description     String?
+  approvalId      String?             // 审批记录ID
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  paymentAccountId String?
+  paymentTransactionId String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // 关系
+  claimant        User                @relation(fields: [claimantId], references: [id])
+  expenses        Expense[]
+  paymentAccount  Account?            @relation(fields: [paymentAccountId], references: [id])
+
+  @@index([claimantId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reimbursements")
+}
+
+// ------------------------------
+// 新增到现有 Order 表的关系（迁移说明）
+// ------------------------------
+// 原 Order 表需要添加：
+// - platformOrderId String?
+// - platformOrder PlatformOrder? @relation(fields: [platformOrderId], references: [id])
+
+// ------------------------------
+// 索引优化建议
+// ------------------------------
+// 1. 高频查询字段都已添加索引
+// 2. 外键字段都已添加索引
+// 3. 唯一约束已配置
+// 4. 复合索引覆盖常用查询场景

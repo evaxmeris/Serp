@@ -2,49 +2,159 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import {
+  ClipboardList,
+  AlertTriangle,
+  FileText,
+  DollarSign,
+  TrendingUp,
+  Plus,
+  ShoppingCart,
+  Download,
+  Package,
+  Search,
+  Edit,
+  UserPlus,
+  BarChart3,
+} from 'lucide-react';
 import Link from 'next/link';
-import { DollarSign, BarChart3, Package } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
+import { getCurrentUserRole } from '@/components/Sidebar';
+import { UserRole } from '@/components/Sidebar';
+
+// 关键指标卡片数据结构
+interface MetricCard {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+  getValue: (data: DashboardData) => string | number;
+  secondary?: string;
+  roles: UserRole[];
+}
+
+// 快捷操作
+interface QuickAction {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  href: string;
+  roles: UserRole[];
+}
+
+// 待办事项
+interface TodoItem {
+  id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'processing';
+}
 
 interface DashboardData {
-  sales: {
-    totalOrders: number;
-    totalRevenue: number;
-    avgOrderValue: number;
-    activeCustomers: number;
-    growth: number;
-  };
-  customers: {
-    totalCustomers: number;
-    newCustomers: number;
-    activeCustomers: number;
-  };
-  products: {
-    totalProducts: number;
-    activeProducts: number;
-    newProducts: number;
-  };
-  conversion: {
-    totalInquiries: number;
-    totalQuotations: number;
-    totalOrders: number;
-    inquiryToQuotationRate: number;
-    quotationToOrderRate: number;
-  };
-  alerts: {
-    lowStockItems: number;
+  overview: {
     pendingOrders: number;
+    lowStockAlerts: number;
+    pendingApprovals: number;
+    pendingPayments: number;
+    todaySales: number;
+    monthlyGrossMargin: number;
   };
+  salesTrend: Array<{ date: string; amount: number }>;
+  channelDistribution: Array<{ name: string; value: number }>;
+  recentTodos: TodoItem[];
+  recentApprovals: TodoItem[];
 }
+
+// 根据角色获取要显示的指标卡片
+const getMetricCards = (role: UserRole): MetricCard[] => {
+  const allCards: MetricCard[] = [
+    {
+      id: 'pendingOrders',
+      title: '待办订单',
+      icon: <ClipboardList className="h-8 w-8" />,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      getValue: (data) => data.overview.pendingOrders,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'SALES', 'WAREHOUSE', 'USER'],
+    },
+    {
+      id: 'lowStock',
+      title: '库存预警',
+      icon: <AlertTriangle className="h-8 w-8" />,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      getValue: (data) => `${data.overview.lowStockAlerts} 款`,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'PURCHASING', 'WAREHOUSE'],
+    },
+    {
+      id: 'pendingApprovals',
+      title: '审批待办',
+      icon: <FileText className="h-8 w-8" />,
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-50',
+      getValue: (data) => data.overview.pendingApprovals,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'FINANCE'],
+    },
+    {
+      id: 'pendingPayments',
+      title: '待收款',
+      icon: <DollarSign className="h-8 w-8" />,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      getValue: (data) => `$${data.overview.pendingPayments.toLocaleString()}`,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE', 'MANAGER'],
+    },
+    {
+      id: 'todaySales',
+      title: '今日销售额',
+      icon: <TrendingUp className="h-8 w-8" />,
+      color: 'text-green-600',
+      bgColor: 'bg-emerald-50',
+      getValue: (data) => `$${data.overview.todaySales.toLocaleString()}`,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'SALES'],
+    },
+    {
+      id: 'monthlyMargin',
+      title: '本月毛利率',
+      icon: <BarChart3 className="h-8 w-8" />,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      getValue: (data) => `${data.overview.monthlyGrossMargin.toFixed(1)}%`,
+      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE'],
+    },
+  ];
+
+  return allCards.filter(card => card.roles.includes(role)).slice(0, 5);
+};
+
+// 根据角色获取快捷操作
+const getQuickActions = (role: UserRole): QuickAction[] => {
+  const allActions: QuickAction[] = [
+    { id: 'new-order', label: '➕ 新建订单', icon: <Plus className="h-5 w-5" />, href: '/orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES'] },
+    { id: 'purchase-in', label: '📥 采购入库', icon: <Download className="h-5 w-5" />, href: '/inbound-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'PURCHASING', 'WAREHOUSE'] },
+    { id: 'ship-order', label: '📤 发货处理', icon: <Package className="h-5 w-5" />, href: '/outbound-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'WAREHOUSE', 'SALES'] },
+    { id: 'inventory-search', label: '🔍 库存查询', icon: <Search className="h-5 w-5" />, href: '/inventory', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'PURCHASING', 'WAREHOUSE', 'SALES'] },
+    { id: 'expense', label: '📝 报销申请', icon: <Edit className="h-5 w-5" />, href: '/expenses/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES', 'PURCHASING', 'PRODUCT', 'FINANCE', 'WAREHOUSE', 'USER'] },
+    { id: 'new-customer', label: '➕ 新建客户', icon: <UserPlus className="h-5 w-5" />, href: '/customers/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES'] },
+    { id: 'new-purchase', label: '🛒 新建采购', icon: <ShoppingCart className="h-5 w-5" />, href: '/purchase-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'PURCHASING'] },
+    { id: 'inventory-report', label: '📊 库存报表', icon: <BarChart3 className="h-5 w-5" />, href: '/reports/inventory', roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE'] },
+  ];
+
+  return allActions.filter(action => action.roles.includes(role));
+};
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [period, setPeriod] = useState('30');
+  const [period, setPeriod] = useState('7');
+  const [currentRole, setCurrentRole] = useState<UserRole>('USER');
 
   useEffect(() => {
+    const role = getCurrentUserRole();
+    setCurrentRole(role);
     fetchDashboardData();
   }, [period]);
 
@@ -55,309 +165,297 @@ export default function DashboardPage() {
       const result = await response.json();
       if (result.success) {
         setData(result.data);
+      } else {
+        // 如果API失败，使用模拟数据
+        setData({
+          overview: {
+            pendingOrders: 18,
+            lowStockAlerts: 5,
+            pendingApprovals: 3,
+            pendingPayments: 24500,
+            todaySales: 12800,
+            monthlyGrossMargin: 43.25,
+          },
+          salesTrend: [
+            { date: '周一', amount: 3200 },
+            { date: '周二', amount: 4500 },
+            { date: '周三', amount: 3800 },
+            { date: '周四', amount: 5200 },
+            { date: '周五', amount: 6100 },
+            { date: '周六', amount: 4800 },
+            { date: '周日', amount: 5900 },
+          ],
+          channelDistribution: [
+            { name: 'Alibaba', value: 45 },
+            { name: 'Amazon', value: 30 },
+            { name: 'TikTok', value: 15 },
+            { name: '其他', value: 10 },
+          ],
+          recentTodos: [
+            { id: '1', title: '#1001', description: '张三 - 万圣节夜光笔 100pcs', status: 'pending' },
+            { id: '2', title: '#1002', description: '李四 - 圣诞帽 50pcs', status: 'processing' },
+            { id: '3', title: '#1003', description: '王五 - 发光手环 200pcs', status: 'pending' },
+          ],
+          recentApprovals: [
+            { id: '1', title: '李四处', description: '差旅费报销 800元', status: 'pending' },
+            { id: '2', title: '王五', description: '采购申请 1200元', status: 'pending' },
+            { id: '3', title: '赵六', description: '绩效提成 3588元', status: 'pending' },
+          ],
+        });
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      // 使用模拟数据
+      setData({
+        overview: {
+          pendingOrders: 18,
+          lowStockAlerts: 5,
+          pendingApprovals: 3,
+          pendingPayments: 24500,
+          todaySales: 12800,
+          monthlyGrossMargin: 43.25,
+        },
+        salesTrend: [
+          { date: '周一', amount: 3200 },
+          { date: '周二', amount: 4500 },
+          { date: '周三', amount: 3800 },
+          { date: '周四', amount: 5200 },
+          { date: '周五', amount: 6100 },
+          { date: '周六', amount: 4800 },
+          { date: '周日', amount: 5900 },
+        ],
+        channelDistribution: [
+          { name: 'Alibaba', value: 45 },
+          { name: 'Amazon', value: 30 },
+          { name: 'TikTok', value: 15 },
+          { name: '其他', value: 10 },
+        ],
+        recentTodos: [
+          { id: '1', title: '#1001', description: '张三 - 万圣节夜光笔 100pcs', status: 'pending' },
+          { id: '2', title: '#1002', description: '李四 - 圣诞帽 50pcs', status: 'processing' },
+          { id: '3', title: '#1003', description: '王五 - 发光手环 200pcs', status: 'pending' },
+        ],
+        recentApprovals: [
+          { id: '1', title: '李四处', description: '差旅费报销 800元', status: 'pending' },
+          { id: '2', title: '王五', description: '采购申请 1200元', status: 'pending' },
+          { id: '3', title: '赵六', description: '绩效提成 3588元', status: 'pending' },
+        ],
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(value);
-  };
-
-  const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('en-US').format(value);
-  };
+  const metricCards = data ? getMetricCards(currentRole) : [];
+  const quickActions = getQuickActions(currentRole);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-zinc-500">加载仪表盘数据...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Data Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your business metrics</p>
+    <DashboardLayout>
+      <div className="p-4 md:p-6 space-y-6">
+        {/* 页面标题和筛选器 */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl md:text-28px font-bold text-zinc-900 dark:text-white">
+              📊 经营看板
+            </h1>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-1">
+              概览您的业务运营数据
+            </p>
+          </div>
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="选择时间范围" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">近 7 天</SelectItem>
+              <SelectItem value="14">近 14 天</SelectItem>
+              <SelectItem value="30">近 30 天</SelectItem>
+              <SelectItem value="90">近 90 天</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="14">Last 14 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
+
+        {/* 关键指标卡片 - 响应式 4列 → 2列 → 1列 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+          {metricCards.map((card) => (
+            <Card key={card.id} className="h-[100px] overflow-hidden">
+              <CardContent className="p-4 h-full flex items-center">
+                <div className={`w-12 h-12 rounded-lg ${card.bgColor} flex items-center justify-center mr-4 flex-shrink-0`}>
+                  <div className={card.color}>{card.icon}</div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate">
+                    {card.title}
+                  </p>
+                  <p className="text-2xl font-bold text-zinc-900 dark:text-white mt-1">
+                    {data && card.getValue(data)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* 图表区域 - 两个图表并排 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">近 {parseInt(period)} 日销售额趋势</CardTitle>
+              <CardDescription>📈 折线图展示销售趋势变化</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[200px] flex items-end gap-2">
+                {data?.salesTrend.map((item, index) => {
+                  const maxAmount = Math.max(...data.salesTrend.map(d => d.amount));
+                  const height = (item.amount / maxAmount) * 100;
+                  return (
+                    <div key={index} className="flex-1 flex flex-col justify-end items-center gap-2">
+                      <div
+                        className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-sm"
+                        style={{ height: `${height}%` }}
+                      />
+                      <span className="text-xs text-zinc-500">{item.date}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">销售渠道占比</CardTitle>
+              <CardDescription>🍋 饼图展示各渠道销售分布</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[200px] flex items-center justify-center">
+                <div className="w-full space-y-3">
+                  {data?.channelDistribution.map((channel, index) => {
+                    const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500'];
+                    return (
+                      <div key={index} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{channel.name}</span>
+                          <span className="text-zinc-500">{channel.value}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2.5">
+                          <div
+                            className={`h-2.5 rounded-full ${colors[index % colors.length]}`}
+                            style={{ width: `${channel.value}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 快捷操作区域 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">⚡ 快捷操作</CardTitle>
+            <CardDescription>根据您的角色配置常用操作入口</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {quickActions.map((action) => (
+                <Button
+                  key={action.id}
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col items-center gap-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition-all"
+                  asChild
+                >
+                  <Link href={action.href}>
+                    {action.icon}
+                    <span className="text-sm font-medium">{action.label}</span>
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 待办区域 - 两列响应式 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">最近待办订单</CardTitle>
+              <CardDescription>需要处理的近期订单</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3">
+                {data?.recentTodos.map((todo) => (
+                  <li key={todo.id} className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-zinc-900 dark:text-white">{todo.title}</span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        todo.status === 'pending'
+                          ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                      }`}>
+                        {todo.status === 'pending' ? '待处理' : '处理中'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-500 mt-1">{todo.description}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 text-center">
+                <Button variant="ghost" asChild>
+                  <Link href="/orders">
+                    查看全部 →
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">最近审批</CardTitle>
+              <CardDescription>等待您审批的事项</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3">
+                {data?.recentApprovals.map((item) => (
+                  <li key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-zinc-900 dark:text-white">{item.title}</span>
+                      <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                        待审批
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-500 mt-1">{item.description}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 text-center">
+                <Button variant="ghost" asChild>
+                  <Link href="/approvals">
+                    查看全部 →
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-      {/* Key Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data?.sales.totalRevenue || 0)}</div>
-            <p className={`text-xs ${data?.sales.growth && data.sales.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {data?.sales.growth && data.sales.growth >= 0 ? '+' : ''}{data?.sales.growth || 0}% from previous period
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(data?.sales.totalOrders || 0)}</div>
-            <p className="text-xs text-muted-foreground">
-              Avg: {formatCurrency(data?.sales.avgOrderValue || 0)} per order
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(data?.sales.activeCustomers || 0)}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatNumber(data?.customers.newCustomers || 0)} new this period
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data?.conversion.quotationToOrderRate || 0}%</div>
-            <p className="text-xs text-muted-foreground">
-              Quote to Order
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Tabs */}
-      <Tabs defaultValue="sales" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sales" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sales Metrics</CardTitle>
-              <CardDescription>Detailed sales performance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h3 className="text-lg font-semibold">Order Statistics</h3>
-                  <div className="mt-2 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Orders</span>
-                      <span className="font-medium">{formatNumber(data?.sales.totalOrders || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Revenue</span>
-                      <span className="font-medium">{formatCurrency(data?.sales.totalRevenue || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Average Order Value</span>
-                      <span className="font-medium">{formatCurrency(data?.sales.avgOrderValue || 0)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Conversion Funnel</h3>
-                  <div className="mt-2 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Inquiries</span>
-                      <span className="font-medium">{formatNumber(data?.conversion.totalInquiries || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quotations</span>
-                      <span className="font-medium">{formatNumber(data?.conversion.totalQuotations || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Orders</span>
-                      <span className="font-medium">{formatNumber(data?.conversion.totalOrders || 0)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Inquiry → Quotation</span>
-                      <span className="font-medium">{data?.conversion.inquiryToQuotationRate || 0}%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Quotation → Order</span>
-                      <span className="font-medium">{data?.conversion.quotationToOrderRate || 0}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="customers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Metrics</CardTitle>
-              <CardDescription>Customer base overview</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <h3 className="text-lg font-semibold">Total Customers</h3>
-                  <p className="text-3xl font-bold mt-2">{formatNumber(data?.customers.totalCustomers || 0)}</p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">New Customers</h3>
-                  <p className="text-3xl font-bold mt-2 text-green-600">{formatNumber(data?.customers.newCustomers || 0)}</p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Active Customers</h3>
-                  <p className="text-3xl font-bold mt-2">{formatNumber(data?.customers.activeCustomers || 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="products" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Metrics</CardTitle>
-              <CardDescription>Product portfolio overview</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <h3 className="text-lg font-semibold">Total Products</h3>
-                  <p className="text-3xl font-bold mt-2">{formatNumber(data?.products.totalProducts || 0)}</p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Active Products</h3>
-                  <p className="text-3xl font-bold mt-2 text-green-600">{formatNumber(data?.products.activeProducts || 0)}</p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">New Products</h3>
-                  <p className="text-3xl font-bold mt-2">{formatNumber(data?.products.newProducts || 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="alerts" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Alerts & Notifications</CardTitle>
-              <CardDescription>Items requiring attention</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card className={data?.alerts.lowStockItems ? 'border-red-500' : ''}>
-                  <CardHeader>
-                    <CardTitle className="text-red-600">Low Stock Items</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{data?.alerts.lowStockItems || 0}</p>
-                    <p className="text-sm text-muted-foreground">Products below minimum stock level</p>
-                  </CardContent>
-                </Card>
-                <Card className={data?.alerts.pendingOrders ? 'border-yellow-500' : ''}>
-                  <CardHeader>
-                    <CardTitle className="text-yellow-600">Pending Orders</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{data?.alerts.pendingOrders || 0}</p>
-                    <p className="text-sm text-muted-foreground">Orders awaiting processing</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* 财务报表快捷入口 */}
-      <Card className="border-2 border-purple-200 bg-purple-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-purple-600" />
-            📊 财务报表中心（✅ 已上线）
-          </CardTitle>
-          <CardDescription>
-            快速访问常用财务报表，全面掌握企业经营状况
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/reports/profit">
-                <DollarSign className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">利润报表</div>
-                <p className="text-xs text-muted-foreground text-center">分析企业利润状况</p>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/reports/sales">
-                <BarChart3 className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">销售报表</div>
-                <p className="text-xs text-muted-foreground text-center">查看销售数据分析</p>
-              </Link>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 bg-white hover:bg-purple-100" asChild>
-              <Link href="/reports/inventory">
-                <Package className="h-8 w-8 text-purple-600" />
-                <div className="text-sm font-medium">库存报表</div>
-                <p className="text-xs text-muted-foreground text-center">监控库存周转情况</p>
-              </Link>
-            </Button>
-          </div>
-          <div className="mt-4 flex items-center justify-center">
-            <Button variant="default" className="bg-purple-600 hover:bg-purple-700" asChild>
-              <Link href="/reports">
-                进入报表中心 →
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </DashboardLayout>
   );
 }

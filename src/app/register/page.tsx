@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +12,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Check, X } from 'lucide-react';
 import Link from 'next/link';
+
+// 密码强度等级定义
+type PasswordStrength = 0 | 1 | 2 | 3 | 4;
+
+// 计算密码强度
+const calculatePasswordStrength = (password: string): PasswordStrength => {
+  let strength = 0;
+  if (password.length >= 8) strength++;
+  if (password.length >= 12) strength++;
+  if (/[A-Z]/.test(password)) strength++;
+  if (/[a-z]/.test(password) && /[0-9]/.test(password)) strength++;
+  if (/[^A-Za-z0-9]/.test(password)) strength++;
+  return Math.min(4, strength) as PasswordStrength;
+};
+
+// 获取密码强度颜色和文字
+const getPasswordStrengthInfo = (strength: PasswordStrength) => {
+  switch (strength) {
+    case 0:
+      return { label: '极弱', color: 'bg-red-500', text: 'text-red-600' };
+    case 1:
+      return { label: '弱', color: 'bg-orange-500', text: 'text-orange-600' };
+    case 2:
+      return { label: '中等', color: 'bg-yellow-500', text: 'text-yellow-600' };
+    case 3:
+      return { label: '强', color: 'bg-blue-500', text: 'text-blue-600' };
+    case 4:
+      return { label: '非常强', color: 'bg-green-500', text: 'text-green-600' };
+    default:
+      return { label: '极弱', color: 'bg-red-500', text: 'text-red-600' };
+  }
+};
+
+// 密码验证规则
+const passwordRules = [
+  { test: (p: string) => p.length >= 8, label: '至少 8 个字符' },
+  { test: (p: string) => /[A-Z]/.test(p), label: '包含大写字母' },
+  { test: (p: string) => /[a-z]/.test(p), label: '包含小写字母' },
+  { test: (p: string) => /[0-9]/.test(p), label: '包含数字' },
+  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: '包含特殊字符' },
+];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -23,17 +64,38 @@ export default function RegisterPage() {
     name: '',
     password: '',
     confirmPassword: '',
-    role: 'USER',
+    role: 'SALES', // 默认销售角色
+    company: '',
+    phone: '',
   });
   const [error, setError] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>(0);
+
+  // 当密码变化时重新计算强度
+  useEffect(() => {
+    setPasswordStrength(calculatePasswordStrength(formData.password));
+  }, [formData.password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
+    // 前端表单验证
     if (formData.password !== formData.confirmPassword) {
       setError('两次输入的密码不一致');
+      setLoading(false);
+      return;
+    }
+
+    if (passwordStrength < 2) {
+      setError('密码强度太弱，请使用更强的密码');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.email || !formData.name || !formData.company || !formData.phone) {
+      setError('请填写所有必填字段');
       setLoading(false);
       return;
     }
@@ -47,13 +109,16 @@ export default function RegisterPage() {
           name: formData.name,
           password: formData.password,
           role: formData.role,
+          company: formData.company,
+          phone: formData.phone,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        router.push('/login');
+        // 注册成功后跳转到待审批页面
+        router.push('/pending-approval');
       } else {
         setError(data.error || '注册失败');
       }
@@ -108,7 +173,7 @@ export default function RegisterPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="name">
-                姓名
+                姓名 <span className="text-red-500">*</span>
               </label>
               <Input
                 id="name"
@@ -123,8 +188,40 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="company">
+                公司名称 <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="company"
+                placeholder="您的公司名称"
+                value={formData.company}
+                onChange={(e) =>
+                  setFormData({ ...formData, company: e.target.value })
+                }
+                className="h-11"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="phone">
+                联系电话 <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="phone"
+                placeholder="手机号码"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+                className="h-11"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="role">
-                角色
+                角色 <span className="text-red-500">*</span>
               </label>
               <Select
                 value={formData.role}
@@ -133,19 +230,26 @@ export default function RegisterPage() {
                 }
               >
                 <SelectTrigger className="h-11">
-                  <SelectValue placeholder="选择角色" />
+                  <SelectValue placeholder="选择您的角色" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USER">普通用户</SelectItem>
-                  <SelectItem value="MANAGER">经理</SelectItem>
+                  <SelectItem value="SUPER_ADMIN">超级管理员</SelectItem>
+                  <SelectItem value="OWNER">公司老板</SelectItem>
                   <SelectItem value="ADMIN">管理员</SelectItem>
+                  <SelectItem value="MANAGER">部门经理</SelectItem>
+                  <SelectItem value="SALES">销售业务员</SelectItem>
+                  <SelectItem value="PURCHASING">采购专员</SelectItem>
+                  <SelectItem value="WAREHOUSE">仓库管理员</SelectItem>
+                  <SelectItem value="FINANCE">财务会计</SelectItem>
+                  <SelectItem value="PRODUCT">产品开发</SelectItem>
+                  <SelectItem value="USER">普通用户</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="password">
-                密码
+                密码 <span className="text-red-500">*</span>
               </label>
               <Input
                 id="password"
@@ -157,13 +261,57 @@ export default function RegisterPage() {
                 }
                 className="h-11"
                 required
-                minLength={6}
+                minLength={8}
               />
+              
+              {/* 密码强度条 */}
+              {formData.password && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">密码强度：</span>
+                    <span className={`text-sm font-semibold ${getPasswordStrengthInfo(passwordStrength).text}`}>
+                      {getPasswordStrengthInfo(passwordStrength).label}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {[0, 1, 2, 3].map((index) => (
+                      <div
+                        key={index}
+                        className={`h-2 flex-1 rounded-full ${
+                          index < passwordStrength
+                            ? getPasswordStrengthInfo(passwordStrength).color
+                            : 'bg-zinc-200 dark:bg-zinc-700'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {passwordRules.map((rule, index) => {
+                      const passed = rule.test(formData.password);
+                      return (
+                        <div
+                          key={index}
+                          className={`flex items-center gap-2 text-xs ${
+                            passed ? 'text-green-600' : 'text-zinc-500'
+                          }`}
+                        >
+                          {passed ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                          {rule.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="confirmPassword">
-                确认密码
+                确认密码 <span className="text-red-500">*</span>
               </label>
               <Input
                 id="confirmPassword"
@@ -175,8 +323,11 @@ export default function RegisterPage() {
                 }
                 className="h-11"
                 required
-                minLength={6}
+                minLength={8}
               />
+              {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                <p className="text-xs text-red-500">两次输入的密码不一致</p>
+              )}
             </div>
 
             <Button 

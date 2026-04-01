@@ -9,6 +9,21 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 
+// 前端表单验证
+const validateForm = (email: string, password: string): string | null => {
+  if (!email || !password) {
+    return '请填写邮箱和密码';
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return '请输入有效的邮箱地址';
+  }
+  if (password.length < 6) {
+    return '密码长度至少6位';
+  }
+  return null;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -19,6 +34,7 @@ export default function LoginPage() {
     password: '',
   });
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState({ email: false, password: false });
 
   // 页面加载时读取记住的邮箱
   useEffect(() => {
@@ -46,6 +62,14 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
+    // 前端验证
+    const validationError = validateForm(formData.email, formData.password);
+    if (validationError) {
+      setError(validationError);
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -66,7 +90,8 @@ export default function LoginPage() {
         }
         // 保存用户信息到 localStorage
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/dashboard');
+        // 跳转到首页（中间件会处理认证）
+        router.push('/');
         router.refresh();
       } else {
         setError(data.error || '登录失败');
@@ -79,7 +104,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-black px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-black px-4 sm:px-6 py-8">
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
       
       <Card className="w-full max-w-md shadow-xl border-0 ring-1 ring-zinc-200 dark:ring-zinc-800 rounded-2xl">
@@ -117,10 +142,15 @@ export default function LoginPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                onBlur={() => setTouched(prev => ({ ...prev, email: true }))}
                 onKeyDown={handleKeyDown}
                 className="h-11"
                 required
+                aria-required="true"
               />
+              {touched.email && formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) && (
+                <p className="text-xs text-red-500">请输入有效的邮箱地址</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -136,9 +166,11 @@ export default function LoginPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
+                  onBlur={() => setTouched(prev => ({ ...prev, password: true }))}
                   onKeyDown={handleKeyDown}
                   className="h-11 pr-11"
                   required
+                  aria-required="true"
                 />
                 <button
                   type="button"

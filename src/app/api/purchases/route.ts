@@ -1,9 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import { requireAuth } from '@/middleware/auth';
 
-// GET /api/purchases - 获取采购单列表
-export async function GET(request: Request) {
+// GET /api/purchases - 获取采购单列表（行级隔离）
+// 普通用户只能看到自己负责的采购单，管理员可以看到所有
+export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -22,6 +36,11 @@ export async function GET(request: Request) {
 
     if (status) {
       where.status = status;
+    }
+
+    // BUG-PERM-007: 行级隔离 - 普通用户只能看到自己负责的采购单
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+      where.purchaserId = currentUser.id;
     }
 
     const [purchases, total] = await Promise.all([
@@ -74,9 +93,20 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/purchases - 创建采购单
-export async function POST(request: Request) {
+// POST /api/purchases - 创建采购单（行级隔离）
+export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const body = await request.json();
     const {
       supplierId,
@@ -86,6 +116,7 @@ export async function POST(request: Request) {
       paymentTerms,
       notes,
       items,
+      purchaserId,
     } = body;
 
     if (!supplierId) {
@@ -101,6 +132,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // BUG-PERM-007: 如果没有指定采购人，自动设置为当前用户
+    const finalPurchaserId = purchaserId || currentUser.id;
 
     // Generate purchase order number
     const date = new Date();
@@ -125,6 +159,7 @@ export async function POST(request: Request) {
         deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
         paymentTerms,
         notes,
+        purchaserId: finalPurchaserId,
         items: {
           create: items.map((item: any) => ({
             productId: item.productId,

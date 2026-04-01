@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
 import {
   successResponse,
   listResponse,
@@ -13,11 +14,19 @@ import {
 import { orderCreateSchema, orderListQuerySchema } from '@/lib/validators/order';
 
 /**
- * GET /api/orders - 获取订单列表
+ * GET /api/orders - 获取订单列表（行级隔离）
+ * 管理员可以看到所有订单，普通用户只能看到自己负责的订单
  * 支持分页、筛选、搜索
  */
 export async function GET(request: NextRequest) {
   try {
+    // 获取当前登录用户
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return errorResponse('Unauthorized', 'UNAUTHORIZED');
+    }
+    const currentUser = session.user;
+
     // 解析查询参数
     const searchParams = request.nextUrl.searchParams;
     const queryResult = orderListQuerySchema.safeParse(Object.fromEntries(searchParams));
@@ -75,6 +84,12 @@ export async function GET(request: NextRequest) {
         { customer: { companyName: { contains: search, mode: 'insensitive' } } },
         { shippingAddress: { contains: search, mode: 'insensitive' } },
       ];
+    }
+
+    // BUG-PERM-007: 添加行级隔离
+    // 管理员/经理可以看到所有订单，普通用户只能看到自己负责的订单
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+      where.salesRepId = currentUser.id;
     }
 
     // 执行查询
@@ -159,10 +174,18 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/orders - 创建订单
+ * POST /api/orders - 创建订单（行级隔离）
+ * 自动分配给当前登录用户作为业务员
  */
 export async function POST(request: NextRequest) {
   try {
+    // 获取当前登录用户
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return errorResponse('Unauthorized', 'UNAUTHORIZED');
+    }
+    const currentUser = session.user;
+
     // 解析并验证请求体
     const body = await request.json();
     const validationResult = orderCreateSchema.safeParse(body);
@@ -191,6 +214,9 @@ export async function POST(request: NextRequest) {
       attachments,
       items,
     } = validationResult.data;
+
+    // BUG-PERM-007: 如果没有指定业务员，自动设置为当前用户
+    const finalSalesRepId = salesRepId || currentUser.id;
 
     // 验证客户是否存在
     const customer = await prisma.customer.findUnique({
@@ -252,7 +278,7 @@ export async function POST(request: NextRequest) {
         shippingAddress,
         shippingContact,
         shippingPhone,
-        salesRepId,
+        salesRepId: finalSalesRepId,
         notes,
         internalNotes,
         attachments: attachments || [],

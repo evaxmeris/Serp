@@ -1,0 +1,436 @@
+// ============================================
+// Trade ERP v0.8.0 - Database Schema Changes
+// 功能：权限系统 + 多平台集成 + 海外仓 + 审批流程
+// ============================================
+
+// ------------------------------
+// 1. 权限系统 - RBAC 模型
+// ------------------------------
+
+// 角色表
+model Role {
+  id          String    @id @default(cuid())
+  name        String    // 角色名称，如：系统管理员、运营经理、业务员、财务、仓库管理员
+  code        String    @unique // 角色编码，如：admin, manager, sales, finance, warehouse
+  description String?   // 角色描述
+  isSystem    Boolean   @default(false) // 是否系统内置角色
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关联关系
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@index([code])
+  @@index([isActive])
+  @@map("roles")
+}
+
+// 权限表
+model Permission {
+  id          String    @id @default(cuid())
+  name        String    // 权限名称
+  code        String    @unique // 权限编码，如：order:create, order:view, order:edit, order:delete
+  module      String    // 所属模块：order, product, purchase, inventory, finance, system, platform, warehouse
+  action      String    // 操作类型：create, read, update, delete, approve, export
+  description String?   // 权限描述
+  isSystem    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关联关系
+  roles RolePermission[]
+
+  @@index([module])
+  @@index([code])
+  @@map("permissions")
+}
+
+// 用户-角色关联表
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// 角色-权限关联表
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// 扩展 User 表（需要在主 schema 中添加以下关系）
+// 注意：原 User 表保持不变，只新增关系
+// users -> user_roles
+// userRoles UserRole[]
+
+// ------------------------------
+// 2. 用户注册审批表
+// ------------------------------
+
+model UserRegistration {
+  id            String          @id @default(cuid())
+  email         String          @unique // 申请邮箱
+  passwordHash  String          // 密码哈希
+  name          String          // 用户姓名
+  company       String?         // 公司名称
+  phone         String?         // 联系电话
+  status        RegistrationStatus @default(PENDING)
+  approvedBy    String?         // 审批人 ID
+  approvedAt    DateTime?       // 审批时间
+  rejectReason  String?         // 拒绝原因
+  remarks       String?         // 备注
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@map("user_registrations")
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ------------------------------
+// 3. 平台账号表 - 多平台集成
+// ------------------------------
+
+// 电商平台枚举
+enum PlatformType {
+  ALIBABA       // 阿里国际站
+  ALIBABA_1688  // 1688
+  AMAZON        // 亚马逊
+  TIKTOK        // TikTok Shop
+  SHOPIFY       // Shopify
+  EBAY          // eBay
+  WISH          // Wish
+  OTHER         // 其他
+}
+
+// 授权状态
+enum AuthStatus {
+  ACTIVE        // 有效
+  EXPIRED       // 过期
+  INVALID       // 无效
+  PENDING       // 待授权
+}
+
+model PlatformAccount {
+  id                String        @id @default(cuid())
+  userId            String        // 所属用户 ID
+  platformType       PlatformType  // 平台类型
+  platformName       String        // 平台名称（自定义）
+  accountName        String        // 账号名称/卖家ID
+  accountId          String?       // 平台账号 ID
+  appKey            String?       // App Key / Client ID
+  appSecret         String?       // App Secret / Client Secret（加密存储）
+  accessToken        String?       // 访问令牌（加密存储）
+  refreshToken       String?       // 刷新令牌（加密存储）
+  tokenExpiresAt     DateTime?     // 令牌过期时间
+  authStatus         AuthStatus    @default(PENDING) // 授权状态
+  region             String?       // 站点/区域，如：us, eu, gb, jp
+  currency           String        @default("USD") // 默认币种
+  isActive           Boolean       @default(true)
+  lastSyncAt         DateTime?     // 最后同步时间
+  lastSyncStatus     String?       // 最后同步结果：success/failed
+  syncError          String?       // 同步错误信息
+  config             Json          @default("{}") // 其他配置（JSON）
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // 关联关系
+  orders PlatformOrder[]
+
+  @@index([userId])
+  @@index([platformType])
+  @@index([authStatus])
+  @@index([isActive])
+  @@index([lastSyncAt])
+  @@map("platform_accounts")
+}
+
+// ------------------------------
+// 4. 平台订单表 - 多平台订单同步
+// ------------------------------
+
+// 平台订单状态映射
+enum PlatformOrderStatus {
+  NEW            // 新建
+  PROCESSING     // 处理中
+  SHIPPED        // 已发货
+  DELIVERED      // 已送达
+  CANCELLED      // 已取消
+  RETURNED       // 已退货
+}
+
+model PlatformOrder {
+  id                  String              @id @default(cuid())
+  platformOrderId      String             // 平台订单号（第三方平台的原始ID）
+  platformOrderNo      String?            // 平台订单编号（显示用）
+  platformAccountId    String             // 关联平台账号
+  localOrderId         String?            // 关联本地 ERP 订单 ID（可选）
+  platformType         PlatformType       // 平台类型
+  buyerId              String?            // 买家 ID
+  buyerName            String?            // 买家名称
+  buyerEmail           String?            // 买家邮箱
+  buyerPhone           String?            // 买家电话
+  status               PlatformOrderStatus // 订单状态
+  currency             String             @default("USD")
+  totalAmount          Decimal            @db.Decimal(12, 2) // 订单总金额
+  shippingFee          Decimal?           @db.Decimal(10, 2) // 运费
+  taxAmount            Decimal?           @db.Decimal(10, 2) // 税费
+  discountAmount       Decimal?           @db.Decimal(10, 2) // 折扣
+  netAmount            Decimal            @db.Decimal(12, 2) // 净金额
+  paymentMethod        String?            // 支付方式
+  paymentTime          DateTime?          // 支付时间
+  shippingAddress      String?            // 收货地址（JSON 格式化存储）
+  buyerMessage         String?            // 买家留言
+  trackingNo           String?            // 物流追踪号
+  carrier              String?            // 物流公司
+  shipTime            DateTime?           // 发货时间
+  deliveryTime         DateTime?          // 送达时间
+  cancelTime           DateTime?          // 取消时间
+  cancelReason         String?            // 取消原因
+  isSync              Boolean             @default(true) // 是否开启自动同步
+  lastSyncAt           DateTime?           // 最后同步时间
+  syncVersion          Int                @default(1) // 同步版本号（乐观锁）
+  rawData              Json?              // 原始订单数据（完整 JSON 备份）
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  // 关联关系
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  localOrder      Order?          @relation(fields: [localOrderId], references: [id])
+
+  @@index([platformAccountId])
+  @@index([platformOrderId])
+  @@index([localOrderId])
+  @@index([status])
+  @@index([paymentTime])
+  @@index([createdAt])
+  @@unique([platformAccountId, platformOrderId])
+  @@map("platform_orders")
+}
+
+// ------------------------------
+// 5. 海外仓表
+// ------------------------------
+
+// 海外仓类型
+enum WarehouseType {
+  DOMESTIC       // 国内仓库
+  OVERSEAS       // 海外仓
+  THIRD_PARTY    // 第三方海外仓
+  FBA           // Amazon FBA
+}
+
+// 仓库状态已在原有枚举 WarehouseStatus 中定义（ACTIVE/INACTIVE）
+
+model OverseasWarehouse {
+  id              String        @id @default(cuid())
+  name            String        // 仓库名称
+  code            String        @unique // 仓库编码
+  type            WarehouseType // 仓库类型
+  country         String        // 国家
+  province        String?       // 省/州
+  city            String?       // 城市
+  address         String        // 详细地址
+  postcode        String?       // 邮编
+  contactName     String?       // 联系人
+  contactPhone     String?       // 联系电话
+  contactEmail     String?       // 联系邮箱
+  warehouseProvider String?     // 仓库服务商
+  providerCode     String?       // 服务商编码
+  apiEnabled       Boolean       @default(false) // 是否开启 API 对接
+  apiConfig        Json?         @default("{}") // API 配置
+  timezone        String        @default("UTC") // 时区
+  currency         String        @default("USD") // 结算币种
+  storageFeeRate   Decimal?      @db.Decimal(10, 4) // 仓储费率（每单位每天）
+  handlingFee      Decimal?      @db.Decimal(10, 2) // 操作费（每单）
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([country])
+  @@index([type])
+  @@index([isActive])
+  @@index([code])
+  @@map("overseas_warehouses")
+}
+
+// 海外仓库存扩展 - 在原有 InventoryItem 基础上增加海外仓关联
+// 注意：原有 InventoryItem 已经有 warehouse 字段（String），可以直接存储 warehouse code
+// 如果需要更严格的关联，可以添加以下字段到 InventoryItem：
+// overseasWarehouseId String?
+// overseasWarehouse OverseasWarehouse? @relation(fields: [overseasWarehouseId], references: [id])
+
+// ------------------------------
+// 6. 审批流程表 - 可配置审批流程
+// ------------------------------
+
+// 审批类型
+enum ApprovalType {
+  USER_REGISTRATION  // 用户注册
+  ORDER_APPROVAL      // 订单审批
+  PURCHASE_APPROVAL   // 采购审批
+  PRICE_APPROVAL      // 价格审批
+  DISCOUNT_APPROVAL   // 折扣审批
+  CUSTOM              // 自定义
+}
+
+// 审批节点类型
+enum NodeType {
+  SERIAL             // 串行审批
+  PARALLEL           // 并行审批
+  ANY                // 任意一人通过即可
+}
+
+// 审批流程定义
+model ApprovalFlow {
+  id              String        @id @default(cuid())
+  name            String        // 流程名称
+  type            ApprovalType  // 审批类型
+  description     String?       // 流程描述
+  isActive        Boolean       @default(true)
+  isDefault       Boolean       @default(false) // 是否默认流程
+  config          Json          @default("{}") // 流程配置（节点信息）
+  // 节点配置示例：
+  // [
+  //   {
+  //     "name": "部门经理审批",
+  //     "type": "serial",
+  //     "roles": ["manager"],
+  //     "users": [],
+  //     "condition": "amount > 10000"
+  //   }
+  // ]
+  condition       String?       // 触发条件（表达式）
+  sortOrder       Int           @default(0)
+  createdBy       String?       // 创建人
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  records         ApprovalRecord[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([isDefault])
+  @@map("approval_flows")
+}
+
+// 审批记录 - 实际审批实例
+enum ApprovalRecordStatus {
+  PENDING         // 等待审批
+  IN_PROGRESS     // 进行中
+  APPROVED        // 已通过
+  REJECTED        // 已拒绝
+  CANCELLED       // 已取消
+}
+
+model ApprovalRecord {
+  id              String          @id @default(cuid())
+  flowId          String          // 关联流程定义
+  flowName        String          // 流程名称（快照）
+  title           String          // 审批标题
+  type            ApprovalType    // 审批类型
+  businessType    String?         // 业务类型
+  businessId       String?         // 业务ID（订单ID/采购ID等）
+  businessNo       String?         // 业务编号
+  status          ApprovalRecordStatus @default(PENDING)
+  currentStep     Int             @default(1) // 当前步骤
+  totalSteps      Int             @default(1) // 总步骤
+  applicantId     String          // 申请人 ID
+  applicantName   String?         // 申请人姓名
+  targetAmount    Decimal?        @db.Decimal(14, 2) // 涉及金额
+  // 节点审批信息
+  // [
+  //   {
+  //     "step": 1,
+  //     "roleId": "...",
+  //     "userId": "...",
+  //     "status": "approved",
+  //     "comment": "...",
+  //     "approveAt": "2026-..."
+  //   }
+  // ]
+  steps           Json            @default("[]") // 审批步骤详情
+  approvedBy      String?         // 最终审批人
+  approvedAt      DateTime?       // 审批完成时间
+  rejectedBy      String?         // 拒绝人
+  rejectedAt      DateTime?       // 拒绝时间
+  rejectReason    String?         // 拒绝原因
+  cancelledBy     String?         // 取消人
+  cancelledAt     DateTime?       // 取消时间
+  cancelReason    String?         // 取消原因
+  deadline        DateTime?       // 审批截止时间
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  flow            ApprovalFlow    @relation(fields: [flowId], references: [id])
+
+  @@index([flowId])
+  @@index([type])
+  @@index([status])
+  @@index([businessId])
+  @@index([applicantId])
+  @@index([createdAt])
+  @@map("approval_records")
+}
+
+// ------------------------------
+// 7. 新增枚举定义（添加到主 schema）
+// ------------------------------
+
+// 已在上面定义：
+// - PlatformType
+// - AuthStatus
+// - PlatformOrderStatus
+// - WarehouseType（新增枚举，原 Warehouse 表可以扩展 type 字段）
+// - ApprovalType
+// - NodeType
+// - ApprovalRecordStatus
+// - RegistrationStatus
+
+// ------------------------------
+// 数据库索引设计说明
+// ------------------------------
+// 1. 所有外键都建立索引
+// 2. 常用查询字段（status, createdAt, isActive）建立索引
+// 3. 唯一约束：code, email, 平台账号+平台订单号
+// 4. 联合索引满足常见查询模式
+
+// ------------------------------
+// 安全设计说明
+// ------------------------------
+// 1. 平台账号的 appSecret, accessToken, refreshToken 加密存储
+// 2. 密码使用 bcrypt 哈希存储
+// 3. 权限检查在 API 层面进行，数据库层面通过关系约束
+// 4. 操作审计日志记录所有变更
+
+// ------------------------------
+// 性能设计说明
+// ------------------------------
+// 1. 使用 CUID 作为主键，保证分布式环境下唯一性
+// 2. 分页查询基于 createdAt 游标，避免 offset 性能问题
+// 3. 大字段（rawData）使用 JSON 存储，不参与索引
+// 4. 同步版本号使用乐观锁控制并发更新

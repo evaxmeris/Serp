@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/middleware/auth';
 
 // GET /api/users - 获取用户列表
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // BUG-PERM-001: 添加认证检查
+    // 转换 request 兼容 NextRequest 类型
+    const authError = await requireAuth(request as any);
+    if (authError) return authError;
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -30,6 +36,11 @@ export async function GET() {
 // POST /api/users - 创建用户
 export async function POST(request: Request) {
   try {
+    // BUG-PERM-001: 添加认证检查
+    // 转换 request 兼容 NextRequest 类型
+    const authError = await requireAuth(request as any);
+    if (authError) return authError;
+
     const body = await request.json();
     const { email, name, password, role } = body;
 

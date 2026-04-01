@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清除认证数据</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .card {
+            background: white;
+            color: #333;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧹 清除认证数据</h1>
+        <p>点击按钮清除浏览器中保存的认证信息：</p>
+        <ul>
+            <li>认证 Cookie (auth-token)</li>
+            <li>LocalStorage 用户数据</li>
+            <li>SessionStorage</li>
+        </ul>
+        
+        <button onclick="clearAuth()">清除认证数据</button>
+        <button onclick="window.location.href='/'" style="background: #6c757d;">返回首页</button>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function clearAuth() {
+            let cleared = [];
+            
+            // 清除 Cookie
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            cleared.push("Cookie");
+            
+            // 清除 LocalStorage
+            localStorage.clear();
+            cleared.push("LocalStorage");
+            
+            // 清除 SessionStorage
+            sessionStorage.clear();
+            cleared.push("SessionStorage");
+            
+            // 显示结果
+            const status = document.getElementById('status');
+            status.innerHTML = '<strong>✅ 清除完成！</strong><br>已清除：' + cleared.join(', ') + '<br><br>3 秒后自动跳转到登录页...';
+            status.className = 'status success';
+            status.style.display = 'block';
+            
+            // 3 秒后跳转到登录页
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

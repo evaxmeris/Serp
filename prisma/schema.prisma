@@ -8,18 +8,32 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  email          String          @unique
-  name           String?
-  passwordHash   String?
-  role           Role            @default(USER)
-  avatar         String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  customers      Customer[]      @relation("Owner")
-  orders         Order[]         @relation("SalesRep")
-  purchaseOrders PurchaseOrder[] @relation("Purchaser")
-  suppliers      Supplier[]      @relation("Owner")
+  id                           String              @id @default(cuid())
+  email                        String              @unique
+  name                         String?
+  passwordHash                 String?
+  role                         RoleEnum            @default(USER)
+  avatar                       String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  approvalHistory              ApprovalHistory[]   @relation("ApprovalHistoryApprover")
+  approvalApprovals            ApprovalRecord[]    @relation("ApprovalApprover")
+  approvalInitiations          ApprovalRecord[]    @relation("ApprovalInitiator")
+  approvedCommissions          Commission[]        @relation("CommissionApprovedBy")
+  userCommissions              Commission[]        @relation("CommissionUser")
+  customers                    Customer[]          @relation("Owner")
+  applicantExpenses            Expense[]
+  orders                       Order[]             @relation("SalesRep")
+  performanceMetrics           PerformanceMetric[]
+  platformAccounts             PlatformAccount[]
+  calculatedProfitCalculations ProfitCalculation[]
+  salesRepProfitDetails        ProfitDetail[]
+  purchaseOrders               PurchaseOrder[]     @relation("Purchaser")
+  applicantReimbursements      Reimbursement[]
+  suppliers                    Supplier[]          @relation("Owner")
+  createdTransactions          Transaction[]
+  userRegistrations            UserRegistration[]
+  userRoles                    UserRole[]
 
   @@map("users")
 }
@@ -92,9 +106,11 @@ model Product {
   inventoryItems     InventoryItem[]
   inventoryLogs      InventoryLog[]
   orderItems         OrderItem[]
+  outboundOrderItems OutboundOrderItem[]
+  overseasInventory  OverseasInventory[]
+  profitDetails      ProfitDetail[]
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
-  outboundOrderItems OutboundOrderItem[]
 
   @@map("products")
 }
@@ -208,12 +224,13 @@ model Order {
   items             OrderItem[]
   customer          Customer           @relation(fields: [customerId], references: [id])
   salesRep          User?              @relation("SalesRep", fields: [salesRepId], references: [id])
+  outboundOrders    OutboundOrder[]    @relation("OrderOutboundOrders")
   payments          Payment[]
   productionRecords ProductionRecord[]
+  profitDetails     ProfitDetail[]
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
-  outboundOrders    OutboundOrder[]    @relation(name: "OrderOutboundOrders")
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -354,8 +371,8 @@ model Shipment {
   notes           String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  order           Order           @relation(fields: [orderId], references: [id])
   outboundOrders  OutboundOrder[]
+  order           Order           @relation(fields: [orderId], references: [id])
 
   @@map("shipments")
 }
@@ -692,7 +709,7 @@ model InventoryLog {
   inboundOrder    InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
   outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
   product         Product          @relation(fields: [productId], references: [id])
-  inventoryItem   InventoryItem?   @relation(fields: [productId, warehouseId], references: [productId, warehouse])
+  inventoryItem   InventoryItem    @relation(fields: [productId, warehouseId], references: [productId, warehouse])
 
   @@index([createdAt])
   @@index([inboundOrderId])
@@ -1001,7 +1018,735 @@ model ResearchAttachment {
   @@map("research_attachments")
 }
 
-enum Role {
+model OutboundOrder {
+  id            String              @id @default(cuid())
+  outboundNo    String              @unique @default(cuid())
+  orderId       String
+  warehouseId   String
+  status        String
+  totalAmount   Decimal?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  shipmentId    String?
+  inventoryLogs InventoryLog[]
+  items         OutboundOrderItem[]
+  order         Order               @relation("OrderOutboundOrders", fields: [orderId], references: [id], onDelete: Cascade)
+  shipment      Shipment?           @relation(fields: [shipmentId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String        @id @default(cuid())
+  outboundOrderId String
+  productId       String
+  quantity        Int
+  shippedQuantity Int           @default(0)
+  unitPrice       Decimal?
+  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([outboundOrderId])
+  @@index([productId])
+  @@map("outbound_order_items")
+}
+
+model ReportDefinition {
+  id            String               @id @default(cuid())
+  name          String
+  code          String               @unique
+  type          String
+  description   String?
+  config        Json                 @default("{}")
+  columns       Json                 @default("[]")
+  filters       Json                 @default("[]")
+  isSystem      Boolean              @default(false)
+  isActive      Boolean              @default(true)
+  createdBy     String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  data          ReportData[]
+  exportLogs    ReportExportLog[]
+  schedules     ReportSchedule[]
+  subscriptions ReportSubscription[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("report_definitions")
+}
+
+model ReportData {
+  id          String           @id @default(cuid())
+  reportId    String
+  period      String
+  periodStart DateTime
+  periodEnd   DateTime
+  data        Json             @default("{}")
+  metrics     Json             @default("{}")
+  generatedAt DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+  report      ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([period])
+  @@index([periodStart, periodEnd])
+  @@map("report_data")
+}
+
+model ReportSubscription {
+  id         String           @id @default(cuid())
+  reportId   String
+  userId     String
+  frequency  String
+  format     String           @default("pdf")
+  email      String?
+  isActive   Boolean          @default(true)
+  lastSentAt DateTime?
+  nextSendAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  report     ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("report_subscriptions")
+}
+
+model ReportExportLog {
+  id           String           @id @default(cuid())
+  reportId     String
+  userId       String
+  exportType   String
+  format       String
+  fileUrl      String?
+  fileSize     Int?
+  status       String           @default("pending")
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  completedAt  DateTime?
+  report       ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([status])
+  @@map("report_export_logs")
+}
+
+model ReportSchedule {
+  id             String           @id @default(cuid())
+  reportId       String
+  name           String
+  cronExpression String
+  timezone       String           @default("Asia/Shanghai")
+  config         Json             @default("{}")
+  isActive       Boolean          @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  report         ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([isActive])
+  @@map("report_schedules")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  displayName String
+  module      String
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roles       RolePermission[]
+
+  @@index([module, isActive])
+  @@map("permissions")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  displayName String
+  description String?
+  isSystem    Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@index([isActive])
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRegistration {
+  id           String    @id @default(cuid())
+  username     String
+  email        String    @unique
+  passwordHash String
+  name         String?
+  phone        String?
+  department   String?
+  position     String?
+  status       RegStatus @default(PENDING)
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+  remarks      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  approvedBy   User?     @relation(fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@map("user_registrations")
+}
+
+model PlatformAccount {
+  id             String          @id @default(cuid())
+  platformType   PlatformType
+  platformName   String
+  accountName    String
+  accountId      String?
+  shopId         String?
+  clientId       String?
+  clientSecret   String?
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  apiKey         String?
+  apiSecret      String?
+  authCode       String?
+  region         String?
+  currency       String          @default("USD")
+  isTest         Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  lastSyncAt     DateTime?
+  syncStatus     String?
+  errorMessage   String?
+  userId         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User?           @relation(fields: [userId], references: [id])
+  orders         PlatformOrder[]
+  profitDetails  ProfitDetail[]
+
+  @@index([platformType, isActive])
+  @@index([userId])
+  @@index([accountId])
+  @@index([shopId])
+  @@map("platform_accounts")
+}
+
+model PlatformOrder {
+  id                String          @id @default(cuid())
+  platformOrderId   String
+  platformOrderSn   String?
+  platformAccountId String
+  platformType      PlatformType
+  sellerId          String?
+  buyerId           String?
+  buyerName         String?
+  buyerEmail        String?
+  buyerPhone        String?
+  status            String
+  paymentStatus     String?
+  fulfillmentStatus String?
+  orderDate         DateTime?
+  paymentDate       DateTime?
+  shipmentDate      DateTime?
+  deliveryDate      DateTime?
+  currency          String          @default("USD")
+  totalAmount       Decimal         @db.Decimal(12, 2)
+  subtotal          Decimal?        @db.Decimal(12, 2)
+  shippingFee       Decimal?        @db.Decimal(10, 2)
+  platformFee       Decimal?        @db.Decimal(10, 2)
+  commissionFee     Decimal?        @db.Decimal(10, 2)
+  tax               Decimal?        @db.Decimal(10, 2)
+  discount          Decimal?        @db.Decimal(10, 2)
+  coupon            Decimal?        @db.Decimal(10, 2)
+  shippingAddress   Json?
+  billingAddress    Json?
+  buyerMessage      String?
+  notes             String?
+  internalOrderId   String?
+  items             Json            @default("[]")
+  tags              String[]
+  syncVersion       Int             @default(1)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  platformAccount   PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  profitDetails     ProfitDetail[]
+
+  @@unique([platformOrderId, platformAccountId])
+  @@index([platformAccountId, orderDate])
+  @@index([platformType, status])
+  @@index([internalOrderId])
+  @@index([orderDate])
+  @@map("platform_orders")
+}
+
+model OverseasWarehouse {
+  id             String                @id @default(cuid())
+  name           String
+  code           String                @unique
+  type           OverseasWarehouseType
+  country        String
+  province       String?
+  city           String?
+  address        String
+  postcode       String?
+  contactName    String?
+  contactPhone   String?
+  email          String?
+  warehouseId    String?
+  region         String?
+  timezone       String                @default("UTC")
+  isActive       Boolean               @default(true)
+  apiEnabled     Boolean               @default(false)
+  apiKey         String?
+  apiUrl         String?
+  fbaSyncEnabled Boolean               @default(false)
+  lastSyncAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  inventory      OverseasInventory[]
+
+  @@index([type, country, isActive])
+  @@index([code])
+  @@map("overseas_warehouses")
+}
+
+model OverseasInventory {
+  id                 String            @id @default(cuid())
+  warehouseId        String
+  productId          String
+  sku                String
+  fnsku              String?
+  asin               String?
+  availableQty       Int               @default(0)
+  inboundQty         Int               @default(0)
+  reservedQty        Int               @default(0)
+  totalQty           Int               @default(0)
+  lastFulfillableQty Int?
+  costPerUnit        Decimal?          @db.Decimal(10, 2)
+  location           String?
+  lastSyncAt         DateTime?
+  updatedAtSource    DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  product            Product           @relation(fields: [productId], references: [id])
+  warehouse          OverseasWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([sku])
+  @@index([fnsku])
+  @@index([asin])
+  @@map("overseas_inventory")
+}
+
+model ApprovalFlow {
+  id          String             @id @default(cuid())
+  name        String
+  type        ApprovalType
+  description String?
+  config      Json               @default("{}")
+  isActive    ApprovalFlowStatus @default(ACTIVE)
+  isSystem    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  records     ApprovalRecord[]
+
+  @@index([type, isActive])
+  @@map("approval_flows")
+}
+
+model ApprovalRecord {
+  id           String               @id @default(cuid())
+  flowId       String
+  flowCode     String?
+  title        String
+  type         ApprovalType
+  businessId   String
+  businessType String
+  status       ApprovalRecordStatus @default(PENDING)
+  currentStep  Int                  @default(1)
+  totalSteps   Int                  @default(1)
+  initiatorId  String
+  approverId   String?
+  initiatedAt  DateTime             @default(now())
+  approvedAt   DateTime?
+  updatedAt    DateTime             @updatedAt
+  data         Json                 @default("{}")
+  comments     String?
+  history      ApprovalHistory[]
+  approver     User?                @relation("ApprovalApprover", fields: [approverId], references: [id])
+  flow         ApprovalFlow         @relation(fields: [flowId], references: [id])
+  initiator    User                 @relation("ApprovalInitiator", fields: [initiatorId], references: [id])
+
+  @@index([flowId])
+  @@index([status])
+  @@index([initiatorId])
+  @@index([approverId])
+  @@index([businessId, businessType])
+  @@index([initiatedAt])
+  @@map("approval_records")
+}
+
+model ApprovalHistory {
+  id         String         @id @default(cuid())
+  recordId   String
+  step       Int
+  approverId String
+  action     ApprovalAction
+  comments   String?
+  actionAt   DateTime       @default(now())
+  approver   User           @relation("ApprovalHistoryApprover", fields: [approverId], references: [id])
+  record     ApprovalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([approverId])
+  @@index([actionAt])
+  @@map("approval_history")
+}
+
+model Account {
+  id             String          @id @default(cuid())
+  name           String
+  type           AccountType
+  accountNumber  String?
+  bankName       String?
+  branchName     String?
+  currency       String          @default("CNY")
+  openingBalance Decimal         @default(0) @db.Decimal(14, 2)
+  currentBalance Decimal         @default(0) @db.Decimal(14, 2)
+  isActive       Boolean         @default(true)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  commissions    Commission[]
+  expenses       Expense[]
+  reimbursements Reimbursement[]
+  transactions   Transaction[]
+
+  @@index([type, isActive])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                  String            @id @default(cuid())
+  transactionNo       String            @unique
+  accountId           String
+  type                TransactionType
+  amount              Decimal           @db.Decimal(14, 2)
+  currency            String            @default("CNY")
+  exchangeRate        Decimal           @default(1) @db.Decimal(10, 6)
+  amountCny           Decimal           @db.Decimal(14, 2)
+  counterParty        String?
+  counterPartyAccount String?
+  description         String?
+  category            String?
+  businessType        String?
+  businessId          String?
+  transactionDate     DateTime
+  status              TransactionStatus @default(CONFIRMED)
+  receiptUrl          String?
+  notes               String?
+  createdById         String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  commissions         Commission[]
+  expenses            Expense[]
+  reimbursements      Reimbursement[]
+  account             Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdBy           User              @relation(fields: [createdById], references: [id])
+
+  @@index([accountId, transactionDate])
+  @@index([type, category])
+  @@index([businessType, businessId])
+  @@index([transactionDate])
+  @@index([status])
+  @@map("transactions")
+}
+
+model Expense {
+  id             String              @id @default(cuid())
+  expenseNo      String              @unique
+  applicantId    String
+  department     String?
+  category       ExpenseCategory
+  amount         Decimal             @db.Decimal(12, 2)
+  currency       String              @default("CNY")
+  description    String
+  receiptCount   Int                 @default(0)
+  receiptUrls    String[]
+  expenseDate    DateTime
+  status         ReimbursementStatus @default(DRAFT)
+  approvalId     String?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  accountId      String?
+  transactionId  String?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  account        Account?            @relation(fields: [accountId], references: [id])
+  applicant      User                @relation(fields: [applicantId], references: [id])
+  transaction    Transaction?        @relation(fields: [transactionId], references: [id])
+  reimbursements Reimbursement[]     @relation("ReimbursementExpenses")
+
+  @@index([applicantId, status])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([status])
+  @@map("expenses")
+}
+
+model Reimbursement {
+  id              String              @id @default(cuid())
+  reimbursementNo String              @unique
+  expenseIds      String[]
+  applicantId     String
+  totalAmount     Decimal             @db.Decimal(12, 2)
+  status          ReimbursementStatus @default(DRAFT)
+  description     String?
+  currentStep     Int                 @default(1)
+  approvedById    String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  accountId       String?
+  transactionId   String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  account         Account?            @relation(fields: [accountId], references: [id])
+  applicant       User                @relation(fields: [applicantId], references: [id])
+  transaction     Transaction?        @relation(fields: [transactionId], references: [id])
+  expenses        Expense[]           @relation("ReimbursementExpenses")
+
+  @@index([applicantId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reimbursements")
+}
+
+model ProfitCalculation {
+  id               String                  @id @default(cuid())
+  calculationNo    String                  @unique
+  name             String
+  periodType       String
+  period           String
+  startDate        DateTime
+  endDate          DateTime
+  status           ProfitCalculationStatus @default(DRAFT)
+  totalRevenue     Decimal                 @db.Decimal(14, 2)
+  totalCost        Decimal                 @db.Decimal(14, 2)
+  totalExpense     Decimal                 @db.Decimal(14, 2)
+  totalProfit      Decimal                 @db.Decimal(14, 2)
+  netProfit        Decimal                 @db.Decimal(14, 2)
+  profitMargin     Decimal?                @db.Decimal(5, 2)
+  orderCount       Int                     @default(0)
+  platformStats    Json                    @default("{}")
+  calculatedBy     String
+  calculatedAt     DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  calculatedByUser User                    @relation(fields: [calculatedBy], references: [id])
+  details          ProfitDetail[]
+
+  @@index([periodType, period])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdAt])
+  @@map("profit_calculations")
+}
+
+model ProfitDetail {
+  id                    String            @id @default(cuid())
+  calculationId         String
+  orderId               String?
+  platformOrderId       String?
+  productId             String?
+  sku                   String?
+  platformType          PlatformType?
+  platformAccountId     String?
+  salesRepId            String?
+  currency              String            @default("USD")
+  exchangeRate          Decimal           @default(1) @db.Decimal(10, 6)
+  salesAmount           Decimal           @db.Decimal(12, 2)
+  shippingIncome        Decimal?          @db.Decimal(10, 2)
+  totalIncome           Decimal           @db.Decimal(12, 2)
+  productCost           Decimal           @db.Decimal(12, 2)
+  shippingCost          Decimal?          @db.Decimal(10, 2)
+  internationalShipping Decimal?          @db.Decimal(10, 2)
+  warehouseCost         Decimal?          @db.Decimal(10, 2)
+  packagingCost         Decimal?          @db.Decimal(10, 2)
+  platformFee           Decimal?          @db.Decimal(10, 2)
+  paymentFee            Decimal?          @db.Decimal(10, 2)
+  adFee                 Decimal?          @db.Decimal(10, 2)
+  tax                   Decimal?          @db.Decimal(10, 2)
+  otherFees             Decimal?          @db.Decimal(10, 2)
+  totalCost             Decimal           @db.Decimal(12, 2)
+  grossProfit           Decimal           @db.Decimal(12, 2)
+  netProfit             Decimal           @db.Decimal(12, 2)
+  profitMargin          Decimal?          @db.Decimal(5, 2)
+  totalIncomeCny        Decimal           @db.Decimal(12, 2)
+  totalCostCny          Decimal           @db.Decimal(12, 2)
+  netProfitCny          Decimal           @db.Decimal(12, 2)
+  quantity              Int               @default(1)
+  tags                  String[]
+  createdAt             DateTime          @default(now())
+  commissionId          String?
+  calculation           ProfitCalculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  commission            Commission?       @relation("CommissionProfitDetails", fields: [commissionId], references: [id])
+  order                 Order?            @relation(fields: [orderId], references: [id])
+  platformAccount       PlatformAccount?  @relation(fields: [platformAccountId], references: [id])
+  platformOrder         PlatformOrder?    @relation(fields: [platformOrderId], references: [id])
+  product               Product?          @relation(fields: [productId], references: [id])
+  salesRep              User?             @relation(fields: [salesRepId], references: [id])
+
+  @@index([calculationId])
+  @@index([orderId])
+  @@index([platformOrderId])
+  @@index([productId])
+  @@index([salesRepId])
+  @@index([platformType])
+  @@map("profit_details")
+}
+
+model PerformanceRule {
+  id                String              @id @default(cuid())
+  name              String
+  code              String              @unique
+  type              PerformanceRuleType
+  calculationMethod CalculationMethod
+  department        String?
+  position          String?
+  targetUserType    String?
+  isActive          Boolean             @default(true)
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  baseFormula       String?
+  tierConfig        Json                @default("[]")
+  conditionConfig   Json                @default("{}")
+  description       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  commissions       Commission[]
+  metrics           PerformanceMetric[]
+
+  @@index([type, isActive])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("performance_rules")
+}
+
+model PerformanceMetric {
+  id           String          @id @default(cuid())
+  ruleId       String
+  userId       String
+  period       String
+  periodStart  DateTime
+  periodEnd    DateTime
+  salesAmount  Decimal         @db.Decimal(14, 2)
+  orderCount   Int             @default(0)
+  newCustomers Int             @default(0)
+  grossProfit  Decimal         @db.Decimal(14, 2)
+  netProfit    Decimal         @db.Decimal(14, 2)
+  targetAmount Decimal?        @db.Decimal(14, 2)
+  achievement  Decimal?        @db.Decimal(5, 2)
+  score        Decimal?        @db.Decimal(5, 2)
+  calculatedAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  rule         PerformanceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id])
+
+  @@unique([ruleId, userId, period])
+  @@index([userId, period])
+  @@index([ruleId])
+  @@index([periodStart, periodEnd])
+  @@map("performance_metrics")
+}
+
+model Commission {
+  id               String           @id @default(cuid())
+  commissionNo     String           @unique
+  userId           String
+  period           String
+  startDate        DateTime
+  endDate          DateTime
+  status           CommissionStatus @default(DRAFT)
+  ruleId           String?
+  salesCommission  Decimal          @default(0) @db.Decimal(12, 2)
+  profitCommission Decimal          @default(0) @db.Decimal(12, 2)
+  targetBonus      Decimal          @default(0) @db.Decimal(12, 2)
+  otherBonus       Decimal          @default(0) @db.Decimal(12, 2)
+  adjustment       Decimal          @default(0) @db.Decimal(12, 2)
+  totalCommission  Decimal          @default(0) @db.Decimal(12, 2)
+  totalSales       Decimal          @default(0) @db.Decimal(14, 2)
+  totalProfit      Decimal          @default(0) @db.Decimal(14, 2)
+  orderCount       Int              @default(0)
+  approvedById     String?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  accountId        String?
+  transactionId    String?
+  notes            String?
+  details          Json             @default("[]")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  account          Account?         @relation(fields: [accountId], references: [id])
+  approvedBy       User?            @relation("CommissionApprovedBy", fields: [approvedById], references: [id])
+  rule             PerformanceRule? @relation(fields: [ruleId], references: [id])
+  transaction      Transaction?     @relation(fields: [transactionId], references: [id])
+  user             User             @relation("CommissionUser", fields: [userId], references: [id])
+  profitDetails    ProfitDetail[]   @relation("CommissionProfitDetails")
+
+  @@index([userId, period])
+  @@index([status])
+  @@index([period])
+  @@index([createdAt])
+  @@map("commissions")
+}
+
+enum RoleEnum {
   ADMIN
   MANAGER
   USER
@@ -1247,158 +1992,151 @@ enum TrendDirection {
   VOLATILE
 }
 
-// ==================== Sprint 5: 出库订单模型 ====================
-
-model OutboundOrder {
-  id            String              @id @default(cuid())
-  outboundNo    String              @unique @default(cuid())
-  orderId       String // 关联销售订单
-  warehouseId   String // 关联仓库
-  status        String // draft/pending/confirmed/cancelled
-  totalAmount   Decimal?
-  items         OutboundOrderItem[]
-  shipment      Shipment?           @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
-  inventoryLogs InventoryLog[]
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade, name: "OrderOutboundOrders")
-  shipmentId    String?
-
-  @@index([orderId])
-  @@index([status])
-  @@index([createdAt])
-  @@map("outbound_orders")
+enum RegStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
-model OutboundOrderItem {
-  id              String        @id @default(cuid())
-  outboundOrderId String
-  productId       String
-  quantity        Int
-  shippedQuantity Int           @default(0)
-  unitPrice       Decimal?
-  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
-  product         Product       @relation(fields: [productId], references: [id])
-
-  @@index([outboundOrderId])
-  @@index([productId])
-  @@map("outbound_order_items")
+enum PlatformType {
+  ALIBABA
+  ALIBABA_1688
+  AMAZON
+  TIKTOK
+  SHOPIFY
+  WISH
+  EBAY
+  OTHER
 }
 
-// ==================== Sprint 6: 财务报表模块 ====================
-
-// 报表定义表 - 存储报表的元数据和配置
-model ReportDefinition {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  type        String // PROFIT/SALES/INVENTORY/PURCHASE/CASHFLOW/CUSTOM
-  description String?
-  config      Json     @default("{}")
-  columns     Json     @default("[]")
-  filters     Json     @default("[]")
-  isSystem    Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关联关系
-  data          ReportData[]
-  subscriptions ReportSubscription[]
-  exportLogs    ReportExportLog[]
-  schedules     ReportSchedule[]
-
-  @@index([type])
-  @@index([isActive])
-  @@map("report_definitions")
+enum OverseasWarehouseType {
+  FBA
+  FBN
+  SELF_OWNED
+  THIRD_PARTY
 }
 
-// 报表数据表 - 存储生成的报表数据
-model ReportData {
-  id          String   @id @default(cuid())
-  reportId    String
-  period      String // 2026-03 / 2026-Q1 / 2026
-  periodStart DateTime
-  periodEnd   DateTime
-  data        Json     @default("{}")
-  metrics     Json     @default("{}")
-  generatedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-
-  // 关联关系
-  report ReportDefinition @relation(fields: [reportId], references: [id])
-
-  @@index([reportId])
-  @@index([period])
-  @@index([periodStart, periodEnd])
-  @@map("report_data")
+enum ApprovalType {
+  USER_REGISTRATION
+  ORDER_APPROVAL
+  PURCHASE_APPROVAL
+  PAYMENT_APPROVAL
+  EXPENSE_APPROVAL
+  PRICE_CHANGE
+  DISCOUNT_APPROVAL
+  CUSTOM
 }
 
-// 订阅配置表 - 用户订阅报表推送
-model ReportSubscription {
-  id         String    @id @default(cuid())
-  reportId   String
-  userId     String
-  frequency  String // DAILY/WEEKLY/MONTHLY
-  format     String    @default("pdf") // pdf/excel/csv
-  email      String?
-  isActive   Boolean   @default(true)
-  lastSentAt DateTime?
-  nextSendAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  // 关联关系
-  report ReportDefinition @relation(fields: [reportId], references: [id])
-
-  @@index([reportId])
-  @@index([userId])
-  @@index([isActive])
-  @@map("report_subscriptions")
+enum ApprovalFlowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
 }
 
-// 导出日志表 - 记录报表导出历史
-model ReportExportLog {
-  id           String    @id @default(cuid())
-  reportId     String
-  userId       String
-  exportType   String // IMMEDIATE/SCHEDULED
-  format       String // pdf/excel/csv
-  fileUrl      String?
-  fileSize     Int?
-  status       String    @default("pending") // pending/completed/failed
-  errorMessage String?
-  createdAt    DateTime  @default(now())
-  completedAt  DateTime?
-
-  // 关联关系
-  report ReportDefinition @relation(fields: [reportId], references: [id])
-
-  @@index([reportId])
-  @@index([userId])
-  @@index([status])
-  @@map("report_export_logs")
+enum ApprovalRecordStatus {
+  PENDING
+  APPROVING
+  APPROVED
+  REJECTED
+  CANCELLED
+  WITHDRAWN
 }
 
-// 定时任务表 - 报表自动生成调度
-model ReportSchedule {
-  id             String    @id @default(cuid())
-  reportId       String
-  name           String
-  cronExpression String
-  timezone       String    @default("Asia/Shanghai")
-  config         Json      @default("{}")
-  isActive       Boolean   @default(true)
-  lastRunAt      DateTime?
-  nextRunAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+enum ApprovalAction {
+  APPROVE
+  REJECT
+  TRANSFER
+  RETURN
+  CANCEL
+}
 
-  // 关联关系
-  report ReportDefinition @relation(fields: [reportId], references: [id])
+enum AccountType {
+  CASH
+  BANK
+  ALIPAY
+  WECHAT
+  PAYPAL
+  CREDIT_CARD
+  OTHER
+}
 
-  @@index([reportId])
-  @@index([isActive])
-  @@map("report_schedules")
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER_IN
+  TRANSFER_OUT
+  EXCHANGE
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  RENT
+  UTILITY
+  SALARY
+  BONUS
+  COMMISSION
+  MARKETING
+  ADVERTISING
+  LOGISTICS
+  WAREHOUSE
+  PACKAGING
+  PLATFORM_FEE
+  TAX
+  INSURANCE
+  TRAVEL
+  ENTERTAINMENT
+  OFFICE
+  COMMUNICATION
+  SOFTWARE
+  HARDWARE
+  REPAIR
+  LEGAL
+  FINANCIAL
+  OTHER
+}
+
+enum ReimbursementStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum ProfitCalculationStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PerformanceRuleType {
+  SALES_REVENUE
+  NET_PROFIT
+  ORDER_COUNT
+  NEW_CUSTOMER
+  TARGET_BONUS
+  CUSTOM
+}
+
+enum CalculationMethod {
+  FIXED_AMOUNT
+  PERCENTAGE
+  TIERED
+  COMMISSION_RATE
+}
+
+enum CommissionStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
 }

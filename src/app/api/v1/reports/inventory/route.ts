@@ -109,7 +109,7 @@ async function getInventoryData(params: {
   // 获取库存明细数据
   const inventoryItems = await prisma.inventoryItem.findMany({
     where: {
-      ...(warehouseId && { warehouseId }),
+      ...(warehouseId && { warehouse: warehouseId }),
       ...(productId && { productId }),
       ...(categoryId && { product: { category: categoryId } }),
       ...(!includeZero && { quantity: { gt: 0 } })

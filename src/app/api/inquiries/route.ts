@@ -1,21 +1,33 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import { requireAuth } from '@/middleware/auth';
 import type { InquiryStatus, Priority } from '@prisma/client';
 
-// GET /api/inquiries - 获取询盘列表
-export async function GET(request: Request) {
+// GET /api/inquiries - 获取询盘列表（行级隔离）
+// 普通用户只能看到自己客户的询盘，管理员可以看到所有
+export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const status = searchParams.get('status') || '';
     const priority = searchParams.get('priority') || '';
+    const customerId = searchParams.get('customerId') || '';
 
     // 构建查询条件
-    const where: {
-      status?: InquiryStatus;
-      priority?: Priority;
-    } = {};
+    const where: any = {};
     
     if (status) {
       where.status = status as InquiryStatus;
@@ -23,6 +35,17 @@ export async function GET(request: Request) {
     
     if (priority) {
       where.priority = priority as Priority;
+    }
+
+    if (customerId) {
+      where.customerId = customerId;
+    }
+
+    // BUG-PERM-007: 行级隔离 - 通过客户 ownerId 过滤
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+      where.customer = {
+        ownerId: currentUser.id,
+      };
     }
 
     const [inquiries, total] = await Promise.all([
@@ -34,6 +57,7 @@ export async function GET(request: Request) {
               id: true,
               companyName: true,
               contactName: true,
+              ownerId: true,
             },
           },
           followUps: {
@@ -71,9 +95,20 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/inquiries - 创建询盘
-export async function POST(request: Request) {
+// POST /api/inquiries - 创建询盘（行级隔离）
+export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const body = await request.json();
     const {
       customerId,
@@ -85,6 +120,7 @@ export async function POST(request: Request) {
       requirements,
       deadline,
       priority,
+      assignedTo,
     } = body;
 
     if (!customerId) {
@@ -96,6 +132,9 @@ export async function POST(request: Request) {
 
     // 生成询盘编号
     const inquiryNo = `INQ${Date.now()}`;
+
+    // BUG-PERM-007: 如果没有指定负责人，自动分配给当前用户
+    const finalAssignedTo = assignedTo || currentUser.id;
 
     const inquiry = await prisma.inquiry.create({
       data: {
@@ -110,6 +149,7 @@ export async function POST(request: Request) {
         deadline: deadline ? new Date(deadline) : null,
         priority: (priority || 'MEDIUM') as Priority,
         status: 'NEW',
+        assignedTo: finalAssignedTo,
       },
     });
 

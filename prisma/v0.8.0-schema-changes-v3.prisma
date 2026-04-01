@@ -1,0 +1,838 @@
+// ============================================
+// Trade ERP v0.8.0 - Database Schema Changes
+// 新增表结构：权限系统 + 多平台 + 海外仓 + 审批 + 财务 + 利润核算 + 绩效提成
+// ============================================
+
+// ==================== 1. 权限系统 - RBAC ====================
+
+// 权限表
+model Permission {
+  id          String    @id @default(cuid())
+  name        String    // 权限名称，如: order.create, order.approve
+  displayName String    // 显示名称
+  module      String    // 所属模块: system/auth/order/product/warehouse/finance/profit/performance
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  roles       RolePermission[]
+
+  @@unique([name])
+  @@index([module, isActive])
+  @@map("permissions")
+}
+
+// 扩展角色表（原 User 有 role 字段，这里支持多角色）
+model Role {
+  id          String    @id @default(cuid())
+  name        String    // 角色名称: super_admin/admin/manager/sales/warehouse/finance/observer
+  displayName String    // 显示名称
+  description String?
+  isSystem    Boolean   @default(false)  // 系统角色不可删除
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([name])
+  @@index([isActive])
+  @@map("roles")
+}
+
+// 用户-角色关联表
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// 角色-权限关联表
+model RolePermission {
+  id           String      @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime    @default(now())
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// 扩展 User 表关系（需在原 schema 中添加）
+// 用户表已存在，这里添加关系声明：
+// users       UserRole[]
+// 原 User.role 字段保留作为默认角色
+
+// 用户注册审批表（新用户注册需要审批）
+model UserRegistration {
+  id           String         @id @default(cuid())
+  username     String
+  email        String         @unique
+  passwordHash String
+  name         String?
+  phone        String?
+  department   String?
+  position     String?
+  status       RegStatus      @default(PENDING)
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+  remarks      String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  approvedBy   User?          @relation(fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@map("user_registrations")
+}
+
+enum RegStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ==================== 2. 多平台集成 ====================
+
+// 平台类型枚举
+enum PlatformType {
+  ALIBABA       // 阿里国际站
+  ALIBABA_1688  // 1688
+  AMAZON        // 亚马逊
+  TIKTOK        // TikTok Shop
+  SHOPIFY       // Shopify
+  WISH          // Wish
+  EBAY          // eBay
+  OTHER         // 其他
+}
+
+// 平台账号表
+model PlatformAccount {
+  id               String        @id @default(cuid())
+  platformType     PlatformType  // 平台类型
+  platformName     String        // 平台名称显示
+  accountName      String        // 账号名称/店铺名
+  accountId        String?       // 平台账号ID
+  shopId           String?       // 店铺ID
+  clientId         String?       // API Client ID
+  clientSecret     String?       // API Client Secret (加密存储)
+  accessToken      String?       // Access Token (加密存储)
+  refreshToken     String?       // Refresh Token (加密存储)
+  tokenExpiresAt   DateTime?     // Token 过期时间
+  apiKey           String?       // API Key (部分平台)
+  apiSecret        String?       // API Secret (加密存储)
+  authCode         String?       // 授权码
+  region           String?       // 站点区域: US/EU/SE/...
+  currency         String        @default("USD")
+  isTest           Boolean       @default(false)  // 是否沙箱测试
+  isActive         Boolean       @default(true)
+  lastSyncAt       DateTime?     // 最后同步时间
+  syncStatus       String?       // last sync status
+  errorMessage     String?       // last sync error
+  userId           String?       // 负责人ID
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  orders           PlatformOrder[]
+  user             User?         @relation(fields: [userId], references: [id])
+
+  @@index([platformType, isActive])
+  @@index([userId])
+  @@index([accountId])
+  @@index([shopId])
+  @@map("platform_accounts")
+}
+
+// 平台订单表（同步各平台订单）
+model PlatformOrder {
+  id                String          @id @default(cuid())
+  platformOrderId   String          // 平台订单ID
+  platformOrderSn   String?         // 平台订单号
+  platformAccountId String          // 关联平台账号
+  platformType      PlatformType    // 平台类型
+  sellerId          String?         // 卖家ID
+  buyerId           String?         // 买家ID
+  buyerName         String?         // 买家名称
+  buyerEmail        String?         // 买家邮箱
+  buyerPhone        String?         // 买家电话
+  status            String          // 平台订单状态
+  paymentStatus     String?         // 支付状态
+  fulfillmentStatus String?         // 发货状态
+  orderDate         DateTime?       // 订单创建时间
+  paymentDate       DateTime?       // 支付时间
+  shipmentDate      DateTime?       // 发货时间
+  deliveryDate      DateTime?       // 送达时间
+  currency          String          @default("USD")
+  totalAmount       Decimal         @db.Decimal(12, 2)  // 订单总额
+  subtotal          Decimal?        @db.Decimal(12, 2)  // 商品小计
+  shippingFee       Decimal?        @db.Decimal(10, 2)  // 运费
+  platformFee       Decimal?        @db.Decimal(10, 2)  // 平台佣金
+  commissionFee     Decimal?        @db.Decimal(10, 2)  // 佣金
+  tax               Decimal?        @db.Decimal(10, 2)  // 税费
+  discount          Decimal?        @db.Decimal(10, 2)  // 折扣
+  coupon            Decimal?        @db.Decimal(10, 2)  // 优惠券
+  shippingAddress   Json?           // 收货地址JSON
+  billingAddress    Json?           // 账单地址JSON
+  buyerMessage      String?         // 买家留言
+  notes             String?         // 内部备注
+  internalOrderId   String?         // 关联内部ERP订单ID
+  items             Json            @default("[]")      // 订单商品明细JSON
+  tags              String[]        // 标签
+  syncVersion       Int             @default(1)        // 同步版本号
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  platformAccount   PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  profitDetails     ProfitDetail[]
+
+  @@unique([platformOrderId, platformAccountId])  // 同一账号下平台订单ID唯一
+  @@index([platformAccountId, orderDate])
+  @@index([platformType, status])
+  @@index([internalOrderId])
+  @@index([orderDate])
+  @@map("platform_orders")
+}
+
+// ==================== 3. 海外仓管理 ====================
+
+// 海外仓类型枚举
+enum OverseasWarehouseType {
+  FBA          // 亚马逊FBA仓
+  FBN          //  TikTok FBN
+  SELF_OWNED   // 自营海外仓
+  THIRD_PARTY  // 第三方海外仓
+}
+
+// 海外仓表
+model OverseasWarehouse {
+  id            String                 @id @default(cuid())
+  name          String                 // 仓库名称
+  code          String                 @unique  // 仓库编码
+  type          OverseasWarehouseType  // 仓库类型
+  country       String                 // 国家
+  province      String?                // 省/州
+  city          String?                // 城市
+  address       String                 // 地址
+  postcode      String?                // 邮编
+  contactName   String?                // 联系人
+  contactPhone  String?                // 联系电话
+  email         String?                // 邮箱
+  warehouseId   String?                // 平台仓库ID (如FBA仓库ID)
+  region        String?                // 区域代码
+  timezone      String                 @default("UTC") // 时区
+  isActive      Boolean                @default(true)
+  apiEnabled    Boolean                @default(false) // 是否启用API同步
+  apiKey        String?                // API密钥 (加密)
+  apiUrl        String?                // API地址
+  fbaSyncEnabled Boolean               @default(false) // FBA库存同步
+  lastSyncAt    DateTime?              // 最后同步时间
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  inventory     OverseasInventory[]
+
+  @@index([type, country, isActive])
+  @@index([code])
+  @@map("overseas_warehouses")
+}
+
+// 海外仓库存
+model OverseasInventory {
+  id                String              @id @default(cuid())
+  warehouseId       String
+  productId         String
+  sku               String
+  fnsku             String?             // FBA FNSKU
+  asin              String?             // ASIN
+  availableQty      Int                 @default(0)  // 可售数量
+  inboundQty        Int                 @default(0)  // 在途数量
+  reservedQty       Int                 @default(0)  // 预留数量
+  totalQty          Int                 @default(0)  // 总数量
+  lastFulfillableQty Int?              // 最后同步可售数量
+  costPerUnit       Decimal?            @db.Decimal(10, 2) // 单位成本
+  location          String?             // 库位
+  lastSyncAt        DateTime?           // 最后同步时间
+  updatedAtSource   DateTime?           // 来源更新时间
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  warehouse         OverseasWarehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product           Product             @relation(fields: [productId], references: [id])
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([sku])
+  @@index([fnsku])
+  @@index([asin])
+  @@map("overseas_inventory")
+}
+
+// FBA 库存补货建议
+// 可后续扩展，暂时通过计算生成
+
+// ==================== 4. 审批流程 ====================
+
+// 审批类型枚举
+enum ApprovalType {
+  USER_REGISTRATION    // 用户注册
+  ORDER_APPROVAL       // 订单审批
+  PURCHASE_APPROVAL    // 采购审批
+  PAYMENT_APPROVAL     // 付款审批
+  EXPENSE_APPROVAL     // 报销审批
+  PRICE_CHANGE         // 价格变更
+  DISCOUNT_APPROVAL    // 折扣审批
+  CUSTOM               // 自定义
+}
+
+// 审批状态枚举
+enum ApprovalFlowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+// 审批流程定义
+model ApprovalFlow {
+  id            String             @id @default(cuid())
+  name          String             // 流程名称
+  type          ApprovalType       // 审批类型
+  description   String?
+  config        Json               @default("{}") // 流程配置: 审批节点、条件
+  isActive      ApprovalFlowStatus @default(ACTIVE)
+  isSystem      Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  records       ApprovalRecord[]
+
+  @@index([type, isActive])
+  @@map("approval_flows")
+}
+
+// 审批记录状态
+enum ApprovalRecordStatus {
+  PENDING
+  APPROVING
+  APPROVED
+  REJECTED
+  CANCELLED
+  WITHDRAWN
+}
+
+// 审批操作类型
+enum ApprovalAction {
+  APPROVE
+  REJECT
+  TRANSFER
+  RETURN
+  CANCEL
+}
+
+// 审批记录
+model ApprovalRecord {
+  id              String             @id @default(cuid())
+  flowId          String
+  flowCode        String?            // 流程编码（方便查询）
+  title           String             // 审批标题
+  type            ApprovalType       // 审批类型
+  businessId      String             // 关联业务ID（订单ID/采购ID等）
+  businessType    String             // 业务类型
+  status          ApprovalRecordStatus @default(PENDING)
+  currentStep     Int                @default(1)   // 当前步骤
+  totalSteps      Int                @default(1)   // 总步骤
+  initiatorId     String             // 发起人ID
+  approverId      String?            // 当前处理人ID
+  initiatedAt     DateTime           @default(now())
+  approvedAt      DateTime?          // 审批完成时间
+  updatedAt       DateTime           @updatedAt
+  data            Json               @default("{}") // 申请数据
+  comments        String?            // 审批备注
+  flow            ApprovalFlow       @relation(fields: [flowId], references: [id])
+  initiator       User               @relation(fields: [initiatorId], references: [id])
+  approver        User?              @relation(fields: [approverId], references: [id])
+  history         ApprovalHistory[]
+
+  @@index([flowId])
+  @@index([status])
+  @@index([initiatorId])
+  @@index([approverId])
+  @@index([businessId, businessType])
+  @@index([initiatedAt])
+  @@map("approval_records")
+}
+
+// 审批历史记录
+model ApprovalHistory {
+  id             String            @id @default(cuid())
+  recordId       String
+  step           Int               // 第几步
+  approverId     String
+  action         ApprovalAction    // 操作
+  comments       String?           // 审批意见
+  actionAt       DateTime          @default(now())
+  record         ApprovalRecord    @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  approver       User              @relation(fields: [approverId], references: [id])
+
+  @@index([recordId])
+  @@index([approverId])
+  @@index([actionAt])
+  @@map("approval_history")
+}
+
+// ==================== 5. 财务模块 ====================
+
+// 账户类型
+enum AccountType {
+  CASH          // 现金
+  BANK          // 银行账户
+  ALIPAY        // 支付宝
+  WECHAT        // 微信支付
+  PAYPAL        // PayPal
+  CREDIT_CARD   // 信用卡
+  OTHER         // 其他
+}
+
+// 账户表
+model Account {
+  id            String        @id @default(cuid())
+  name          String        // 账户名称
+  type          AccountType   // 账户类型
+  accountNumber String?       // 账号
+  bankName      String?       // 银行名称
+  branchName    String?       // 支行
+  currency      String        @default("CNY")
+  openingBalance Decimal      @default(0) @db.Decimal(14, 2) // 期初余额
+  currentBalance Decimal      @default(0) @db.Decimal(14, 2) // 当前余额
+  isActive      Boolean       @default(true)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
+
+  @@index([type, isActive])
+  @@map("accounts")
+}
+
+// 交易类型
+enum TransactionType {
+  INCOME         // 收入
+  EXPENSE        // 支出
+  TRANSFER_IN    // 转入
+  TRANSFER_OUT   // 转出
+  EXCHANGE       // 汇兑
+}
+
+// 交易状态
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// 交易记录表
+model Transaction {
+  id              String          @id @default(cuid())
+  transactionNo   String          @unique // 交易编号
+  accountId       String
+  type            TransactionType
+  amount          Decimal         @db.Decimal(14, 2)
+  currency        String          @default("CNY")
+  exchangeRate    Decimal         @default(1) @db.Decimal(10, 6)
+  amountCny       Decimal         @db.Decimal(14, 2) // 人民币金额
+  counterParty    String?         // 对方
+  counterPartyAccount String?
+  description     String?         // 描述
+  category        String?         // 分类
+  businessType    String?         // 关联业务类型: order/purchase/expense...
+  businessId      String?         // 关联业务ID
+  transactionDate Date            // 交易日期
+  status          TransactionStatus @default(CONFIRMED)
+  receiptUrl      String?         // 凭证URL
+  notes           String?
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdBy       User            @relation(fields: [createdById], references: [id])
+
+  @@index([accountId, transactionDate])
+  @@index([type, category])
+  @@index([businessType, businessId])
+  @@index([transactionDate])
+  @@index([status])
+  @@map("transactions")
+}
+
+// 费用类型
+enum ExpenseCategory {
+  RENT           // 租金
+  UTILITY        // 水电
+  SALARY         // 工资
+  BONUS          // 奖金
+  COMMISSION     // 提成
+  MARKETING      // 营销推广
+  ADVERTISING    // 广告
+  LOGISTICS      // 物流运费
+  WAREHOUSE      // 仓储费
+  PACKAGING      // 包装费
+  PLATFORM_FEE   // 平台费用
+  COMMISSION     // 佣金
+  TAX            // 税费
+  INSURANCE      // 保险
+  TRAVEL         // 差旅费
+  ENTERTAINMENT  // 招待费
+  OFFICE         // 办公用品
+  COMMUNICATION  // 通讯
+  SOFTWARE       // 软件服务
+  HARDWARE       // 硬件设备
+  REPAIR         // 维修
+  LEGAL          // 法律咨询
+  FINANCIAL      // 财务费用
+  OTHER          // 其他
+}
+
+// 报销状态
+enum ReimbursementStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+// 费用支出表
+model Expense {
+  id              String              @id @default(cuid())
+  expenseNo       String              @unique
+  applicantId     String
+  department      String?
+  category        ExpenseCategory
+  amount          Decimal             @db.Decimal(12, 2)
+  currency        String              @default("CNY")
+  description     String
+  receiptCount    Int                 @default(0)
+  receiptUrls     String[]
+  expenseDate     Date                // 消费日期
+  status          ReimbursementStatus @default(DRAFT)
+  approvalId      String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  accountId       String?
+  transactionId   String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  applicant       User                @relation(fields: [applicantId], references: [id])
+  account         Account?            @relation(fields: [accountId], references: [id])
+  transaction     Transaction?        @relation(fields: [transactionId], references: [id])
+  reimbursements  Reimbursement[]
+
+  @@index([applicantId, status])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([status])
+  @@map("expenses")
+}
+
+// 报销单表
+model Reimbursement {
+  id               String              @id @default(cuid())
+  reimbursementNo String              @unique
+  expenseIds       String[]           // 关联费用ID列表
+  applicantId      String
+  totalAmount      Decimal             @db.Decimal(12, 2)
+  status           ReimbursementStatus @default(DRAFT)
+  description      String?
+  currentStep      Int                 @default(1)
+  approvedById     String?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  accountId        String?
+  transactionId    String?
+  notes            String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  applicant        User                @relation(fields: [applicantId], references: [id])
+  account          Account?            @relation(fields: [accountId], references: [id])
+  transaction      Transaction?        @relation(fields: [transactionId], references: [id])
+  expenses         Expense[]           @relation("ReimbursementExpenses")
+
+  @@index([applicantId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reimbursements")
+}
+
+// ==================== 6. 利润核算 ====================
+
+// 利润核算状态
+enum ProfitCalculationStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// 利润核算主表
+model ProfitCalculation {
+  id              String                  @id @default(cuid())
+  calculationNo   String                  @unique
+  name            String                  // 核算名称
+  periodType      String                  // MONTH/QUARTER/YEAR/CUSTOM
+  period          String                  // 2026-03 / 2026-Q1 / 2026
+  startDate       Date                    // 开始日期
+  endDate         Date                    // 结束日期
+  status          ProfitCalculationStatus @default(DRAFT)
+  totalRevenue    Decimal                 @db.Decimal(14, 2) // 总收入
+  totalCost       Decimal                 @db.Decimal(14, 2) // 总成本
+  totalExpense    Decimal                 @db.Decimal(14, 2) // 总费用
+  totalProfit     Decimal                 @db.Decimal(14, 2) // 总利润
+  netProfit       Decimal                 @db.Decimal(14, 2) // 净利润
+  profitMargin    Decimal?                @db.Decimal(5, 2)  // 利润率 %
+  orderCount      Int                     @default(0)       // 订单数
+  platformStats   Json                    @default("{}")    // 各平台统计JSON
+  calculatedBy    String                  // 核算人ID
+  calculatedAt    DateTime?               // 核算完成时间
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  details         ProfitDetail[]
+  calculatedByUser User                    @relation(fields: [calculatedBy], references: [id])
+
+  @@index([periodType, period])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdAt])
+  @@map("profit_calculations")
+}
+
+// 利润核算明细表 - 按订单/按SKU细分
+model ProfitDetail {
+  id                    String          @id @default(cuid())
+  calculationId         String
+  orderId               String?         // 内部订单ID
+  platformOrderId       String?         // 平台订单ID
+  productId             String?         // 产品ID
+  sku                   String?         // SKU
+  platformType          PlatformType?   // 平台类型
+  platformAccountId     String?         // 平台账号
+  salesRepId            String?         // 销售员
+  currency              String          @default("USD")
+  exchangeRate          Decimal         @default(1) @db.Decimal(10, 6)
+
+  // 收入部分
+  salesAmount           Decimal         @db.Decimal(12, 2) // 销售收入
+  shippingIncome        Decimal?        @db.Decimal(10, 2) // 运费收入
+  totalIncome           Decimal         @db.Decimal(12, 2) // 总收入
+
+  // 成本部分
+  productCost           Decimal         @db.Decimal(12, 2) // 产品采购成本
+  shippingCost          Decimal?        @db.Decimal(10, 2) // 国内运费
+  internationalShipping Decimal?        @db.Decimal(10, 2) // 国际运费
+  warehouseCost         Decimal?        @db.Decimal(10, 2) // 仓储费
+  packagingCost         Decimal?        @db.Decimal(10, 2) // 包装费
+
+  // 平台费用
+  platformFee           Decimal?        @db.Decimal(10, 2) // 平台佣金
+  paymentFee            Decimal?        @db.Decimal(10, 2) // 支付手续费
+  adFee                 Decimal?        @db.Decimal(10, 2) // 广告费用
+  tax                  Decimal?         @db.Decimal(10, 2) // 税费
+
+  // 其他费用
+  otherFees             Decimal?        @db.Decimal(10, 2) // 其他费用
+
+  // 总计
+  totalCost             Decimal         @db.Decimal(12, 2) // 总成本
+  grossProfit           Decimal         @db.Decimal(12, 2) // 毛利润
+  netProfit             Decimal         @db.Decimal(12, 2) // 净利润
+  profitMargin          Decimal?        @db.Decimal(5, 2)  // 利润率
+
+  // 折算人民币
+  totalIncomeCny        Decimal         @db.Decimal(12, 2)
+  totalCostCny          Decimal         @db.Decimal(12, 2)
+  netProfitCny          Decimal         @db.Decimal(12, 2)
+
+  quantity              Int             @default(1) // 销售数量
+  tags                  String[]
+  createdAt             DateTime        @default(now())
+
+  calculation           ProfitCalculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  order                 Order?            @relation(fields: [orderId], references: [id])
+  platformOrder         PlatformOrder?   @relation(fields: [platformOrderId], references: [id])
+  product               Product?          @relation(fields: [productId], references: [id])
+  salesRep              User?             @relation(fields: [salesRepId], references: [id])
+  platformAccount       PlatformAccount?  @relation(fields: [platformAccountId], references: [id])
+  commission            Commission?
+
+  @@index([calculationId])
+  @@index([orderId])
+  @@index([platformOrderId])
+  @@index([productId])
+  @@index([salesRepId])
+  @@index([platformType])
+  @@map("profit_details")
+}
+
+// ==================== 7. 绩效提成 ====================
+
+// 绩效规则类型
+enum PerformanceRuleType {
+  SALES_REVENUE     // 销售额提成
+  GROSS_PROFIT      // 毛利提成
+  NET_PROFIT        // 净利润提成
+  ORDER_COUNT       // 订单数量
+  NEW_CUSTOMER      // 新客户
+  TARGET_BONUS      // 目标达成奖金
+  CUSTOM            // 自定义
+}
+
+// 计算方式
+enum CalculationMethod {
+  FIXED_AMOUNT      // 固定金额
+  PERCENTAGE        // 百分比
+  TIERED            // 阶梯提成
+  COMMISSION_RATE   // 佣金率（按利润/销售额）
+}
+
+// 绩效规则表
+model PerformanceRule {
+  id              String              @id @default(cuid())
+  name            String              // 规则名称
+  code            String              @unique // 规则编码
+  type            PerformanceRuleType // 规则类型
+  calculationMethod CalculationMethod // 计算方式
+  department      String?             // 适用部门
+  position        String?             // 适用职位
+  targetUserType  String?             // 适用人群: sales/manager/all
+  isActive        Boolean             @default(true)
+  effectiveFrom   Date                // 生效日期
+  effectiveTo     Date?              // 失效日期
+  baseFormula     String?             // 基础计算公式
+  tierConfig      Json                @default("[]") // 阶梯配置JSON
+  conditionConfig Json                @default("{}") // 条件配置
+  description     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  metrics         PerformanceMetric[]
+  commissions     Commission[]
+
+  @@index([type, isActive])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("performance_rules")
+}
+
+// 绩效指标记录表 - 按人员/周期统计
+model PerformanceMetric {
+  id            String          @id @default(cuid())
+  ruleId        String
+  userId        String          // 员工ID
+  period        String          // 2026-03
+  periodStart   Date
+  periodEnd     Date
+  salesAmount   Decimal         @db.Decimal(14, 2) // 销售额
+  orderCount    Int             @default(0)       // 订单数
+  newCustomers  Int             @default(0)       // 新客户数
+  grossProfit   Decimal         @db.Decimal(14, 2) // 毛利
+  netProfit     Decimal         @db.Decimal(14, 2) // 净利
+  targetAmount  Decimal?        @db.Decimal(14, 2) // 目标
+  achievement   Decimal?        @db.Decimal(5, 2)  // 达成率 %
+  score         Decimal?        @db.Decimal(5, 2)  // 评分
+  calculatedAt  DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  rule          PerformanceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user          User            @relation(fields: [userId], references: [id])
+
+  @@unique([ruleId, userId, period])
+  @@index([userId, period])
+  @@index([ruleId])
+  @@index([periodStart, periodEnd])
+  @@map("performance_metrics")
+}
+
+// 提成结算状态
+enum CommissionStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+// 提成表
+model Commission {
+  id              String             @id @default(cuid())
+  commissionNo    String             @unique
+  userId          String             // 业务员ID
+  period          String             // 结算周期 2026-03
+  startDate       Date
+  endDate         Date
+  status          CommissionStatus   @default(DRAFT)
+  ruleId          String?
+
+  // 各项提成
+  salesCommission Decimal            @db.Decimal(12, 2) @default(0) // 销售提成
+  profitCommission Decimal           @db.Decimal(12, 2) @default(0) // 利润提成
+  targetBonus     Decimal            @db.Decimal(12, 2) @default(0) // 目标奖金
+  otherBonus      Decimal            @db.Decimal(12, 2) @default(0) // 其他奖金
+  adjustment      Decimal            @db.Decimal(12, 2) @default(0) // 调整
+  totalCommission Decimal            @db.Decimal(12, 2) @default(0) // 总提成
+
+  // 汇总业绩
+  totalSales      Decimal            @db.Decimal(14, 2) @default(0) // 总销售额
+  totalProfit     Decimal            @db.Decimal(14, 2) @default(0) // 总利润
+  orderCount      Int                @default(0)
+
+  // 审批信息
+  approvedById    String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  accountId       String?
+  transactionId   String?
+  notes           String?
+  details         Json               @default("[]") // 明细JSON
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id])
+  rule            PerformanceRule?   @relation(fields: [ruleId], references: [id])
+  approvedBy      User?              @relation(fields: [approvedById], references: [id])
+  account         Account?           @relation(fields: [accountId], references: [id])
+  transaction     Transaction?       @relation(fields: [transactionId], references: [id])
+  profitDetails   ProfitDetail[]     @relation("CommissionProfitDetails")
+
+  @@index([userId, period])
+  @@index([status])
+  @@index([period])
+  @@index([createdAt])
+  @@map("commissions")
+}
+
+// 为 ProfitDetail 添加关系（需要在上面定义后添加反向关系）
+// 上面 ProfitDetail 已经添加: commission Commission?
+// 在 Commission 中添加: profitDetails ProfitDetail[] @relation("CommissionProfitDetails")
+
+// ============================================
+// 索引设计总结:
+// ============================================
+// 1. 所有外键都添加索引
+// 2. 常用查询条件（status, date, period）添加复合索引
+// 3. 唯一约束保证业务唯一性
+// 4. 按时间范围查询时使用日期索引
+
+// ============================================
+// 向后兼容性说明:
+// ============================================
+// - 原有表结构保持不变
+// - 原 User 表已有 role 字段，新增 RBAC 多角色体系作为扩展
+// - 新增表与原有表通过外键关联
+// - 所有关系都支持级联删除（关联业务删除时清理数据）

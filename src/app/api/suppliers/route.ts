@@ -1,9 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import { requireAuth } from '@/middleware/auth';
 
-// GET /api/suppliers - 获取供应商列表
-export async function GET(request: Request) {
+// GET /api/suppliers - 获取供应商列表（行级隔离）
+// 管理员可以看到所有供应商，普通用户只能看到自己的供应商
+export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -18,6 +32,11 @@ export async function GET(request: Request) {
         { email: { contains: search } },
         { phone: { contains: search } },
       ];
+    }
+
+    // BUG-PERM-007: 行级隔离
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+      where.ownerId = currentUser.id;
     }
 
     const [suppliers, total] = await Promise.all([
@@ -55,9 +74,20 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/suppliers - 创建供应商
-export async function POST(request: Request) {
+// POST /api/suppliers - 创建供应商（行级隔离）
+export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // 获取当前用户会话
+    const session = await getCurrentUser(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const currentUser = session.user;
+
     const body = await request.json();
     const {
       companyName,
@@ -98,6 +128,7 @@ export async function POST(request: Request) {
     
     const supplierNo = `SUP-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
 
+    // BUG-PERM-007: 自动设置 ownerId 为当前用户
     const supplier = await prisma.supplier.create({
       data: {
         supplierNo,
@@ -114,6 +145,7 @@ export async function POST(request: Request) {
         products,
         creditTerms,
         notes,
+        ownerId: currentUser.id,
         status: 'ACTIVE',
         type: 'DOMESTIC',
         level: 'NORMAL',
