@@ -23,13 +23,13 @@ async function main() {
       email: 'manager@trade-erp.com',
       password: 'Manager@123456',
       name: '部门经理',
-      role: 'MANAGER' as const,
+      role: 'SALES' as const,
     },
     {
       email: 'user@trade-erp.com',
       password: 'User@123456',
       name: '普通用户',
-      role: 'USER' as const,
+      role: 'WAREHOUSE' as const,
     },
     {
       email: 'viewer@trade-erp.com',
