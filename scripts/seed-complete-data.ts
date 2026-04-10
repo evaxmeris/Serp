@@ -43,10 +43,10 @@ const supplierData = [
 // 用户数据 - 各角色
 const userData = [
   { email: 'admin@trade-erp.com', name: '管理员', role: RoleEnum.ADMIN },
-  { email: 'manager@trade-erp.com', name: '部门经理', role: RoleEnum.MANAGER },
-  { email: 'sales@trade-erp.com', name: '销售代表', role: RoleEnum.USER },
-  { email: 'purchaser@trade-erp.com', name: '采购员', role: RoleEnum.USER },
-  { email: 'warehouse@trade-erp.com', name: '仓库管理员', role: RoleEnum.USER },
+  { email: 'manager@trade-erp.com', name: '部门经理', role: RoleEnum.ADMIN },
+  { email: 'sales@trade-erp.com', name: '销售代表', role: RoleEnum.SALES },
+  { email: 'purchaser@trade-erp.com', name: '采购员', role: RoleEnum.SALES },
+  { email: 'warehouse@trade-erp.com', name: '仓库管理员', role: RoleEnum.SALES },
   { email: 'viewer@trade-erp.com', name: '访客用户', role: RoleEnum.VIEWER },
 ];
 
