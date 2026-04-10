@@ -65,7 +65,7 @@ if curl -s http://localhost:3000/api/health > /dev/null; then
     echo "  查看日志：docker-compose logs -f"
     echo "  停止服务：docker-compose down"
     echo "  重启服务：docker-compose restart"
-    echo "  进入容器：docker exec -it trade-erp-v0.4.0 sh"
+    echo "  进入容器：docker exec -it trade-erp-v0.9.0 sh"
     echo ""
 else
     echo "⚠️  服务可能未完全启动，请稍后检查"
