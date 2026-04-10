@@ -51,8 +51,10 @@ export async function login(email: string, password: string) {
       return { success: false, error: '账号或密码错误' };
     }
 
-    // 验证用户状态（预留）
-    // User 模型目前没有 status 字段，暂时跳过状态检查
+    // 验证用户是否已批准
+    if (!user.isApproved) {
+      return { success: false, error: '账号等待管理员审批，请联系管理员批准后再登录' };
+    }
 
     // 生成 JWT token
     const SECRET = getSecret();

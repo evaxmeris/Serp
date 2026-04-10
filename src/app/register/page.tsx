@@ -64,8 +64,6 @@ export default function RegisterPage() {
     name: '',
     password: '',
     confirmPassword: '',
-    role: 'SALES', // 默认业务员角色
-    company: '',
     phone: '',
   });
   const [error, setError] = useState('');
@@ -94,7 +92,7 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!formData.email || !formData.name || !formData.company || !formData.phone) {
+    if (!formData.email || !formData.name || !formData.phone) {
       setError('请填写所有必填字段');
       setLoading(false);
       return;
@@ -108,8 +106,6 @@ export default function RegisterPage() {
           email: formData.email,
           name: formData.name,
           password: formData.password,
-          role: formData.role,
-          company: formData.company,
           phone: formData.phone,
         }),
       });
@@ -188,22 +184,6 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="company">
-                公司名称 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="company"
-                placeholder="您的公司名称"
-                value={formData.company}
-                onChange={(e) =>
-                  setFormData({ ...formData, company: e.target.value })
-                }
-                className="h-11"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="phone">
                 联系电话 <span className="text-red-500">*</span>
               </label>
@@ -217,34 +197,6 @@ export default function RegisterPage() {
                 className="h-11"
                 required
               />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300" htmlFor="role">
-                角色 <span className="text-red-500">*</span>
-              </label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, role: value })
-                }
-              >
-                <SelectTrigger className="h-11">
-                  <SelectValue placeholder="选择您的角色" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SUPER_ADMIN">超级管理员</SelectItem>
-                  <SelectItem value="OWNER">公司老板</SelectItem>
-                  <SelectItem value="ADMIN">管理员</SelectItem>
-                  <SelectItem value="MANAGER">部门经理</SelectItem>
-                  <SelectItem value="SALES">销售业务员</SelectItem>
-                  <SelectItem value="PURCHASING">采购专员</SelectItem>
-                  <SelectItem value="WAREHOUSE">仓库管理员</SelectItem>
-                  <SelectItem value="FINANCE">财务会计</SelectItem>
-                  <SelectItem value="PRODUCT">产品开发</SelectItem>
-                  <SelectItem value="USER">普通用户</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-2">
