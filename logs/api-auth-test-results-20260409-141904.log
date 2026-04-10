@@ -1,0 +1,10 @@
+
+FAIL - LOGIN-001: 正常登录返回 success=true - Expected: 0, Actual: 0
+FAIL - LOGIN-001: 返回用户角色正确 - Expected: 0, Actual: 0
+[14:19:04] LOGIN-001: Admin user ID: cmng7v3sf0000s96ytp2nxdq6
+FAIL - LOGIN-002: 返回密码错误消息 - Expected: 0, Actual: 0
+PASS - LOGIN-002: HTTP 状态码 401 - Expected: 401, Actual: 401
+FAIL - LOGIN-003: 返回账号错误消息 - Expected: 0, Actual: 0
+PASS - LOGIN-003: HTTP 状态码 401 - Expected: 401, Actual: 401
+PASS - LOGIN-004: HTTP 状态码 400 - Expected: 400, Actual: 400
+PASS - LOGIN-005: HTTP 状态码 400 - Expected: 400, Actual: 400

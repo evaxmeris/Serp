@@ -23,6 +23,9 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     
+    // 获取 includeAttributes 参数
+    const includeAttributes = searchParams.get('includeAttributes') === 'true';
+    
     // 验证查询参数
     const queryValidation = ProductResearchQuerySchema.safeParse({
       page: searchParams.get('page') || '1',
@@ -139,34 +142,40 @@ export async function GET(request: Request) {
       }
     }
 
-    // 查询产品调研列表
-    const [products, total] = await Promise.all([
-      prisma.productResearch.findMany({
-        where,
+    // 构建 include 配置
+    const includeConfig: any = {
+      // 包含品类信息
+      category: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+    };
+    
+    // 根据参数决定是否包含属性
+    if (includeAttributes) {
+      includeConfig.attributes = {
         include: {
-          // 包含品类信息
-          category: {
+          attribute: {
             select: {
               id: true,
               name: true,
               code: true,
-            },
-          },
-          // 包含属性值（仅基本信息）
-          attributes: {
-            include: {
-              attribute: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                  type: true,
-                  unit: true,
-                },
-              },
+              type: true,
+              unit: true,
             },
           },
         },
+      };
+    }
+    
+    // 查询产品调研列表
+    const [products, total] = await Promise.all([
+      prisma.productResearch.findMany({
+        where,
+        include: includeConfig,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,

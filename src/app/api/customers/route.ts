@@ -1,20 +1,18 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/middleware/auth';
+import { getUserFromRequest } from '@/lib/auth-api';
 import { getCurrentUser } from '@/lib/auth-simple';
 
 // GET /api/customers - 获取客户列表（行级隔离：只能看到自己的客户）
 export async function GET(request: NextRequest) {
   try {
-    // BUG-PERM-001: 添加认证检查
-    // 转换 request 兼容 NextRequest 类型
-    const authError = await requireAuth(request);
-    if (authError) return authError;
-
-    // 获取当前登录用户
-    const currentUser = await getCurrentUser();
+    // 获取当前登录用户（修复 API 认证问题）
+    const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -32,7 +30,7 @@ export async function GET(request: NextRequest) {
     } : {};
 
     // BUG-PERM-007: 添加行级隔离 - 管理员可以看到所有客户，普通用户只能看到自己的
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+    if (currentUser.role !== 'ADMIN') {
       where.ownerId = currentUser.id;
     }
 
@@ -82,15 +80,13 @@ export async function GET(request: NextRequest) {
 // POST /api/customers - 创建客户（行级隔离：自动设置 ownerId 为当前用户）
 export async function POST(request: NextRequest) {
   try {
-    // BUG-PERM-001: 添加认证检查
-    // 转换 request 兼容 NextRequest 类型
-    const authError = await requireAuth(request);
-    if (authError) return authError;
-
     // 获取当前登录用户
-    const currentUser = await getCurrentUser();
+    const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();

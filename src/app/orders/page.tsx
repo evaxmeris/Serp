@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useOrders, useDeleteOrder } from '@/hooks/use-orders';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -33,8 +34,19 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight, CheckCheck, Truck, CheckSquare, Square } from 'lucide-react';
 import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/types/order';
+import { OrderBatchConfirmDialog } from '@/components/batch-operations/OrderBatchConfirmDialog';
+import { OrderBatchShipDialog } from '@/components/batch-operations/OrderBatchShipDialog';
+
+type OrderItem = {
+  id: string;
+  orderNo: string;
+  customer: {
+    companyName: string;
+  };
+  status: string;
+};
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'ALL', label: '全部状态' },
@@ -57,6 +69,9 @@ export default function OrdersPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchConfirmDialogOpen, setBatchConfirmDialogOpen] = useState(false);
+  const [batchShipDialogOpen, setBatchShipDialogOpen] = useState(false);
 
   const { data, isLoading, error } = useOrders({ 
     page, 
@@ -68,6 +83,28 @@ export default function OrdersPage() {
 
   const orders = data?.data || [];
   const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 };
+
+  // 键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + A 全选
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        if (orders.length > 0 && orders.length === selectedIds.size) {
+          setSelectedIds(new Set());
+        } else {
+          setSelectedIds(new Set(orders.map(p => p.id)));
+        }
+        e.preventDefault();
+      }
+      // Esc 取消选择
+      if (e.key === 'Escape') {
+        setSelectedIds(new Set());
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [orders, selectedIds]);
 
   const handleCancel = (orderId: string) => {
     setSelectedOrderId(orderId);
@@ -93,6 +130,35 @@ export default function OrdersPage() {
         alert(err.message);
       },
     });
+  };
+
+  // 批量选择
+  const toggleSelectAll = () => {
+    if (orders.length === selectedIds.size) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(orders.map(o => o.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBatchConfirmComplete = () => {
+    setSelectedIds(new Set());
+    window.location.reload();
+  };
+
+  const handleBatchShipComplete = () => {
+    setSelectedIds(new Set());
+    window.location.reload();
   };
 
   return (
@@ -157,6 +223,12 @@ export default function OrdersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedIds.size === orders.length && orders.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>订单号</TableHead>
                     <TableHead>客户</TableHead>
                     <TableHead>状态</TableHead>
@@ -174,7 +246,13 @@ export default function OrdersPage() {
                   {orders.map((order) => {
                     const statusConfig = ORDER_STATUS_CONFIG[order.status];
                     return (
-                      <TableRow key={order.id}>
+                      <TableRow key={order.id} className={selectedIds.has(order.id) ? 'bg-muted' : ''}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(order.id)}
+                            onCheckedChange={() => toggleSelect(order.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           <Link
                             href={`/orders/${order.id}`}
@@ -289,6 +367,48 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
+      {/* 底部悬浮批量操作栏 */}
+      {selectedIds.size > 0 && (
+        <>
+          <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg p-4 z-50">
+            <div className="container mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {selectedIds.size === orders.length ? (
+                  <CheckSquare className="h-5 w-5 text-primary" />
+                ) : (
+                  <Square className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="font-medium">
+                  已选择 {selectedIds.size} / {orders.length} 项
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setSelectedIds(new Set())}>
+                  取消选择 (Esc)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setBatchConfirmDialogOpen(true)}
+                  disabled={selectedIds.size === 0}
+                >
+                  <CheckCheck className="h-4 w-4 mr-2" />
+                  批量确认
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setBatchShipDialogOpen(true)}
+                  disabled={selectedIds.size === 0}
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  批量发货
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="h-20" />
+        </>
+      )}
+
       {/* 取消订单对话框 */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
@@ -314,6 +434,40 @@ export default function OrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 批量确认对话框 */}
+      <OrderBatchConfirmDialog
+        open={batchConfirmDialogOpen}
+        onOpenChange={setBatchConfirmDialogOpen}
+        selectedOrders={Array.from(selectedIds).map(id => {
+          const order = orders.find(o => o.id === id);
+          return {
+            id,
+            orderNo: order?.orderNo || '',
+            customerName: order?.customer?.companyName || '',
+            totalAmount: order?.totalAmount || 0,
+            currency: order?.currency || 'CNY',
+            status: order?.status || '',
+          };
+        })}
+        onConfirmComplete={handleBatchConfirmComplete}
+      />
+
+      {/* 批量发货对话框 */}
+      <OrderBatchShipDialog
+        open={batchShipDialogOpen}
+        onOpenChange={setBatchShipDialogOpen}
+        selectedOrders={Array.from(selectedIds).map(id => {
+          const order = orders.find(o => o.id === id);
+          return {
+            id,
+            orderNo: order?.orderNo || '',
+            customerName: order?.customer?.companyName || '',
+            status: order?.status || '',
+          };
+        })}
+        onShipComplete={handleBatchShipComplete}
+      />
     </div>
   );
 }

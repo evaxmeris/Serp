@@ -12,7 +12,7 @@ model User {
   email                        String              @unique
   name                         String?
   passwordHash                 String?
-  role                         RoleEnum            @default(USER)
+  role                         RoleEnum            @default(ADMIN)
   avatar                       String?
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
@@ -100,6 +100,7 @@ model Product {
   moq                Int?
   leadTime           Int?
   status             ProductStatus       @default(ACTIVE)
+  deletedAt          DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   inboundOrderItems  InboundOrderItem[]
@@ -832,12 +833,20 @@ model ProductResearch {
   category               ProductCategory         @relation(fields: [categoryId], references: [id])
   researchTask           ResearchTask?           @relation(fields: [researchTaskId], references: [id])
   researchAttachments    ResearchAttachment[]
+  
+  // Composite indexes for common query patterns
+  @@index([categoryId, status])
+  @@index([status, createdAt])
+  @@index([assignedTo, status])
 
   @@index([categoryId])
   @@index([status])
   @@index([assignedTo])
-  @@index([createdAt])
+  @@index([createdAt(sort: Desc)])
   @@index([brand])
+  @@index([name])
+  @@index([conclusion])
+  @@index([priority])
   @@map("product_research")
 }
 
@@ -1747,10 +1756,11 @@ model Commission {
 }
 
 enum RoleEnum {
-  ADMIN
-  MANAGER
-  USER
-  VIEWER
+  ADMIN       // 管理员：全部权限
+  SALES       // 业务员：客户/报价/订单
+  PURCHASING  // 采购员：供应商/采购/入库
+  WAREHOUSE   // 仓管员：出入库/库存
+  VIEWER      // 只读访客
 }
 
 enum CustomerStatus {

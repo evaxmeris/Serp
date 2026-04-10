@@ -13,12 +13,16 @@ import { jwtVerify, SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-// 🔴 强制检查 JWT 密钥，不使用默认值（安全修复）
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error('NEXTAUTH_SECRET 环境变量必须设置！请在 .env.local 中配置');
+/**
+ * 获取密钥（动态获取，避免模块缓存导致的密钥不一致问题）
+ */
+function getSecret() {
+  // 🔴 强制检查 JWT 密钥，不使用默认值（安全修复）
+  if (!process.env.NEXTAUTH_SECRET) {
+    throw new Error('NEXTAUTH_SECRET 环境变量必须设置！请在 .env.local 中配置');
+  }
+  return new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
 }
-
-const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
 
 /**
  * 用户登录
@@ -51,6 +55,7 @@ export async function login(email: string, password: string) {
     // User 模型目前没有 status 字段，暂时跳过状态检查
 
     // 生成 JWT token
+    const SECRET = getSecret();
     const token = await new SignJWT({ 
       id: user.id, 
       email: user.email,
@@ -100,6 +105,7 @@ export async function getCurrentUser() {
       return null;
     }
 
+    const SECRET = getSecret();
     const { payload } = await jwtVerify(token, SECRET);
     
     return {

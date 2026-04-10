@@ -21,8 +21,16 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   ArrowLeft,
   Edit,
@@ -33,9 +41,12 @@ import {
   DollarSign,
   Clock,
   FileText,
+  ShoppingCart,
 } from 'lucide-react';
 import { ORDER_STATUS_CONFIG, APPROVAL_STATUS_CONFIG } from '@/types/order';
-import { useState } from 'react';
+import type { CreatePurchaseOrderInput, PurchaseOrderItem } from '@/types/purchase';
+import { isValidIncoterm, isValidPaymentTerm } from '@/lib/trade-terms';
+import { useState, useEffect } from 'react';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -49,6 +60,60 @@ export default function OrderDetailPage() {
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  
+  // 生成采购订单相关状态
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; companyName: string }>>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [notes, setNotes] = useState('');
+  const [creating, setCreating] = useState(false);
+  
+  // 预填充采购订单项
+  const [purchaseItems, setPurchaseItems] = useState<Array<{
+    productName: string;
+    productSku: string | null;
+    specification: string | null;
+    unit: string;
+    quantity: number;
+    unitPrice: number;
+  }>>([]);
+
+  // 获取供应商列表
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const res = await fetch('/api/v1/suppliers?limit=100&status=ACTIVE');
+        const result = await res.json();
+        const suppliersData = Array.isArray(result?.data) ? result.data : 
+          Array.isArray(result?.data?.items) ? result.data.items : [];
+        setSuppliers(suppliersData.map((s: any) => ({ 
+          id: s.id, 
+          companyName: s.companyName 
+        })));
+      } catch (err) {
+        console.error('Failed to fetch suppliers:', err);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+
+  // 打开生成采购订单弹窗时预填充数据
+  const openGenerateDialog = () => {
+    if (!order) return;
+    
+    // 将订单项转换为采购订单项
+    const items = order.items.map(item => ({
+      productName: item.productName,
+      productSku: item.productSku,
+      specification: item.specification,
+      unit: item.unit || 'PCS',
+      quantity: item.quantity,
+      unitPrice: item.unitPrice, // 默认使用订单单价，用户可修改
+    }));
+    
+    setPurchaseItems(items);
+    setGenerateDialogOpen(true);
+  };
 
   const handleConfirm = () => {
     confirmOrder.mutate(
@@ -96,6 +161,79 @@ export default function OrderDetailPage() {
         alert(err.message);
       },
     });
+  };
+
+  // 提交生成采购订单
+  const handleGeneratePurchaseOrder = async () => {
+    if (!order) return;
+    
+    if (!selectedSupplierId) {
+      alert('请选择供应商');
+      return;
+    }
+    
+    if (purchaseItems.length === 0) {
+      alert('没有商品项');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      // 构建创建采购订单请求
+      const payload: CreatePurchaseOrderInput = {
+        supplierId: selectedSupplierId,
+        salesOrderId: order.id,
+        currency: 'CNY', // 默认人民币，用户可后续编辑
+        exchangeRate: 1,
+        notes: notes || `从销售订单 ${order.orderNo} 生成`,
+        items: purchaseItems.map(item => ({
+          productName: item.productName,
+          productSku: item.productSku || undefined,
+          specification: item.specification || undefined,
+          unit: item.unit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountRate: 0,
+          taxRate: 13, // 默认13%税率
+        })),
+      };
+
+      const res = await fetch('/api/v1/purchase-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error?.message || '创建失败');
+      }
+
+      const purchaseOrder = result.data;
+      alert(`采购订单创建成功：${purchaseOrder.poNo}`);
+      setGenerateDialogOpen(false);
+      router.push(`/purchase-orders/${purchaseOrder.id}`);
+    } catch (err) {
+      console.error('Failed to create purchase order:', err);
+      alert(`创建失败：${(err as Error).message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // 更新商品数量
+  const updateItemQuantity = (index: number, quantity: number) => {
+    const newItems = [...purchaseItems];
+    newItems[index] = { ...newItems[index], quantity };
+    setPurchaseItems(newItems);
+  };
+
+  // 更新商品单价
+  const updateItemUnitPrice = (index: number, unitPrice: number) => {
+    const newItems = [...purchaseItems];
+    newItems[index] = { ...newItems[index], unitPrice };
+    setPurchaseItems(newItems);
   };
 
   if (isLoading) {
@@ -189,6 +327,117 @@ export default function OrderDetailPage() {
             <Edit className="w-4 h-4 mr-2" />
             编辑
           </Button>
+          <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                variant="default" 
+                className="ml-2" 
+                onClick={openGenerateDialog}
+              >
+                <ShoppingCart className="w-4 h-4 mr-2" />
+                生成采购订单
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>从销售订单生成采购订单</DialogTitle>
+                <p className="text-sm text-gray-500">
+                  订单号：{order?.orderNo}，共 {purchaseItems.length} 件商品
+                </p>
+              </DialogHeader>
+              
+              <div className="py-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>供应商 *</Label>
+                    <Select 
+                      value={selectedSupplierId} 
+                      onValueChange={setSelectedSupplierId}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="请选择供应商" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(supplier => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.companyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>备注</Label>
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="可选，填写采购备注"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>商品明细</Label>
+                  <Table className="mt-2">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>产品名称</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>规格</TableHead>
+                        <TableHead className="text-right">数量</TableHead>
+                        <TableHead className="text-right">单价 (CNY)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {purchaseItems.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.productName}</TableCell>
+                          <TableCell>{item.productSku || '-'}</TableCell>
+                          <TableCell>{item.specification || '-'}</TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => updateItemQuantity(index, parseInt(e.target.value) || 0)}
+                              className="w-20 text-right ml-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.unitPrice}
+                              onChange={(e) => updateItemUnitPrice(index, parseFloat(e.target.value) || 0)}
+                              className="w-28 text-right ml-auto"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setGenerateDialogOpen(false)}
+                  disabled={creating}
+                >
+                  取消
+                </Button>
+                <Button 
+                  onClick={handleGeneratePurchaseOrder}
+                  disabled={creating || !selectedSupplierId}
+                >
+                  {creating ? '创建中...' : '创建采购订单'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -221,11 +470,31 @@ export default function OrderDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">付款条件</p>
-                <p className="font-medium">{order.paymentTerms || '-'}</p>
+                <p className="font-medium">
+                  {order.paymentTerms ? (
+                    isValidPaymentTerm(order.paymentTerms) ? (
+                      <Badge variant="secondary">{order.paymentTerms}</Badge>
+                    ) : (
+                      order.paymentTerms
+                    )
+                  ) : (
+                    '-'
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">交货条款</p>
-                <p className="font-medium">{order.deliveryTerms || '-'}</p>
+                <p className="font-medium">
+                  {order.deliveryTerms ? (
+                    isValidIncoterm(order.deliveryTerms) ? (
+                      <Badge variant="secondary">{order.deliveryTerms}</Badge>
+                    ) : (
+                      order.deliveryTerms
+                    )
+                  ) : (
+                    '-'
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">交货日期</p>

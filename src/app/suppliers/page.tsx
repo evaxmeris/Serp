@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Search, Eye, Edit } from 'lucide-react';
+import { ToastContainer, useToast } from '@/components/ui/toast';
 
 interface Supplier {
   id: string;
@@ -82,6 +83,7 @@ const SUPPLIER_LEVEL: Record<string, string> = {
 
 export default function SuppliersPage() {
   const router = useRouter();
+  const { toasts, removeToast, toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -93,6 +95,7 @@ export default function SuppliersPage() {
   const [total, setTotal] = useState(0);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [newSupplier, setNewSupplier] = useState({
     companyName: '',
     companyEn: '',
@@ -156,17 +159,71 @@ export default function SuppliersPage() {
     setPage(1);
   };
 
+  // 邮箱验证
+  const validateEmail = (email: string): boolean => {
+    if (!email) return true; // 允许为空
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // 电话验证（支持国际格式）
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // 允许为空
+    const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/;
+    return phoneRegex.test(phone);
+  };
+
+  // 验证表单
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!newSupplier.companyName.trim()) {
+      newErrors.companyName = '公司名称不能为空';
+    }
+
+    if (newSupplier.email && !validateEmail(newSupplier.email)) {
+      newErrors.email = '邮箱格式不正确';
+    }
+
+    if (newSupplier.phone && !validatePhone(newSupplier.phone)) {
+      newErrors.phone = '电话格式不正确';
+    }
+
+    if (newSupplier.mobile && !validatePhone(newSupplier.mobile)) {
+      newErrors.mobile = '手机格式不正确';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleCreate = async () => {
+    console.log('[SuppliersPage] handleCreate called');
+    // 表单验证
+    if (!validateForm()) {
+      console.log('[SuppliersPage] Validation failed');
+      toast.error('请修正表单错误');
+      return;
+    }
+
     setCreating(true);
     try {
+      console.log('[SuppliersPage] Sending request to /api/v1/suppliers');
       const res = await fetch('/api/v1/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSupplier),
       });
 
-      if (res.ok) {
+      const result = await res.json();
+      console.log('[SuppliersPage] API response:', result);
+
+      if (result.success) {
+        console.log('[SuppliersPage] Calling toast.success');
+        toast.success('供应商创建成功');
+        console.log('[SuppliersPage] toast.success called, closing dialog');
         setIsCreateDialogOpen(false);
+        setErrors({});
         setNewSupplier({
           companyName: '',
           companyEn: '',
@@ -183,9 +240,13 @@ export default function SuppliersPage() {
           notes: '',
         });
         fetchSuppliers();
+      } else {
+        console.log('[SuppliersPage] API returned error:', result.message);
+        toast.error(`创建失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to create supplier:', error);
+      toast.error('创建失败，请重试');
     } finally {
       setCreating(false);
     }
@@ -218,7 +279,11 @@ export default function SuppliersPage() {
                         onChange={(e) =>
                           setNewSupplier({ ...newSupplier, companyName: e.target.value })
                         }
+                        className={errors.companyName ? 'border-red-500' : ''}
                       />
+                      {errors.companyName && (
+                        <p className="text-red-500 text-xs mt-1">{errors.companyName}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">英文名称</label>
@@ -263,7 +328,11 @@ export default function SuppliersPage() {
                         onChange={(e) =>
                           setNewSupplier({ ...newSupplier, email: e.target.value })
                         }
+                        className={errors.email ? 'border-red-500' : ''}
                       />
+                      {errors.email && (
+                        <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">电话</label>
@@ -273,7 +342,11 @@ export default function SuppliersPage() {
                         onChange={(e) =>
                           setNewSupplier({ ...newSupplier, phone: e.target.value })
                         }
+                        className={errors.phone ? 'border-red-500' : ''}
                       />
+                      {errors.phone && (
+                        <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -284,7 +357,11 @@ export default function SuppliersPage() {
                       onChange={(e) =>
                         setNewSupplier({ ...newSupplier, mobile: e.target.value })
                       }
+                      className={errors.mobile ? 'border-red-500' : ''}
                     />
+                    {errors.mobile && (
+                      <p className="text-red-500 text-xs mt-1">{errors.mobile}</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -361,6 +438,10 @@ export default function SuppliersPage() {
             </Dialog>
           </div>
         </CardHeader>
+
+        {/* Toast 通知容器 */}
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+
         <CardContent>
           {/* Filters */}
           <form onSubmit={handleSearch} className="mb-6 space-y-4">

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth-api';
 import {
   successResponse,
   listResponse,
@@ -21,11 +21,11 @@ import { orderCreateSchema, orderListQuerySchema } from '@/lib/validators/order'
 export async function GET(request: NextRequest) {
   try {
     // 获取当前登录用户
-    const session = await getCurrentUser(request);
+    const session = await getUserFromRequest(request);
     if (!session) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED');
     }
-    const currentUser = session.user;
+    const currentUser = session;
 
     // 解析查询参数
     const searchParams = request.nextUrl.searchParams;
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // BUG-PERM-007: 添加行级隔离
     // 管理员/经理可以看到所有订单，普通用户只能看到自己负责的订单
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+    if (currentUser.role !== 'ADMIN') {
       where.salesRepId = currentUser.id;
     }
 
@@ -180,11 +180,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // 获取当前登录用户
-    const session = await getCurrentUser(request);
+    const session = await getUserFromRequest(request);
     if (!session) {
       return errorResponse('Unauthorized', 'UNAUTHORIZED');
     }
-    const currentUser = session.user;
+    const currentUser = session;
 
     // 解析并验证请求体
     const body = await request.json();

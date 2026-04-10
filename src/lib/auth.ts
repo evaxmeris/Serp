@@ -47,4 +47,4 @@ export { getSessionFromMiddleware as getCurrentUser };
 /**
  * 用户角色枚举（保留用于向后兼容）
  */
-export type UserRole = 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER';

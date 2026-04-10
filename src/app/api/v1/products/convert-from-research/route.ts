@@ -5,10 +5,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserFromRequest } from '@/lib/auth-api';
 import { generateProductSku } from '@/lib/sku-generator';
 
 export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { researchProductId, overrideData } = body;
 

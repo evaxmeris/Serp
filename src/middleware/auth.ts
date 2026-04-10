@@ -119,7 +119,7 @@ export async function loadUserPermissions(userId: string): Promise<{
     select: { role: true },
   });
 
-  const mainRole = user?.role || 'USER';
+  const mainRole = user?.role || 'ADMIN';
 
   return { roleIds, permissions, mainRole };
 }

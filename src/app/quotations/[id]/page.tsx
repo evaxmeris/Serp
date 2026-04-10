@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Send, FileCheck, Edit, Trash2 } from 'lucide-react';
+import { isValidIncoterm, isValidPaymentTerm } from '@/lib/trade-terms';
 
 interface Quotation {
   id: string;
@@ -314,11 +315,31 @@ export default function QuotationDetailPage() {
             </div>
             <div>
               <div className="text-sm text-gray-500">付款条件</div>
-              <div className="font-medium">{quotation.paymentTerms || '-'}</div>
+              <div className="font-medium">
+                {quotation.paymentTerms ? (
+                  isValidPaymentTerm(quotation.paymentTerms) ? (
+                    <Badge variant="secondary">{quotation.paymentTerms}</Badge>
+                  ) : (
+                    quotation.paymentTerms
+                  )
+                ) : (
+                  '-'
+                )}
+              </div>
             </div>
             <div>
               <div className="text-sm text-gray-500">交货条款</div>
-              <div className="font-medium">{quotation.deliveryTerms || '-'}</div>
+              <div className="font-medium">
+                {quotation.deliveryTerms ? (
+                  isValidIncoterm(quotation.deliveryTerms) ? (
+                    <Badge variant="secondary">{quotation.deliveryTerms}</Badge>
+                  ) : (
+                    quotation.deliveryTerms
+                  )
+                ) : (
+                  '-'
+                )}
+              </div>
             </div>
             <div>
               <div className="text-sm text-gray-500">有效期</div>

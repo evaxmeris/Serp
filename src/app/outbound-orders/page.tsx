@@ -78,6 +78,8 @@ interface OutboundOrdersResponse {
 const OUTBOUND_STATUS: Record<string, string> = {
   DRAFT: '草稿',
   PENDING: '待发货',
+  PROCESSING: '处理中',
+  PICKED: '已拣货',
   SHIPPED: '已发货',
   CANCELLED: '已取消',
 };
@@ -85,6 +87,8 @@ const OUTBOUND_STATUS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   PENDING: 'bg-yellow-100 text-yellow-800',
+  PROCESSING: 'bg-blue-100 text-blue-800',
+  PICKED: 'bg-purple-100 text-purple-800',
   SHIPPED: 'bg-green-100 text-green-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
@@ -491,7 +495,7 @@ export default function OutboundOrdersPage() {
                       </TableCell>
                       <TableCell>{order._count?.items || order.items?.length || 0}</TableCell>
                       <TableCell>
-                        {order.totalAmount ? `¥${order.totalAmount.toFixed(2)}` : '-'}
+                        {order.totalAmount != null ? `¥${Number(order.totalAmount).toFixed(2)}` : '-'}
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_COLORS[order.status] || 'bg-gray-100'}>

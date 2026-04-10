@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserFromRequest } from '@/lib/auth-api';
 import { getCurrentUser } from '@/lib/auth';
 
 /**
@@ -13,6 +14,12 @@ import { getCurrentUser } from '@/lib/auth';
  */
 export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
@@ -61,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 只有 ADMIN 和 MANAGER 角色可以创建自定义报表
-    const allowedRoles = ['ADMIN', 'MANAGER'];
+    const allowedRoles = ['ADMIN'];
     if (!allowedRoles.includes(user.user.role)) {
       return NextResponse.json(
         { error: '权限不足，只有管理员或经理可以创建自定义报表' },
@@ -114,6 +121,12 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, name, description, config, columns, filters, isActive } = body;
 
@@ -156,6 +169,12 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
 

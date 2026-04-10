@@ -29,7 +29,7 @@ export async function POST(
     }
 
     // 检查当前用户是否有审批权限（需要管理员角色）
-    if (currentSession.user.role !== 'ADMIN' && currentSession.user.role !== 'MANAGER') {
+    if (currentSession.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Permission denied' },
         { status: 403 }
@@ -63,7 +63,7 @@ export async function POST(
         email: registration.email,
         passwordHash: registration.passwordHash,
         name: registration.name,
-        role: 'USER', // 默认角色为普通用户
+        role: 'SALES', // 默认角色为业务员
       },
     });
 

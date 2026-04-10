@@ -133,11 +133,12 @@ export default function PurchaseOrdersPage() {
       if (supplierFilter !== 'all') params.append('supplierId', supplierFilter);
 
       const res = await fetch(`/api/v1/purchase-orders?${params}`);
-      const data = await res.json();
-      const poList = Array.isArray(data?.data) ? data.data : [];
+      const result = await res.json();
+      // API 返回格式：{ success: true, data: { items: [], pagination: {} } }
+      const poList = Array.isArray(result?.data?.items) ? result.data.items : [];
       setPurchaseOrders(poList);
-      setTotalPages(data.pagination?.totalPages || 1);
-      setTotal(data.pagination?.total || 0);
+      setTotalPages(result.data?.pagination?.totalPages || 1);
+      setTotal(result.data?.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to fetch purchase orders:', error);
     } finally {

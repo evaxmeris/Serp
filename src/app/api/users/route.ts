@@ -1,14 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/middleware/auth';
+import { getUserFromRequest } from '@/lib/auth-api';
 
 // GET /api/users - 获取用户列表
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    // BUG-PERM-001: 添加认证检查
-    // 转换 request 兼容 NextRequest 类型
-    const authError = await requireAuth(request as any);
-    if (authError) return authError;
+    // 获取当前登录用户
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
 
     const users = await prisma.user.findMany({
       select: {
@@ -34,12 +38,24 @@ export async function GET(request: Request) {
 }
 
 // POST /api/users - 创建用户
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // BUG-PERM-001: 添加认证检查
-    // 转换 request 兼容 NextRequest 类型
-    const authError = await requireAuth(request as any);
-    if (authError) return authError;
+    // 获取当前登录用户
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+    
+    // 只有管理员可以创建用户
+    if (currentUser.role !== 'ADMIN') {
+      return NextResponse.json(
+        { success: false, error: '权限不足', code: 'FORBIDDEN' },
+        { status: 403 }
+      );
+    }
 
     const body = await request.json();
     const { email, name, password, role } = body;
@@ -69,7 +85,7 @@ export async function POST(request: Request) {
       data: {
         email,
         name,
-        role: role || 'USER',
+        role: role || 'SALES',
       },
       select: {
         id: true,

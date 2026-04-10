@@ -25,6 +25,12 @@ import {
   ClipboardList,
   GitCompare,
   LayoutDashboard,
+  Building2,
+  Mail,
+  CircleDollarSign,
+  PackageCheck,
+  Inbox,
+  User,
 } from 'lucide-react';
 
 // 模块开发进度数据
@@ -132,17 +138,17 @@ const statusConfig = {
 type StatusKey = keyof typeof statusConfig;
 
 const quickLinks = [
-  { name: '供应商', path: '/suppliers', icon: '🏢' },
-  { name: '采购订单', path: '/purchase-orders', icon: '📦' },
-  { name: '询盘', path: '/inquiries', icon: '📧' },
-  { name: '报价', path: '/quotations', icon: '💰' },
-  { name: '销售订单', path: '/orders', icon: '🛒' },
-  { name: '客户', path: '/customers', icon: '👥' },
-  { name: '产品', path: '/products', icon: '📦' },
-  { name: '入库单', path: '/inbound-orders', icon: '📥' },
-  { name: '库存', path: '/inventory', icon: '📊' },
-  { name: '出库单', path: '/outbound-orders', icon: '🚚' },
-  { name: '财务报表', path: '/reports', icon: '📈' },
+  { name: '供应商', path: '/suppliers', icon: Building2 },
+  { name: '采购订单', path: '/purchase-orders', icon: Package },
+  { name: '询盘', path: '/inquiries', icon: Mail },
+  { name: '报价', path: '/quotations', icon: CircleDollarSign },
+  { name: '销售订单', path: '/orders', icon: ShoppingCart },
+  { name: '客户', path: '/customers', icon: Users },
+  { name: '产品', path: '/products', icon: PackageCheck },
+  { name: '入库单', path: '/inbound-orders', icon: Inbox },
+  { name: '库存', path: '/inventory', icon: BarChart3 },
+  { name: '出库单', path: '/outbound-orders', icon: Truck },
+  { name: '财务报表', path: '/reports', icon: TrendingUp },
 ];
 
 // Phase 2 产品调研模块快捷入口
@@ -155,9 +161,9 @@ const researchLinks = [
 ];
 
 const authLinks = [
-  { name: '登录', path: '/login', icon: '🔑', description: '访问系统' },
-  { name: '注册', path: '/register', icon: '✍️', description: '创建账号' },
-  { name: '用户管理', path: '/users', icon: '👤', description: '管理用户' },
+  { name: '登录', path: '/login', icon: LogIn, description: '访问系统' },
+  { name: '注册', path: '/register', icon: UserPlus, description: '创建账号' },
+  { name: '用户管理', path: '/users', icon: User, description: '管理用户' },
 ];
 
 export default function HomePage() {
@@ -232,7 +238,7 @@ export default function HomePage() {
                 asChild
               >
                 <Link href={item.path}>
-                  <div className="text-2xl">{item.icon}</div>
+                  <item.icon className="h-8 w-8" />
                   <div className="text-sm font-medium">{item.name}</div>
                 </Link>
               </Button>
@@ -409,7 +415,7 @@ export default function HomePage() {
               <Card key={item.path} className="border-2 hover:border-primary transition-colors cursor-pointer">
                 <CardContent className="p-6">
                   <Link href={item.path} className="flex items-center gap-4">
-                    <div className="text-4xl">{item.icon}</div>
+                    <item.icon className="h-12 w-12" />
                     <div>
                       <div className="font-semibold text-lg">{item.name}</div>
                       <div className="text-sm text-muted-foreground">{item.description}</div>

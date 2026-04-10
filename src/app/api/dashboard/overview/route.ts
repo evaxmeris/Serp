@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
+import { withCache, generateCacheKey } from '@/lib/cache';
 
 // ============================================
 // 类型定义
@@ -72,83 +71,110 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days') || '30');
+    
+    // 生成缓存键
+    const cacheKey = generateCacheKey('dashboard_overview', days);
+    
+    return await withCache(cacheKey, async () => {
 
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
+    const prevStartDate = new Date();
+    prevStartDate.setDate(startDate.getDate() - days);
 
-    // 销售核心指标
-    const salesMetrics = await prisma.$queryRaw<Array<{
-      totalorders: string;
-      totalrevenue: string;
-      avgordervalue: string;
-      activecustomers: string;
-    }>>`
-      SELECT 
-        COUNT(*) as totalOrders,
-        SUM("totalAmount") as totalRevenue,
-        AVG("totalAmount") as avgOrderValue,
-        COUNT(DISTINCT "customerId") as activeCustomers
-      FROM "orders"
-      WHERE "createdAt" >= ${startDate}
-    `;
-
-    // 客户核心指标
-    const customerMetrics = await prisma.$queryRaw<Array<{
-      totalcustomers: string;
-      newcustomers: string;
-      activecustomers: string;
-    }>>`
-      SELECT 
-        COUNT(*) as totalCustomers,
-        COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newCustomers,
-        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeCustomers
-      FROM "customers"
-    `;
-
-    // 产品核心指标
-    const productMetrics = await prisma.$queryRaw<Array<{
-      totalproducts: string;
-      activeproducts: string;
-      newproducts: string;
-    }>>`
-      SELECT 
-        COUNT(*) as totalProducts,
-        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeProducts,
-        COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newProducts
-      FROM "products"
-    `;
-
-    // 询盘/报价转化指标
-    const conversionMetrics = await prisma.$queryRaw<Array<{
-      totalinquiries: string;
-      totalquotations: string;
-      totalorders: string;
-    }>>`
-      SELECT 
-        (SELECT COUNT(*) FROM "inquiries" WHERE "createdAt" >= ${startDate}) as totalInquiries,
-        (SELECT COUNT(*) FROM "quotations" WHERE "createdAt" >= ${startDate}) as totalQuotations,
-        (SELECT COUNT(*) FROM "orders" WHERE "createdAt" >= ${startDate}) as totalOrders
-    `;
-
-    // 库存预警数量
-    const inventoryAlert = await prisma.$queryRaw<Array<{
-      alertcount: string;
-    }>>`
-      SELECT COUNT(*) as alertCount
-      FROM "inventory_items" i
-      JOIN "products" p ON i."productId" = p.id
-      WHERE i.quantity < COALESCE(p.moq, 0)
-    `;
-
-    // 待处理订单数量
-    const pendingOrders = await prisma.$queryRaw<Array<{
-      pendingcount: string;
-    }>>`
-      SELECT COUNT(*) as pendingCount
-      FROM "orders"
-      WHERE status IN ('PENDING', 'CONFIRMED')
-    `;
+    // 使用 Promise.all 并行执行所有查询（优化：减少总响应时间）
+    const [
+      salesMetrics,
+      customerMetrics,
+      productMetrics,
+      conversionMetrics,
+      inventoryAlert,
+      pendingOrders,
+      prevSales
+    ] = await Promise.all([
+      // 1. 销售核心指标
+      prisma.$queryRaw<Array<{
+        totalorders: string;
+        totalrevenue: string;
+        avgordervalue: string;
+        activecustomers: string;
+      }>>`
+        SELECT 
+          COUNT(*) as totalOrders,
+          SUM("totalAmount") as totalRevenue,
+          AVG("totalAmount") as avgOrderValue,
+          COUNT(DISTINCT "customerId") as activeCustomers
+        FROM "orders"
+        WHERE "createdAt" >= ${startDate}
+      `,
+      
+      // 2. 客户核心指标
+      prisma.$queryRaw<Array<{
+        totalcustomers: string;
+        newcustomers: string;
+        activecustomers: string;
+      }>>`
+        SELECT 
+          COUNT(*) as totalCustomers,
+          COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newCustomers,
+          COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeCustomers
+        FROM "customers"
+      `,
+      
+      // 3. 产品核心指标
+      prisma.$queryRaw<Array<{
+        totalproducts: string;
+        activeproducts: string;
+        newproducts: string;
+      }>>`
+        SELECT 
+          COUNT(*) as totalProducts,
+          COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeProducts,
+          COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newProducts
+        FROM "products"
+      `,
+      
+      // 4. 询盘/报价转化指标
+      prisma.$queryRaw<Array<{
+        totalinquiries: string;
+        totalquotations: string;
+        totalorders: string;
+      }>>`
+        SELECT 
+          (SELECT COUNT(*) FROM "inquiries" WHERE "createdAt" >= ${startDate}) as totalInquiries,
+          (SELECT COUNT(*) FROM "quotations" WHERE "createdAt" >= ${startDate}) as totalQuotations,
+          (SELECT COUNT(*) FROM "orders" WHERE "createdAt" >= ${startDate}) as totalOrders
+      `,
+      
+      // 5. 库存预警数量
+      prisma.$queryRaw<Array<{
+        alertcount: string;
+      }>>`
+        SELECT COUNT(*) as alertCount
+        FROM "inventory_items" i
+        JOIN "products" p ON i."productId" = p.id
+        WHERE i.quantity < COALESCE(p.moq, 0)
+      `,
+      
+      // 6. 待处理订单数量
+      prisma.$queryRaw<Array<{
+        pendingcount: string;
+      }>>`
+        SELECT COUNT(*) as pendingCount
+        FROM "orders"
+        WHERE status IN ('PENDING', 'CONFIRMED')
+      `,
+      
+      // 7. 上一周期销售额（用于计算环比增长）
+      prisma.$queryRaw<Array<{
+        prevrevenue: string;
+      }>>`
+        SELECT SUM("totalAmount") as prevRevenue
+        FROM "orders"
+        WHERE "createdAt" >= ${prevStartDate} AND "createdAt" < ${startDate}
+      `
+    ]);
 
     // 计算转化率
     const convData = conversionMetrics[0];
@@ -164,16 +190,7 @@ export async function GET(request: Request) {
       : 0;
 
     // 计算环比增长（与上一个周期对比）
-    const prevStartDate = new Date(startDate);
-    prevStartDate.setDate(prevStartDate.getDate() - days);
-
-    const prevSales = await prisma.$queryRaw<Array<{
-      prevrevenue: string;
-    }>>`
-      SELECT SUM("totalAmount") as prevRevenue
-      FROM "orders"
-      WHERE "createdAt" >= ${prevStartDate} AND "createdAt" < ${startDate}
-    `;
+    // prevStartDate 已在前面声明，避免作用域问题
 
     const currentRevenue = salesMetrics[0] ? parseFloat(salesMetrics[0].totalrevenue) : 0;
     const prevRevenue = prevSales[0] ? parseFloat(prevSales[0].prevrevenue) : 0;
@@ -218,9 +235,10 @@ export async function GET(request: Request) {
       },
     };
 
-    return NextResponse.json({
-      success: true,
-      data: responseData,
+      return NextResponse.json({
+        success: true,
+        data: responseData,
+      });
     });
   } catch (error) {
     console.error('Dashboard overview API error:', error);

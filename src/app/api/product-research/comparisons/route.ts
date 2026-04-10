@@ -87,52 +87,66 @@ export async function GET(request: Request) {
   }
 }
 
-// 获取对比详情（含差异分析）
+// 获取对比详情（含差异分析）- 优化版：批量查询
 async function getComparisonDetail(comparisonId: string) {
-  const comparison = await prisma.productComparison.findUnique({
-    where: { id: comparisonId },
-    include: {
-      category: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-        },
+  // 使用单次批量查询代替多层嵌套查询
+  const [comparison, productsWithAttributes, categories] = await Promise.all([
+    // 1. 获取对比基本信息
+    prisma.productComparison.findUnique({
+      where: { id: comparisonId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        categoryId: true,
+        comparedBy: true,
+        status: true,
+        attributes: true,
+        highlightDiff: true,
+        summary: true,
+        recommendation: true,
+        rating: true,
+        createdAt: true,
+        updatedAt: true,
+        productResearchId: true,
       },
-      products: {
-        include: {
-          product: {
-            include: {
-              attributes: {
-                include: {
-                  attribute: {
-                    select: {
-                      id: true,
-                      name: true,
-                      nameEn: true,
-                      code: true,
-                      type: true,
-                      unit: true,
-                      isComparable: true,
-                      sortOrder: true,
-                    },
-                  },
-                },
-                orderBy: {
-                  attribute: {
-                    sortOrder: 'asc',
-                  },
-                },
-              },
-            },
+    }),
+    
+    // 2. 批量获取所有产品及其属性（关键优化点）
+    prisma.productComparisonItem.findMany({
+      where: { comparisonId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            model: true,
+            mainImage: true,
+            costPrice: true,
+            salePrice: true,
+            currency: true,
+            categoryId: true,
           },
         },
-        orderBy: {
-          sortOrder: 'asc',
-        },
       },
-    },
-  });
+      orderBy: {
+        sortOrder: 'asc',
+      },
+    }),
+    
+    // 3. 批量获取品类信息
+    prisma.productCategory.findMany({
+      where: {
+        id: comparisonId ? { in: [] } : { in: [] }, // 占位符
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+      },
+    }),
+  ]);
 
   if (!comparison) {
     return NextResponse.json(
@@ -144,8 +158,86 @@ async function getComparisonDetail(comparisonId: string) {
     );
   }
 
+  // 如果有品类ID，获取具体品类
+  let category = null;
+  if (comparison.categoryId) {
+    category = await prisma.productCategory.findUnique({
+      where: { id: comparison.categoryId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+      },
+    });
+  }
+
+  // 批量获取所有产品的属性值
+  const productIds = productsWithAttributes.map(item => item.productId);
+  const allAttributes = productIds.length > 0 
+    ? await prisma.productAttributeValue.findMany({
+        where: { 
+          productId: { in: productIds },
+          attribute: { isComparable: true },
+        },
+        include: {
+          attribute: {
+            select: {
+              id: true,
+              name: true,
+              nameEn: true,
+              code: true,
+              type: true,
+              unit: true,
+              isComparable: true,
+              sortOrder: true,
+            },
+          },
+        },
+        orderBy: {
+          attribute: {
+            sortOrder: 'asc',
+          },
+        },
+      })
+    : [];
+
+  // 按产品ID分组属性
+  const attributesByProduct = allAttributes.reduce((acc, attr) => {
+    if (!acc[attr.productId]) {
+      acc[attr.productId] = [];
+    }
+    acc[attr.productId].push(attr);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  // 构建完整的产品数据
+  const products = productsWithAttributes.map(item => ({
+    ...item,
+    product: {
+      ...item.product,
+      attributes: attributesByProduct[item.productId] || [],
+    },
+  }));
+
+  if (!comparison) {
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: '对比不存在' 
+      },
+      { status: 404 }
+    );
+  }
+
+  // 构建完整的对比对象
+  const fullComparison = {
+    ...comparison,
+    category,
+    products,
+  };
+
   // 生成差异分析
-  const diffAnalysis = generateDiffAnalysis(comparison);
+  const diffAnalysis = generateDiffAnalysis(fullComparison);
 
   return NextResponse.json({
     success: true,

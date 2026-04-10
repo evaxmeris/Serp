@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -17,10 +19,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/components/ui/toast';
 
 interface Inquiry {
   id: string;
@@ -45,10 +56,19 @@ interface Customer {
 }
 
 export default function InquiriesPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [newInquiry, setNewInquiry] = useState({
     customerId: '',
     source: 'Website',
@@ -60,17 +80,114 @@ export default function InquiriesPage() {
     priority: 'MEDIUM',
   });
 
+  const statusOptions = [
+    { value: 'all', label: '全部状态' },
+    { value: 'NEW', label: '新建' },
+    { value: 'CONTACTED', label: '已联系' },
+    { value: 'QUOTED', label: '已报价' },
+    { value: 'NEGOTIATING', label: '谈判中' },
+    { value: 'WON', label: '成交' },
+    { value: 'LOST', label: '丢失' },
+  ];
+
   useEffect(() => {
     fetchInquiries();
     fetchCustomers();
-  }, []);
+  }, [page, search, statusFilter]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setPage(1);
+    setSelectedIds([]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === inquiries.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(inquiries.map(i => i.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) {
+      toast.warning('请选择要删除的询盘');
+      return;
+    }
+    if (!confirm(`确定要删除选中的 ${selectedIds.length} 个询盘吗？此操作不可撤销。`)) {
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      await Promise.all(
+        selectedIds.map(id =>
+          fetch(`/api/inquiries/${id}`, { method: 'DELETE' })
+        )
+      );
+      toast.success(`成功删除 ${selectedIds.length} 个询盘`);
+      setSelectedIds([]);
+      fetchInquiries();
+    } catch (error) {
+      console.error('Failed to batch delete:', error);
+      toast.error('批量删除失败');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定要删除这个询盘吗？此操作不可撤销。')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/inquiries/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('删除成功');
+        fetchInquiries();
+      } else {
+        toast.error('删除失败');
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error);
+      toast.error('删除失败');
+    }
+  };
 
   const fetchInquiries = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/inquiries');
-      const data = await res.json();
-      setInquiries(data.data || []);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '20',
+      });
+
+      if (search) params.append('search', search);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+
+      const res = await fetch(`/api/inquiries?${params}`);
+      const result = await res.json();
+      const inquiriesData = Array.isArray(result?.data)
+        ? result?.data
+        : result?.data?.items || [];
+      setInquiries(inquiriesData);
+      setTotalPages(result.pagination?.totalPages || 1);
+      setTotal(result.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to fetch inquiries:', error);
     } finally {
@@ -283,62 +400,187 @@ export default function InquiriesPage() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>询盘编号</TableHead>
-                <TableHead>客户</TableHead>
-                <TableHead>来源</TableHead>
-                <TableHead>产品</TableHead>
-                <TableHead>数量</TableHead>
-                <TableHead>目标价</TableHead>
-                <TableHead>优先级</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>创建时间</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {inquiries.map((inquiry) => (
-                <TableRow key={inquiry.id}>
-                  <TableCell className="font-medium">
-                    {inquiry.inquiryNo}
-                  </TableCell>
-                  <TableCell>{inquiry.customer.companyName}</TableCell>
-                  <TableCell>{inquiry.source || '-'}</TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {inquiry.products || '-'}
-                  </TableCell>
-                  <TableCell>{inquiry.quantity || '-'}</TableCell>
-                  <TableCell>
-                    {inquiry.targetPrice && typeof inquiry.targetPrice === 'number'
-                      ? `${inquiry.currency} ${inquiry.targetPrice.toFixed(2)}`
-                      : inquiry.targetPrice
-                      ? `${inquiry.currency} ${Number(inquiry.targetPrice).toFixed(2)}`
-                      : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs ${getPriorityColor(inquiry.priority)}`}>
-                      {getPriorityText(inquiry.priority)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs ${getStatusBadge(inquiry.status)}`}>
-                      {getStatusText(inquiry.status)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(inquiry.createdAt).toLocaleDateString('zh-CN')}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
 
-          {inquiries.length === 0 && !loading && (
-            <div className="text-center py-8 text-gray-500">
-              暂无询盘数据
+        <CardContent>
+          {/* 搜索筛选栏 */}
+          <form onSubmit={handleSearch} className="mb-6 space-y-4">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="搜索询盘编号、产品..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="状态筛选" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="submit" variant="outline">
+                搜索
+              </Button>
+              <Button type="button" variant="ghost" onClick={resetFilters}>
+                重置
+              </Button>
+              {selectedIds.length > 0 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBatchDelete}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? '删除中...' : `批量删除 (${selectedIds.length})`}
+                </Button>
+              )}
             </div>
+          </form>
+
+          {/* 表格 */}
+          {loading ? (
+            <div className="text-center py-8">加载中...</div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        className="h-4 w-4 cursor-pointer"
+                        checked={inquiries.length > 0 && selectedIds.length === inquiries.length}
+                        onClick={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>询盘编号</TableHead>
+                    <TableHead>客户</TableHead>
+                    <TableHead>来源</TableHead>
+                    <TableHead>产品</TableHead>
+                    <TableHead>数量</TableHead>
+                    <TableHead>目标价</TableHead>
+                    <TableHead>优先级</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>创建时间</TableHead>
+                    <TableHead>操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inquiries.map((inquiry) => (
+                    <TableRow key={inquiry.id}>
+                      <TableCell>
+                        <Checkbox
+                          className="h-4 w-4 cursor-pointer"
+                          checked={selectedIds.includes(inquiry.id)}
+                          onClick={() => toggleSelect(inquiry.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {inquiry.inquiryNo}
+                      </TableCell>
+                      <TableCell>{inquiry.customer.companyName}</TableCell>
+                      <TableCell>{inquiry.source || '-'}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {inquiry.products || '-'}
+                      </TableCell>
+                      <TableCell>{inquiry.quantity || '-'}</TableCell>
+                      <TableCell>
+                        {inquiry.targetPrice && typeof inquiry.targetPrice === 'number'
+                          ? `${inquiry.currency} ${inquiry.targetPrice.toFixed(2)}`
+                          : inquiry.targetPrice
+                          ? `${inquiry.currency} ${Number(inquiry.targetPrice).toFixed(2)}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs ${getPriorityColor(inquiry.priority)}`}>
+                          {getPriorityText(inquiry.priority)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs ${getStatusBadge(inquiry.status)}`}>
+                          {getStatusText(inquiry.status)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(inquiry.createdAt).toLocaleDateString('zh-CN')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/inquiries/${inquiry.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            查看
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/inquiries/${inquiry.id}/edit`)}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            编辑
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDelete(inquiry.id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            删除
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {inquiries.length === 0 && !loading && (
+                <div className="text-center py-8 text-gray-500">
+                  暂无询盘数据
+                </div>
+              )}
+
+              {/* 分页 */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-500">
+                    共 {total} 条记录，第 {page} / {totalPages} 页
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      上一页
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === totalPages}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      下一页
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

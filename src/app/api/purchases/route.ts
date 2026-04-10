@@ -1,28 +1,24 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { requireAuth } from '@/middleware/auth';
+import { getUserFromRequest } from '@/lib/auth-api';
 
 // GET /api/purchases - 获取采购单列表（行级隔离）
 // 普通用户只能看到自己负责的采购单，管理员可以看到所有
 export async function GET(request: NextRequest) {
   try {
-    // 认证检查
-    const authError = await requireAuth(request);
-    if (authError) return authError;
-
     // 获取当前用户会话
-    const session = await getCurrentUser(request);
+    const session = await getUserFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const currentUser = session.user;
+    const currentUser = session;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
+    const supplierId = searchParams.get('supplierId') || '';
 
     const where: any = {};
 
@@ -38,8 +34,12 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
+    if (supplierId) {
+      where.supplierId = supplierId;
+    }
+
     // BUG-PERM-007: 行级隔离 - 普通用户只能看到自己负责的采购单
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER') {
+    if (currentUser.role !== 'ADMIN') {
       where.purchaserId = currentUser.id;
     }
 
@@ -96,16 +96,12 @@ export async function GET(request: NextRequest) {
 // POST /api/purchases - 创建采购单（行级隔离）
 export async function POST(request: NextRequest) {
   try {
-    // 认证检查
-    const authError = await requireAuth(request);
-    if (authError) return authError;
-
     // 获取当前用户会话
-    const session = await getCurrentUser(request);
+    const session = await getUserFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const currentUser = session.user;
+    const currentUser = session;
 
     const body = await request.json();
     const {

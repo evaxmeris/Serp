@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -27,6 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Eye, Edit, Trash2 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 interface PurchaseOrder {
   id: string;
@@ -80,12 +84,21 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function PurchasesPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [supplierFilter, setSupplierFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState<PurchaseOrder | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
     currency: 'CNY',
@@ -106,18 +119,23 @@ export default function PurchasesPage() {
   useEffect(() => {
     fetchPurchases();
     fetchSuppliers();
-  }, [search, statusFilter]);
+  }, [page, search, statusFilter, supplierFilter]);
 
   const fetchPurchases = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set('page', page.toString());
+      params.set('limit', '20');
       if (search) params.set('search', search);
       if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (supplierFilter && supplierFilter !== 'ALL') params.set('supplierId', supplierFilter);
       
       const res = await fetch(`/api/purchases?${params.toString()}`);
       const data = await res.json();
       setPurchases(data.data || []);
+      setTotalPages(data.pagination?.totalPages || 1);
+      setTotal(data.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to fetch purchases:', error);
     } finally {
@@ -196,9 +214,36 @@ export default function PurchasesPage() {
         });
         setPurchaseItems([]);
         fetchPurchases();
+        toast.success('采购单创建成功');
       }
     } catch (error) {
       console.error('Failed to create purchase order:', error);
+      toast.error('创建采购单失败');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!purchaseToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/purchases/${purchaseToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setDeleteDialogOpen(false);
+        setPurchaseToDelete(null);
+        fetchPurchases();
+        toast.success('采购单删除成功');
+      } else {
+        toast.error('删除采购单失败');
+      }
+    } catch (error) {
+      console.error('Failed to delete purchase:', error);
+      toast.error('删除采购单失败');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -390,13 +435,27 @@ export default function PurchasesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 mb-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-4 mb-4">
             <Input
               placeholder="搜索采购单号/供应商..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
             />
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="全部供应商" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部供应商</SelectItem>
+                {Array.isArray(suppliers) && suppliers.map((supplier) => (
+                  <SelectItem key={supplier.id} value={supplier.id}>
+                    {supplier.companyName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="全部状态" />
@@ -413,49 +472,144 @@ export default function PurchasesPage() {
           {loading ? (
             <div className="text-center py-8">加载中...</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>采购单号</TableHead>
-                  <TableHead>供应商</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>金额</TableHead>
-                  <TableHead>交货日期</TableHead>
-                  <TableHead>付款条件</TableHead>
-                  <TableHead>创建时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {purchases.map((purchase) => (
-                  <TableRow key={purchase.id}>
-                    <TableCell className="font-medium">{purchase.poNo}</TableCell>
-                    <TableCell>{purchase.supplier.companyName}</TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_COLORS[purchase.status] || 'bg-gray-100'}>
-                        {PURCHASE_STATUS[purchase.status] || purchase.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{purchase.currency} {typeof purchase.totalAmount === 'number' ? purchase.totalAmount.toFixed(2) : Number(purchase.totalAmount || 0).toFixed(2)}</TableCell>
-                    <TableCell>
-                      {purchase.deliveryDate
-                        ? new Date(purchase.deliveryDate).toLocaleDateString('zh-CN')
-                        : '-'}
-                    </TableCell>
-                    <TableCell>{purchase.paymentTerms || '-'}</TableCell>
-                    <TableCell>
-                      {new Date(purchase.createdAt).toLocaleDateString('zh-CN')}
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>采购单号</TableHead>
+                    <TableHead>供应商</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>金额</TableHead>
+                    <TableHead>交货日期</TableHead>
+                    <TableHead>付款条件</TableHead>
+                    <TableHead>创建时间</TableHead>
+                    <TableHead>操作</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {purchases.map((purchase) => (
+                    <TableRow key={purchase.id}>
+                      <TableCell className="font-medium">{purchase.poNo}</TableCell>
+                      <TableCell>{purchase.supplier.companyName}</TableCell>
+                      <TableCell>
+                        <Badge className={STATUS_COLORS[purchase.status] || 'bg-gray-100'}>
+                          {PURCHASE_STATUS[purchase.status] || purchase.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{purchase.currency} {typeof purchase.totalAmount === 'number' ? purchase.totalAmount.toFixed(2) : Number(purchase.totalAmount || 0).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {purchase.deliveryDate
+                          ? new Date(purchase.deliveryDate).toLocaleDateString('zh-CN')
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{purchase.paymentTerms || '-'}</TableCell>
+                      <TableCell>
+                        {new Date(purchase.createdAt).toLocaleDateString('zh-CN')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/purchases/${purchase.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            查看
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/purchases/${purchase.id}/edit`)}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            编辑
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => {
+                              setPurchaseToDelete(purchase);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            删除
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {purchases.length === 0 && !loading && (
+                <div className="text-center py-8 text-gray-500">
+                  暂无采购数据
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-500">
+                    共 {total} 条记录，第 {page} / {totalPages} 页
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      上一页
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === totalPages}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      下一页
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {purchases.length === 0 && !loading && (
-            <div className="text-center py-8 text-gray-500">
-              暂无采购数据
-            </div>
-          )}
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>确认删除</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p className="text-sm text-gray-600">
+                  确定要删除采购单 {purchaseToDelete?.poNo} 吗？此操作不可撤销。
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setPurchaseToDelete(null);
+                  }}
+                  disabled={deleting}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? '删除中...' : '删除'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>

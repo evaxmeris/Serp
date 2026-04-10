@@ -1,5 +1,6 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserFromRequest } from '@/lib/auth-api';
 import {
   successResponse,
   errorResponse,
@@ -23,6 +24,12 @@ const AdjustInventorySchema = z.object({
 // GET /api/v1/inventory - 获取库存列表
 export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     
     const page = Number(searchParams.get('page')) || 1;
@@ -87,6 +94,12 @@ export async function GET(request: NextRequest) {
 // POST /api/v1/inventory/adjust - 库存调整
 export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const validationResult = AdjustInventorySchema.safeParse(body);
 

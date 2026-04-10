@@ -13,7 +13,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 公开路径（不需要认证）
-  const publicPaths = ['/login', '/register', '/api/auth/', '/api/health'];
+  const publicPaths = ['/login', '/register', '/api/auth/', '/api/health', '/api/debug/'];
   
   // 检查是否是公开路径
   const isPublicPath = publicPaths.some(path => 

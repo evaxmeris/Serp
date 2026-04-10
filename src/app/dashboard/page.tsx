@@ -20,7 +20,6 @@ import {
   BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
-import DashboardLayout from '@/components/DashboardLayout';
 import { getCurrentUserRole } from '@/components/Sidebar';
 import { UserRole } from '@/components/Sidebar';
 
@@ -78,7 +77,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       getValue: (data) => data.overview.pendingOrders,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'SALES', 'WAREHOUSE', 'USER'],
+      roles: ['ADMIN', 'SALES', 'WAREHOUSE'],
     },
     {
       id: 'lowStock',
@@ -87,7 +86,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       getValue: (data) => `${data.overview.lowStockAlerts} 款`,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'PURCHASING', 'WAREHOUSE'],
+      roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
     },
     {
       id: 'pendingApprovals',
@@ -96,7 +95,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-orange-500',
       bgColor: 'bg-orange-50',
       getValue: (data) => data.overview.pendingApprovals,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'FINANCE'],
+      roles: ['ADMIN'],
     },
     {
       id: 'pendingPayments',
@@ -105,7 +104,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       getValue: (data) => `$${data.overview.pendingPayments.toLocaleString()}`,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE', 'MANAGER'],
+      roles: ['ADMIN'],
     },
     {
       id: 'todaySales',
@@ -114,7 +113,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-green-600',
       bgColor: 'bg-emerald-50',
       getValue: (data) => `$${data.overview.todaySales.toLocaleString()}`,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'MANAGER', 'SALES'],
+      roles: ['ADMIN', 'SALES'],
     },
     {
       id: 'monthlyMargin',
@@ -123,7 +122,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       getValue: (data) => `${data.overview.monthlyGrossMargin.toFixed(1)}%`,
-      roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE'],
+      roles: ['ADMIN'],
     },
   ];
 
@@ -133,14 +132,14 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
 // 根据角色获取快捷操作
 const getQuickActions = (role: UserRole): QuickAction[] => {
   const allActions: QuickAction[] = [
-    { id: 'new-order', label: '➕ 新建订单', icon: <Plus className="h-5 w-5" />, href: '/orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES'] },
-    { id: 'purchase-in', label: '📥 采购入库', icon: <Download className="h-5 w-5" />, href: '/inbound-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'PURCHASING', 'WAREHOUSE'] },
-    { id: 'ship-order', label: '📤 发货处理', icon: <Package className="h-5 w-5" />, href: '/outbound-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'WAREHOUSE', 'SALES'] },
-    { id: 'inventory-search', label: '🔍 库存查询', icon: <Search className="h-5 w-5" />, href: '/inventory', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'PURCHASING', 'WAREHOUSE', 'SALES'] },
-    { id: 'expense', label: '📝 报销申请', icon: <Edit className="h-5 w-5" />, href: '/expenses/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES', 'PURCHASING', 'PRODUCT', 'FINANCE', 'WAREHOUSE', 'USER'] },
-    { id: 'new-customer', label: '➕ 新建客户', icon: <UserPlus className="h-5 w-5" />, href: '/customers/new', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES'] },
-    { id: 'new-purchase', label: '🛒 新建采购', icon: <ShoppingCart className="h-5 w-5" />, href: '/purchase-orders/new', roles: ['SUPER_ADMIN', 'ADMIN', 'PURCHASING'] },
-    { id: 'inventory-report', label: '📊 库存报表', icon: <BarChart3 className="h-5 w-5" />, href: '/reports/inventory', roles: ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'FINANCE'] },
+    { id: 'new-order', label: '➕ 新建订单', icon: <Plus className="h-5 w-5" />, href: '/orders/new', roles: ['ADMIN', 'SALES'] },
+    { id: 'purchase-in', label: '📥 采购入库', icon: <Download className="h-5 w-5" />, href: '/inbound-orders/new', roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'] },
+    { id: 'ship-order', label: '📤 发货处理', icon: <Package className="h-5 w-5" />, href: '/outbound-orders/new', roles: ['ADMIN', 'WAREHOUSE'] },
+    { id: 'inventory-search', label: '🔍 库存查询', icon: <Search className="h-5 w-5" />, href: '/inventory', roles: ['ADMIN', 'WAREHOUSE', 'PURCHASING'] },
+    { id: 'expense', label: '📝 报销申请', icon: <Edit className="h-5 w-5" />, href: '/expenses/new', roles: ['ADMIN', 'SALES', 'PURCHASING', 'WAREHOUSE'] },
+    { id: 'new-customer', label: '➕ 新建客户', icon: <UserPlus className="h-5 w-5" />, href: '/customers/new', roles: ['ADMIN', 'SALES'] },
+    { id: 'new-purchase', label: '🛒 新建采购', icon: <ShoppingCart className="h-5 w-5" />, href: '/purchase-orders/new', roles: ['ADMIN', 'PURCHASING'] },
+    { id: 'inventory-report', label: '📊 库存报表', icon: <BarChart3 className="h-5 w-5" />, href: '/reports/inventory', roles: ['ADMIN'] },
   ];
 
   return allActions.filter(action => action.roles.includes(role));
@@ -150,7 +149,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [period, setPeriod] = useState('7');
-  const [currentRole, setCurrentRole] = useState<UserRole>('USER');
+  const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
 
   useEffect(() => {
     const role = getCurrentUserRole();
@@ -164,7 +163,23 @@ export default function DashboardPage() {
       const response = await fetch(`/api/dashboard/overview?days=${period}`);
       const result = await response.json();
       if (result.success) {
-        setData(result.data);
+        // 适配 API 返回的数据结构（alerts.pendingOrders → overview.pendingOrders）
+        const apiData = result.data;
+        const adaptedData: DashboardData = {
+          overview: {
+            pendingOrders: apiData.alerts?.pendingOrders ?? 0,
+            lowStockAlerts: apiData.alerts?.lowStockItems ?? 0,
+            pendingApprovals: 0, // API 暂未提供
+            pendingPayments: 0, // API 暂未提供
+            todaySales: apiData.sales?.totalRevenue ?? 0,
+            monthlyGrossMargin: apiData.sales?.growth ?? 0,
+          },
+          salesTrend: [], // API 暂未提供趋势数据
+          channelDistribution: [], // API 暂未提供渠道分布
+          recentTodos: [], // API 暂未提供待办事项
+          recentApprovals: [], // API 暂未提供审批事项
+        };
+        setData(adaptedData);
       } else {
         // 如果API失败，使用模拟数据
         setData({
@@ -251,20 +266,17 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-[calc(100vh-100px)]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-zinc-500">加载仪表盘数据...</p>
-          </div>
+      <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-zinc-500">加载仪表盘数据...</p>
         </div>
-      </DashboardLayout>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
         {/* 页面标题和筛选器 */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -456,6 +468,5 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-    </DashboardLayout>
   );
 }

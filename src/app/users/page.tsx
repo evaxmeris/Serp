@@ -36,7 +36,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER';
+  role: 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER';
   avatar?: string;
   createdAt: string;
   updatedAt: string;
@@ -44,8 +44,9 @@ interface User {
 
 const roleLabels = {
   ADMIN: { label: '管理员', color: 'bg-red-100 text-red-800' },
-  MANAGER: { label: '经理', color: 'bg-blue-100 text-blue-800' },
-  USER: { label: '用户', color: 'bg-green-100 text-green-800' },
+  SALES: { label: '业务员', color: 'bg-blue-100 text-blue-800' },
+  PURCHASING: { label: '采购员', color: 'bg-green-100 text-green-800' },
+  WAREHOUSE: { label: '仓管员', color: 'bg-orange-100 text-orange-800' },
   VIEWER: { label: '访客', color: 'bg-gray-100 text-gray-800' },
 };
 
@@ -61,7 +62,7 @@ export default function UsersPage() {
     email: '',
     name: '',
     password: '',
-    role: 'USER' as 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER',
+    role: 'SALES' as 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER',
   });
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function UsersPage() {
       if (response.ok) {
         await fetchUsers();
         setIsCreateDialogOpen(false);
-        setFormData({ email: '', name: '', password: '', role: 'USER' });
+        setFormData({ email: '', name: '', password: '', role: 'SALES' });
       }
     } catch (error) {
       console.error('Failed to create user:', error);
@@ -111,7 +112,7 @@ export default function UsersPage() {
         await fetchUsers();
         setIsEditDialogOpen(false);
         setSelectedUser(null);
-        setFormData({ email: '', name: '', password: '', role: 'USER' });
+        setFormData({ email: '', name: '', password: '', role: 'SALES' });
       }
     } catch (error) {
       console.error('Failed to update user:', error);
@@ -231,8 +232,9 @@ export default function UsersPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ADMIN">管理员</SelectItem>
-                      <SelectItem value="MANAGER">经理</SelectItem>
-                      <SelectItem value="USER">用户</SelectItem>
+                      <SelectItem value="SALES">业务员</SelectItem>
+                      <SelectItem value="PURCHASING">采购员</SelectItem>
+                      <SelectItem value="WAREHOUSE">仓管员</SelectItem>
                       <SelectItem value="VIEWER">访客</SelectItem>
                     </SelectContent>
                   </Select>
@@ -266,8 +268,9 @@ export default function UsersPage() {
               <SelectContent>
                 <SelectItem value="all">所有角色</SelectItem>
                 <SelectItem value="ADMIN">管理员</SelectItem>
-                <SelectItem value="MANAGER">经理</SelectItem>
-                <SelectItem value="USER">用户</SelectItem>
+                <SelectItem value="SALES">业务员</SelectItem>
+                <SelectItem value="PURCHASING">采购员</SelectItem>
+                <SelectItem value="WAREHOUSE">仓管员</SelectItem>
                 <SelectItem value="VIEWER">访客</SelectItem>
               </SelectContent>
             </Select>
@@ -409,8 +412,9 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">管理员</SelectItem>
-                  <SelectItem value="MANAGER">经理</SelectItem>
-                  <SelectItem value="USER">用户</SelectItem>
+                  <SelectItem value="SALES">业务员</SelectItem>
+                  <SelectItem value="PURCHASING">采购员</SelectItem>
+                  <SelectItem value="WAREHOUSE">仓管员</SelectItem>
                   <SelectItem value="VIEWER">访客</SelectItem>
                 </SelectContent>
               </Select>

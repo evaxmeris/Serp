@@ -64,7 +64,7 @@ export default function RegisterPage() {
     name: '',
     password: '',
     confirmPassword: '',
-    role: 'SALES', // 默认销售角色
+    role: 'SALES', // 默认业务员角色
     company: '',
     phone: '',
   });

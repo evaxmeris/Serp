@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
 
 interface Customer {
   id: string;
@@ -57,6 +58,9 @@ export default function EditQuotationPage() {
   const [items, setItems] = useState<QuotationItem[]>([
     { productName: '', specification: '', quantity: '', unitPrice: '', notes: '' },
   ]);
+
+  const incotermOptions = getIncotermOptions();
+  const paymentTermOptions = getPaymentTermOptions();
 
   useEffect(() => {
     fetchCustomers();
@@ -267,23 +271,37 @@ export default function EditQuotationPage() {
             </div>
             <div>
               <Label>付款条件</Label>
-              <Input
-                placeholder="T/T 30% deposit"
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={formData.paymentTerms}
                 onChange={(e) =>
                   setFormData({ ...formData, paymentTerms: e.target.value })
                 }
-              />
+              >
+                <option value="">选择付款方式</option>
+                {paymentTermOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <Label>交货条款</Label>
-              <Input
-                placeholder="FOB Shanghai"
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={formData.deliveryTerms}
                 onChange={(e) =>
                   setFormData({ ...formData, deliveryTerms: e.target.value })
                 }
-              />
+              >
+                <option value="">选择贸易术语</option>
+                {incotermOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <Label>有效期（天）</Label>

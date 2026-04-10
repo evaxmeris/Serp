@@ -1,5 +1,6 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserFromRequest } from '@/lib/auth-api';
 import {
   successResponse,
   paginatedResponse,
@@ -47,6 +48,12 @@ const QuerySchema = z.object({
 // GET /api/v1/inbound-orders - 获取入库单列表
 export async function GET(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const queryResult = QuerySchema.safeParse(Object.fromEntries(searchParams));
 
@@ -133,6 +140,12 @@ export async function GET(request: NextRequest) {
 // POST /api/v1/inbound-orders - 创建入库单
 export async function POST(request: NextRequest) {
   try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const validationResult = CreateInboundOrderSchema.safeParse(body);
 

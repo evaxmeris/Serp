@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/form';
 import { ArrowLeft, Plus, Trash2, Calculator, Save } from 'lucide-react';
 import { useEffect } from 'react';
+import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
 
 export default function EditOrderPage() {
   const params = useParams();
@@ -43,6 +44,9 @@ export default function EditOrderPage() {
 
   const { data: order, isLoading } = useOrder(id);
   const updateOrder = useUpdateOrder();
+
+  const incotermOptions = getIncotermOptions();
+  const paymentTermOptions = getPaymentTermOptions();
 
   const form = useForm<OrderFormValues>();
 
@@ -217,9 +221,21 @@ export default function EditOrderPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>付款条件</FormLabel>
-                        <FormControl>
-                          <Input placeholder="T/T, L/C 等" {...field} disabled={isReadOnly} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isReadOnly}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择付款方式" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">不指定</SelectItem>
+                            {paymentTermOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -231,9 +247,21 @@ export default function EditOrderPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>交货条款</FormLabel>
-                        <FormControl>
-                          <Input placeholder="FOB, CIF, EXW 等" {...field} disabled={isReadOnly} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isReadOnly}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择贸易术语" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">不指定</SelectItem>
+                            {incotermOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
