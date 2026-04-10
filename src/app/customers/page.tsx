@@ -21,6 +21,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Upload, Tag, CheckSquare, Square, Eye, Edit, Trash2 } from 'lucide-react';
@@ -294,42 +295,62 @@ export default function CustomersPage() {
                     <DialogTitle>新增客户</DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <Input
-                      placeholder="公司名称 *"
-                      value={newCustomer.companyName}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, companyName: e.target.value })
-                      }
-                    />
-                    <Input
-                      placeholder="联系人"
-                      value={newCustomer.contactName}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, contactName: e.target.value })
-                      }
-                    />
-                    <Input
-                      placeholder="邮箱"
-                      type="email"
-                      value={newCustomer.email}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, email: e.target.value })
-                      }
-                    />
-                    <Input
-                      placeholder="电话"
-                      value={newCustomer.phone}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, phone: e.target.value })
-                      }
-                    />
-                    <Input
-                      placeholder="国家/地区"
-                      value={newCustomer.country}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, country: e.target.value })
-                      }
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company">公司名称 *</Label>
+                      <Input
+                        id="create-company"
+                        placeholder="请输入公司名称"
+                        value={newCustomer.companyName}
+                        onChange={(e) =>
+                          setNewCustomer({ ...newCustomer, companyName: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-contact">联系人</Label>
+                      <Input
+                        id="create-contact"
+                        placeholder="请输入联系人姓名"
+                        value={newCustomer.contactName}
+                        onChange={(e) =>
+                          setNewCustomer({ ...newCustomer, contactName: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-email">邮箱</Label>
+                      <Input
+                        id="create-email"
+                        type="email"
+                        placeholder="请输入邮箱"
+                        value={newCustomer.email}
+                        onChange={(e) =>
+                          setNewCustomer({ ...newCustomer, email: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-phone">电话</Label>
+                      <Input
+                        id="create-phone"
+                        placeholder="请输入电话号码"
+                        value={newCustomer.phone}
+                        onChange={(e) =>
+                          setNewCustomer({ ...newCustomer, phone: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-country">国家/地区</Label>
+                      <Input
+                        id="create-country"
+                        placeholder="如：CN, US, DE"
+                        value={newCustomer.country}
+                        onChange={(e) =>
+                          setNewCustomer({ ...newCustomer, country: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
                   <Button onClick={handleCreate}>保存</Button>
                 </DialogContent>
@@ -543,42 +564,62 @@ export default function CustomersPage() {
             <DialogTitle>编辑客户</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <Input
-              placeholder="公司名称 *"
-              value={editForm.companyName}
-              onChange={(e) =>
-                setEditForm({ ...editForm, companyName: e.target.value })
-              }
-            />
-            <Input
-              placeholder="联系人"
-              value={editForm.contactName}
-              onChange={(e) =>
-                setEditForm({ ...editForm, contactName: e.target.value })
-              }
-            />
-            <Input
-              placeholder="邮箱"
-              type="email"
-              value={editForm.email}
-              onChange={(e) =>
-                setEditForm({ ...editForm, email: e.target.value })
-              }
-            />
-            <Input
-              placeholder="电话"
-              value={editForm.phone}
-              onChange={(e) =>
-                setEditForm({ ...editForm, phone: e.target.value })
-              }
-            />
-            <Input
-              placeholder="国家/地区"
-              value={editForm.country}
-              onChange={(e) =>
-                setEditForm({ ...editForm, country: e.target.value })
-              }
-            />
+            <div className="space-y-2">
+              <Label htmlFor="edit-company">公司名称 *</Label>
+              <Input
+                id="edit-company"
+                placeholder="请输入公司名称"
+                value={editForm.companyName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, companyName: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact">联系人</Label>
+              <Input
+                id="edit-contact"
+                placeholder="请输入联系人姓名"
+                value={editForm.contactName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, contactName: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">邮箱</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                placeholder="请输入邮箱"
+                value={editForm.email}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, email: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">电话</Label>
+              <Input
+                id="edit-phone"
+                placeholder="请输入电话号码"
+                value={editForm.phone}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, phone: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-country">国家/地区</Label>
+              <Input
+                id="edit-country"
+                placeholder="如：CN, US, DE"
+                value={editForm.country}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, country: e.target.value })
+                }
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
