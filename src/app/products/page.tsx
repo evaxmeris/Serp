@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Square,
   Edit,
+  AlertCircle,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -30,18 +31,59 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Link from 'next/link';
 import { ProductBatchImportDialog } from '@/components/batch-operations/ProductBatchImportDialog';
 import { ProductBatchExportDialog } from '@/components/batch-operations/ProductBatchExportDialog';
 import { ProductBatchDeleteDialog } from '@/components/batch-operations/ProductBatchDeleteDialog';
 import type { BatchResult } from '@/components/batch-operations/ProductBatchImportDialog';
 
+interface ProductCategory {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface AttributeTemplate {
+  id: string;
+  name: string;
+  nameEn?: string;
+  code: string;
+  categoryId: string;
+  type: 'TEXT' | 'NUMBER' | 'DECIMAL' | 'BOOLEAN' | 'DATE' | 'SELECT' | 'MULTI_SELECT' | 'LONG_TEXT';
+  unit?: string;
+  options: string[];
+  isRequired: boolean;
+  isComparable: boolean;
+  sortOrder: number;
+  description?: string;
+  validationRule?: string;
+  defaultValue?: string;
+  placeholder?: string;
+  isActive: boolean;
+}
+
+interface ProductAttributeValue {
+  id: string;
+  productId: string;
+  attributeId: string;
+  valueText?: string;
+  valueNumber?: number;
+  valueBoolean?: boolean;
+  valueDate?: string;
+  valueOptions?: string[];
+  unit?: string;
+}
+
 interface Product {
   id: string;
   sku: string;
   name: string;
+  nameEn?: string;
   category?: string;
   categoryName?: string;
+  categoryId?: string;
   costPrice?: number;
   salePrice?: number;
   status: string;
@@ -52,11 +94,17 @@ interface Product {
 interface EditFormData {
   sku: string;
   name: string;
+  nameEn?: string;
   category: string;
   categoryName: string;
+  categoryId: string;
   costPrice: string;
   salePrice: string;
   status: string;
+}
+
+interface AttributeValueState {
+  [attributeId: string]: any;
 }
 
 export default function ProductsPage() {
@@ -64,7 +112,7 @@ export default function ProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [totalFiltered, setTotalFiltered] = useState(0);
   
   // 弹窗状态
@@ -76,12 +124,22 @@ export default function ProductsPage() {
   const [editFormData, setEditFormData] = useState<EditFormData>({
     sku: '',
     name: '',
+    nameEn: '',
     category: '',
     categoryName: '',
+    categoryId: '',
     costPrice: '',
     salePrice: '',
     status: 'active',
   });
+  
+  // 品类列表和属性相关状态
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [attributeTemplates, setAttributeTemplates] = useState<AttributeTemplate[]>([]);
+  const [loadingAttributes, setLoadingAttributes] = useState(false);
+  const [attributeValues, setAttributeValues] = useState<AttributeValueState>({});
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
 
   // 键盘快捷键
   useEffect(() => {
@@ -108,7 +166,81 @@ export default function ProductsPage() {
   // 获取产品列表
   useEffect(() => {
     fetchProducts();
+    loadCategories();
   }, [search]);
+
+  // 加载品类列表
+  const loadCategories = async () => {
+    setLoadingCategories(true);
+    try {
+      const res = await fetch('/api/product-research/categories?isActive=true');
+      const data = await res.json();
+      if (data.success) {
+        setProductCategories(data.data || []);
+      }
+    } catch (error) {
+      console.error('加载品类失败:', error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  // 加载品类属性模板
+  const loadAttributeTemplates = async (categoryId: string) => {
+    setLoadingAttributes(true);
+    setAttributeValues({});
+    try {
+      const res = await fetch(`/api/product-research/templates?categoryId=${categoryId}&isActive=true`);
+      const data = await res.json();
+      if (data.success) {
+        setAttributeTemplates(data.data || []);
+        // 设置默认值
+        const defaults: AttributeValueState = {};
+        data.data?.forEach((t: AttributeTemplate) => {
+          if (t.defaultValue) {
+            defaults[t.id] = t.defaultValue;
+          } else if (t.type === 'MULTI_SELECT') {
+            defaults[t.id] = [];
+          } else if (t.type === 'BOOLEAN') {
+            defaults[t.id] = 'false';
+          }
+        });
+        setAttributeValues(defaults);
+      } else {
+        setAttributeTemplates([]);
+      }
+    } catch (error) {
+      console.error('加载属性模板失败:', error);
+      setAttributeTemplates([]);
+    } finally {
+      setLoadingAttributes(false);
+    }
+  };
+
+  // 加载产品已有的属性值
+  const loadProductAttributeValues = async (productId: string) => {
+    try {
+      const res = await fetch(`/api/products/${productId}/attributes`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        const values: AttributeValueState = {};
+        data.data.forEach((av: ProductAttributeValue) => {
+          if (av.valueText !== undefined && av.valueText !== null) {
+            values[av.attributeId] = av.valueText;
+          } else if (av.valueNumber !== undefined && av.valueNumber !== null) {
+            values[av.attributeId] = av.valueNumber.toString();
+          } else if (av.valueBoolean !== undefined && av.valueBoolean !== null) {
+            values[av.attributeId] = av.valueBoolean.toString();
+          } else if (av.valueOptions !== undefined && av.valueOptions !== null) {
+            values[av.attributeId] = av.valueOptions;
+          }
+        });
+        setAttributeValues(values);
+      }
+    } catch (error) {
+      console.error('加载产品属性值失败:', error);
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -136,7 +268,7 @@ export default function ProductsPage() {
 
   // 筛选后的产品
   const getFilteredProducts = (): Product[] => {
-    if (!categoryFilter) return products;
+    if (categoryFilter === 'all') return products;
     return products.filter(product => {
       const cat = product.categoryName || product.category;
       return cat === categoryFilter;
@@ -144,23 +276,174 @@ export default function ProductsPage() {
   };
 
   // 打开编辑对话框
-  const openEditDialog = (product: Product) => {
+  const openEditDialog = async (product: Product) => {
     setEditingProduct(product);
     setEditFormData({
       sku: product.sku,
       name: product.name,
+      nameEn: product.nameEn || '',
       category: product.category || '',
       categoryName: product.categoryName || '',
+      categoryId: product.categoryId || '',
       costPrice: product.costPrice?.toString() || '',
       salePrice: product.salePrice?.toString() || '',
       status: product.status,
     });
+    setSelectedCategoryId(product.categoryId || '');
+    setAttributeValues({});
+    setAttributeTemplates([]);
+    
+    if (product.categoryId) {
+      await loadAttributeTemplates(product.categoryId);
+      await loadProductAttributeValues(product.id);
+    }
+    
     setEditDialogOpen(true);
+  };
+
+  // 品类变更处理
+  const handleCategoryChange = async (categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+    const category = productCategories.find(c => c.id === categoryId);
+    if (category) {
+      setEditFormData(prev => ({
+        ...prev,
+        categoryId,
+        category: category.code,
+        categoryName: category.name,
+      }));
+      await loadAttributeTemplates(categoryId);
+    } else {
+      setAttributeTemplates([]);
+      setAttributeValues({});
+    }
+  };
+
+  // 渲染属性输入框
+  const renderAttributeInput = (template: AttributeTemplate) => {
+    const value = attributeValues[template.id] ?? template.defaultValue ?? '';
+    const handleChange = (newValue: any) => {
+      setAttributeValues(prev => ({
+        ...prev,
+        [template.id]: newValue,
+      }));
+    };
+
+    const isTextType = template.type === 'TEXT' || template.type === 'LONG_TEXT';
+    const isNumberType = template.type === 'NUMBER' || template.type === 'DECIMAL';
+    const isMultiType = template.type === 'MULTI_SELECT';
+
+    switch (template.type) {
+      case 'TEXT':
+      case 'LONG_TEXT':
+        return (
+          <Input
+            placeholder={template.placeholder || '请输入'}
+            value={value as string}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+        );
+
+      case 'NUMBER':
+      case 'DECIMAL':
+        return (
+          <Input
+            type="number"
+            step="0.01"
+            placeholder={template.placeholder || '请输入数字'}
+            value={value as string}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+        );
+
+      case 'DATE':
+        return (
+          <Input
+            type="date"
+            value={value as string}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+        );
+
+      case 'SELECT':
+        return (
+          <Select value={value as string} onValueChange={handleChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="请选择" />
+            </SelectTrigger>
+            <SelectContent>
+              {template.options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+
+      case 'MULTI_SELECT':
+        return (
+          <div className="flex flex-wrap gap-2">
+            {template.options.map((option) => {
+              const selected = (value as string[]) || [];
+              const isSelected = selected.includes(option);
+              return (
+                <Badge
+                  key={option}
+                  variant={isSelected ? 'default' : 'outline'}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    const current = (value as string[]) || [];
+                    if (isSelected) {
+                      handleChange(current.filter(o => o !== option));
+                    } else {
+                      handleChange([...current, option]);
+                    }
+                  }}
+                >
+                  {option}
+                </Badge>
+              );
+            })}
+          </div>
+        );
+
+      case 'BOOLEAN':
+        return (
+          <RadioGroup
+            value={(value as string) || 'false'}
+            onValueChange={handleChange}
+            className="flex gap-4"
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="true" id={`${template.id}-true`} />
+              <Label htmlFor={`${template.id}-true`}>是</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="false" id={`${template.id}-false`} />
+              <Label htmlFor={`${template.id}-false`}>否</Label>
+            </div>
+          </RadioGroup>
+        );
+
+      default:
+        return <Input placeholder="暂不支持的类型" disabled />;
+    }
   };
 
   // 保存产品编辑
   const handleSaveEdit = async () => {
     if (!editingProduct) return;
+
+    // 验证必填属性
+    const requiredTemplates = attributeTemplates.filter(t => t.isRequired);
+    for (const template of requiredTemplates) {
+      const value = attributeValues[template.id];
+      if (!value || (Array.isArray(value) && value.length === 0)) {
+        alert(`请填写必填属性：${template.name}`);
+        return;
+      }
+    }
 
     // 验证必填字段
     if (!editFormData.sku || !editFormData.name) {
@@ -169,17 +452,53 @@ export default function ProductsPage() {
     }
 
     try {
+      // 整理属性值数据
+      const attributes = Object.entries(attributeValues).map(([attributeId, value]) => {
+        const template = attributeTemplates.find(t => t.id === attributeId);
+        if (!template) return null;
+
+        const result: any = { attributeId };
+
+        switch (template.type) {
+          case 'TEXT':
+          case 'LONG_TEXT':
+            result.valueText = value as string;
+            break;
+          case 'NUMBER':
+          case 'DECIMAL':
+            result.valueNumber = value ? parseFloat(value as string) : null;
+            break;
+          case 'BOOLEAN':
+            result.valueBoolean = value === 'true';
+            break;
+          case 'DATE':
+            result.valueDate = value as string;
+            break;
+          case 'MULTI_SELECT':
+            result.valueOptions = value as string[];
+            break;
+          case 'SELECT':
+            result.valueText = value as string;
+            break;
+        }
+
+        return result;
+      }).filter(Boolean);
+
       const response = await fetch(`/api/products/${editingProduct.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sku: editFormData.sku,
           name: editFormData.name,
-          category: editFormData.category || undefined,
-          categoryName: editFormData.categoryName || undefined,
+          nameEn: editFormData.nameEn,
+          category: editFormData.category,
+          categoryName: editFormData.categoryName,
+          categoryId: editFormData.categoryId || undefined,
           costPrice: editFormData.costPrice ? parseFloat(editFormData.costPrice) : undefined,
           salePrice: editFormData.salePrice ? parseFloat(editFormData.salePrice) : undefined,
           status: editFormData.status,
+          attributes: attributes,
         }),
       });
 
@@ -284,19 +603,21 @@ export default function ProductsPage() {
   const filteredProducts = getFilteredProducts();
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">产品管理</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
                 <Download className="h-4 w-4 mr-2" />
-                批量导出
+                <span className="hidden sm:inline">批量导出</span>
+                <span className="sm:hidden">导出</span>
               </Button>
               <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
-                批量导入
+                <span className="hidden sm:inline">批量导入</span>
+                <span className="sm:hidden">导入</span>
               </Button>
               <Button
                 variant="outline"
@@ -304,12 +625,14 @@ export default function ProductsPage() {
                 disabled={selectedCount === 0}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                批量删除
+                <span className="hidden sm:inline">批量删除</span>
+                <span className="sm:hidden">删除</span>
               </Button>
               <Link href="/products/new">
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
-                  新建产品
+                  <span className="hidden sm:inline">新建产品</span>
+                  <span className="sm:hidden">新建</span>
                 </Button>
               </Link>
             </div>
@@ -317,36 +640,37 @@ export default function ProductsPage() {
         </CardHeader>
         <CardContent>
           {/* 搜索和筛选栏 */}
-          <div className="mb-6 flex flex-wrap gap-4 items-end">
-            <div>
+          <div className="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-end">
+            <div className="w-full sm:w-auto">
               <Label className="mb-2 block text-sm font-medium">搜索</Label>
               <Input
                 placeholder="搜索 SKU / 产品名称..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-[280px]"
+                className="w-full sm:w-[280px]"
               />
             </div>
-            <div>
+            <div className="w-full sm:w-auto">
               <Label className="mb-2 block text-sm font-medium">分类筛选</Label>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="全部分类" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">全部分类</SelectItem>
+                  <SelectItem value="all">全部分类</SelectItem>
                   {categories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {categoryFilter && (
-              <div>
+            {categoryFilter !== 'all' && (
+              <div className="w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="default"
-                  onClick={() => setCategoryFilter('')}
+                  onClick={() => setCategoryFilter('all')}
+                  className="w-full sm:w-auto"
                 >
                   清除筛选
                 </Button>
@@ -366,24 +690,28 @@ export default function ProductsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredProducts.map((product) => (
-                  <Card key={product.id} className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
+                  <Card 
+                    key={product.id} 
+                    className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                    onClick={() => openEditDialog(product)}
+                  >
                     <CardContent className="p-4">
                       {/* 头部：选择框 + SKU + 编辑按钮 */}
                       <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <Checkbox
                             checked={selectedIds.has(product.id)}
                             onCheckedChange={() => toggleSelection(product.id)}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <span className="text-sm font-mono text-muted-foreground">
+                          <span className="text-sm font-mono text-muted-foreground break-all">
                             {product.sku}
                           </span>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          className="h-7 w-7"
+                          className="h-7 w-7 shrink-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditDialog(product);
@@ -433,21 +761,12 @@ export default function ProductsPage() {
                       )}
 
                       {/* 状态 */}
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-end">
                         <Badge variant={product.status === 'active' ? 'default' : 'outline'}>
                           {product.status === 'active' ? '在售' : product.status}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          点击编辑
-                        </span>
                       </div>
                     </CardContent>
-                    <CardFooter className="bg-muted/50 p-2 px-4" onClick={() => openEditDialog(product)}>
-                      <div className="flex items-center justify-between w-full text-sm text-muted-foreground">
-                        <span>ID: {product.id.slice(0, 8)}...</span>
-                        <Edit className="h-4 w-4" />
-                      </div>
-                    </CardFooter>
                   </Card>
                 ))}
               </div>
@@ -554,20 +873,34 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>分类编码</Label>
+                  <Label>英文名称</Label>
                   <Input
-                    value={editFormData.category}
-                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                    placeholder="分类编码"
+                    value={editFormData.nameEn}
+                    onChange={(e) => setEditFormData({ ...editFormData, nameEn: e.target.value })}
+                    placeholder="产品英文名称"
                   />
                 </div>
                 <div>
-                  <Label>分类名称</Label>
-                  <Input
-                    value={editFormData.categoryName}
-                    onChange={(e) => setEditFormData({ ...editFormData, categoryName: e.target.value })}
-                    placeholder="分类名称"
-                  />
+                  <Label>品类 *</Label>
+                  <Select
+                    value={editFormData.categoryId}
+                    onValueChange={handleCategoryChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="请选择品类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingCategories ? (
+                        <SelectItem value="loading" disabled>加载中...</SelectItem>
+                      ) : (
+                        productCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -612,6 +945,50 @@ export default function ProductsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* 品类属性区域 */}
+              {selectedCategoryId && (
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-4">品类属性</h4>
+                  {loadingAttributes ? (
+                    <div className="text-center py-4 text-muted-foreground">
+                      加载属性模板中...
+                    </div>
+                  ) : attributeTemplates.length === 0 ? (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        该品类暂无属性模板，请先在品类管理中配置属性。
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="space-y-4">
+                      {attributeTemplates
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                        .map((template) => (
+                          <div key={template.id} className="p-4 border rounded-lg space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="font-medium">
+                                {template.name}
+                                {template.isRequired && <span className="text-destructive ml-1">*</span>}
+                              </Label>
+                              <Badge variant="outline">{template.type}</Badge>
+                            </div>
+
+                            {template.description && (
+                              <p className="text-sm text-muted-foreground">
+                                {template.description}
+                              </p>
+                            )}
+
+                            {renderAttributeInput(template)}
+                          </div>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <DialogFooter>

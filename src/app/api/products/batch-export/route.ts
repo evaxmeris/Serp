@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       p.salePrice || 0,
       p.currency || 'USD',
       p.status || 'ACTIVE',
-      p.category || '',
+      p.categoryId || '',
       p.description || '',
     ]);
 

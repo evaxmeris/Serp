@@ -35,8 +35,11 @@ export default function RootLayoutContent({ children }: RootLayoutContentProps) 
 
   // 初始化：获取用户角色和 Sidebar 状态偏好
   useEffect(() => {
-    const userRole = getCurrentUserRole();
-    setRole(userRole);
+    const loadUserRole = async () => {
+      const userRole = await getCurrentUserRole();
+      setRole(userRole);
+    };
+    loadUserRole();
     
     // 从 localStorage 读取用户偏好
     const savedCollapsed = localStorage.getItem('sidebarCollapsed');

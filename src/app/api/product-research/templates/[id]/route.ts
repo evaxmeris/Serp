@@ -36,7 +36,8 @@ export async function GET(
         // 统计使用该模板的产品数量
         _count: {
           select: {
-            values: true,
+            productValues: true,
+            researchValues: true,
           },
         },
       },
@@ -178,7 +179,8 @@ export async function DELETE(
       include: {
         _count: {
           select: {
-            values: true,
+            productValues: true,
+            researchValues: true,
           },
         },
       },
@@ -195,11 +197,12 @@ export async function DELETE(
     }
 
     // 检查是否有产品使用该模板
-    if (template._count.values > 0) {
+    const totalUsage = template._count.productValues + template._count.researchValues;
+    if (totalUsage > 0) {
       return NextResponse.json(
         { 
           success: false, 
-          error: `该属性已被 ${template._count.values} 个产品使用，无法删除` 
+          error: `该属性已被 ${totalUsage} 个产品/调研记录使用，无法删除` 
         },
         { status: 400 }
       );

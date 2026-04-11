@@ -177,23 +177,25 @@ export default function InboundOrdersPage() {
     <div className="container mx-auto py-6 px-4">
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
             <CardTitle className="text-2xl">入库管理</CardTitle>
             <Button onClick={() => router.push('/inbound-orders/new')}>
               <Plus className="mr-2 h-4 w-4" />
-              创建入库单
+              <span className="hidden sm:inline">创建入库单</span>
+              <span className="sm:hidden">创建</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {/* 筛选栏 */}
-          <div className="flex gap-4 mb-6">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="w-full sm:flex-1">
               <Input
                 placeholder="搜索入库单号、备注..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="w-full"
               />
             </div>
             <Select value={type} onValueChange={setType}>

@@ -6,7 +6,7 @@
  * 
  * @module middleware/auth
  * @author Trade ERP 开发团队
- * @updated 2026-03-26
+ * @updated 2026-04-11 (添加 Cookie 支持)
  */
 
 import { NextResponse } from 'next/server';
@@ -79,6 +79,42 @@ async function parseUserIdFromToken(token: string): Promise<string | null> {
 }
 
 /**
+ * 从 Cookie 读取 token
+ * 支持两种来源：
+ * 1. httpOnly cookie (auth_token) - 生产环境
+ * 2. Bearer header - 开发环境/向后兼容
+ */
+function getTokenFromRequest(request: NextRequest): string | null {
+  // 优先尝试从 cookie 读取（httpOnly）
+  const cookieToken = request.cookies.get('auth_token')?.value;
+  if (cookieToken) {
+    return cookieToken;
+  }
+  
+  // Fallback: 从 Authorization header 读取
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  
+  return null;
+}
+
+/**
+ * 验证 CSRF token
+ */
+function verifyCSRFToken(request: NextRequest): boolean {
+  const csrfToken = request.headers.get('x-csrf-token');
+  const cookieCsrf = request.cookies.get('csrf_token')?.value;
+  
+  if (!csrfToken || !cookieCsrf) {
+    return false;
+  }
+  
+  return csrfToken === cookieCsrf;
+}
+
+/**
  * 加载用户所有角色并展开权限
  * 
  * @param userId 用户 ID
@@ -128,7 +164,7 @@ export async function loadUserPermissions(userId: string): Promise<{
  * 验证用户认证并加载会话（包含权限）
  * 
  * 流程：
- * 1. 从请求头获取 Bearer token
+ * 1. 从 cookie 或 header 获取 token
  * 2. 验证 token 解析用户 ID
  * 3. 从数据库加载用户所有角色和权限
  * 4. 返回认证会话
@@ -138,13 +174,12 @@ export async function loadUserPermissions(userId: string): Promise<{
  */
 export async function getSession(request: NextRequest): Promise<AuthSession | null> {
   try {
-    const authHeader = request.headers.get('authorization');
+    const token = getTokenFromRequest(request);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return null;
     }
 
-    const token = authHeader.substring(7);
     const userId = await parseUserIdFromToken(token);
     
     if (!userId) {

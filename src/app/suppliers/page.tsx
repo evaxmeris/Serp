@@ -253,16 +253,17 @@ export default function SuppliersPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">供应商管理</CardTitle>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
-                  新增供应商
+                  <span className="hidden sm:inline">新增供应商</span>
+                  <span className="sm:hidden">新增</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

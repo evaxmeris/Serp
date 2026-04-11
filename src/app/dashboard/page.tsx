@@ -152,8 +152,11 @@ export default function DashboardPage() {
   const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
 
   useEffect(() => {
-    const role = getCurrentUserRole();
-    setCurrentRole(role);
+    const loadRole = async () => {
+      const role = await getCurrentUserRole();
+      setCurrentRole(role);
+    };
+    loadRole();
     fetchDashboardData();
   }, [period]);
 

@@ -33,6 +33,7 @@ import {
   Ship,
   CreditCard,
   DollarSign,
+  Users,
 } from 'lucide-react';
 
 // Tab 定义
@@ -321,18 +322,32 @@ function SystemSettings() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[
-              ['系统版本', 'v0.9.0'],
-              ['构建时间', '2026-04-10'],
-              ['数据库状态', '正常运行'],
-              ['API 状态', '正常运行'],
-              ['角色体系', '5 角色（ADMIN/SALES/PURCHASING/WAREHOUSE/VIEWER）'],
-            ].map(([label, value]) => (
-              <div key={label} className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
-                <span className="text-zinc-500">{label}</span>
-                <span className="font-medium text-sm">{value}</span>
+            <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+              <span className="text-zinc-500">系统版本</span>
+              <span className="font-medium text-sm">v0.9.0</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+              <span className="text-zinc-500">构建时间</span>
+              <span className="font-medium text-sm">2026-04-10</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+              <span className="text-zinc-500">数据库状态</span>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">正常运行</Badge>
+            </div>
+            <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+              <span className="text-zinc-500">API 状态</span>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">正常运行</Badge>
+            </div>
+            <div className="py-2">
+              <div className="text-zinc-500 mb-2">角色体系</div>
+              <div className="flex flex-wrap gap-1.5">
+                <Badge variant="secondary">ADMIN</Badge>
+                <Badge variant="secondary">SALES</Badge>
+                <Badge variant="secondary">PURCHASING</Badge>
+                <Badge variant="secondary">WAREHOUSE</Badge>
+                <Badge variant="secondary">VIEWER</Badge>
               </div>
-            ))}
+            </div>
           </div>
         </CardContent>
       </Card>

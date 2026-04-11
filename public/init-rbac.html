@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>初始化角色权限系统</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+    .btn { padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+    .btn:hover { background: #4338ca; }
+    .log { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>🚀 初始化角色权限系统</h1>
+  <p>此页面将创建默认权限和角色。</p>
+  
+  <button class="btn" onclick="initRBAC()">开始初始化</button>
+  
+  <div id="log" class="log" style="display:none;"></div>
+  
+  <script>
+    async function initRBAC() {
+      const logDiv = document.getElementById('log');
+      logDiv.style.display = 'block';
+      logDiv.innerHTML = '开始初始化...\n\n';
+      
+      try {
+        // 1. 创建权限
+        logDiv.innerHTML += '📋 创建默认权限...\n';
+        const permRes = await fetch('/api/permissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'user:list',
+            displayName: '查看用户列表',
+            module: 'user',
+            description: '查看用户列表权限'
+          })
+        });
+        
+        if (permRes.ok) {
+          const permData = await permRes.json();
+          logDiv.innerHTML += `✅ 权限创建成功：${permData.displayName}\n\n`;
+        } else {
+          const err = await permRes.json();
+          logDiv.innerHTML += `❌ 权限创建失败：${err.error}\n\n`;
+        }
+        
+        // 2. 创建角色
+        logDiv.innerHTML += '👥 创建默认角色...\n';
+        const roleRes = await fetch('/api/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'super-admin',
+            displayName: '超级管理员',
+            description: '系统超级管理员，拥有所有权限',
+            isSystem: true,
+            isActive: true
+          })
+        });
+        
+        if (roleRes.ok) {
+          const roleData = await roleRes.json();
+          logDiv.innerHTML += `✅ 角色创建成功：${roleData.displayName}\n\n`;
+          logDiv.innerHTML += `角色 ID: ${roleData.id}\n`;
+          logDiv.innerHTML += `\n🎉 初始化完成！请刷新角色管理页面查看。\n`;
+          logDiv.innerHTML += `\n访问 <a href="/settings/roles">角色管理页面</a> 查看和管理角色。\n`;
+        } else {
+          const err = await roleRes.json();
+          logDiv.innerHTML += `❌ 角色创建失败：${err.error}\n\n`;
+        }
+        
+      } catch (error) {
+        logDiv.innerHTML += `\n❌ 错误：${error.message}\n`;
+      }
+      
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+  </script>
+</body>
+</html>

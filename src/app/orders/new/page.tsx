@@ -130,7 +130,7 @@ export default function CreateOrderPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push('/orders')}>
           <ArrowLeft className="w-4 h-4 mr-2" />

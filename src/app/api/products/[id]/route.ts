@@ -37,13 +37,50 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
+    const { attributes, ...productData } = body;
 
+    // 更新产品基本信息
     const product = await prisma.product.update({
       where: { id },
-      data: body,
+      data: productData,
     });
 
-    return NextResponse.json(product);
+    // 如果有属性数据，更新属性值
+    if (Array.isArray(attributes) && attributes.length > 0) {
+      // 使用事务处理所有属性更新
+      await prisma.$transaction(
+        attributes.map(attr => {
+          return prisma.productAttributeValue.upsert({
+            where: {
+              productId_attributeId: {
+                productId: id,
+                attributeId: attr.attributeId,
+              },
+            },
+            update: {
+              valueText: attr.valueText,
+              valueNumber: attr.valueNumber,
+              valueBoolean: attr.valueBoolean,
+              valueDate: attr.valueDate,
+              valueOptions: attr.valueOptions,
+              unit: attr.unit,
+            },
+            create: {
+              productId: id,
+              attributeId: attr.attributeId,
+              valueText: attr.valueText,
+              valueNumber: attr.valueNumber,
+              valueBoolean: attr.valueBoolean,
+              valueDate: attr.valueDate,
+              valueOptions: attr.valueOptions,
+              unit: attr.unit,
+            },
+          });
+        })
+      );
+    }
+
+    return NextResponse.json({ success: true, product });
   } catch (error) {
     console.error('Error updating product:', error);
     return NextResponse.json(

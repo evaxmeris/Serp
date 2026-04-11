@@ -307,7 +307,7 @@ export async function POST(request: Request) {
 
     // 如果提供了属性值，批量创建
     if (data.attributes && data.attributes.length > 0) {
-      await prisma.productAttributeValue.createMany({
+      await prisma.productResearchAttributeValue.createMany({
         data: data.attributes.map((attr) => ({
           productId: product.id,
           attributeId: attr.attributeId,

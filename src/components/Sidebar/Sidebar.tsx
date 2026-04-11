@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Cookies from 'js-cookie';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -28,6 +29,7 @@ import {
   User,
   Scale,
   Upload,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -186,7 +188,7 @@ const menuConfig: MenuGroup[] = [
     items: [
       {
         key: 'users',
-        label: '用户管理',
+        label: '用户及权限',
         icon: User,
         href: '/users',
         roles: ['ADMIN'],
@@ -381,6 +383,7 @@ export default function Sidebar({
                         )}
                         title={isCollapsed ? item.label : undefined}
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={isCollapsed ? item.label : undefined}
                       >
                         <div className="flex-shrink-0">
                           <item.icon className="h-5 w-5" />
@@ -410,6 +413,7 @@ export default function Sidebar({
               isCollapsed ? 'p-2' : 'p-2 gap-2'
             )}
             aria-label={isCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+            aria-expanded={!isCollapsed}
           >
             {isCollapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -431,6 +435,8 @@ export default function Sidebar({
             setIsMobileOpen(true);
           }}
           aria-label="打开导航菜单"
+          aria-controls="sidebar-navigation"
+          aria-expanded={isMobileOpen}
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -439,13 +445,24 @@ export default function Sidebar({
   );
 }
 
-// 获取当前用户角色从 localStorage
-export const getCurrentUserRole = (): UserRole => {
+// 获取当前用户角色从 cookie
+export const getCurrentUserRole = async (): Promise<UserRole> => {
   if (typeof window === 'undefined') return 'ADMIN';
   try {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return 'ADMIN';
-    const user = JSON.parse(userStr);
+    const userId = Cookies.get('user_id');
+    const token = Cookies.get('auth_token');
+    
+    if (!userId || !token) return 'ADMIN';
+    
+    const res = await fetch('/api/auth/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    if (!res.ok) return 'ADMIN';
+    
+    const user = await res.json();
     return (user.role as UserRole) || 'ADMIN';
   } catch {
     return 'ADMIN';

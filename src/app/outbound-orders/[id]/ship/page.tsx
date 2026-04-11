@@ -151,7 +151,7 @@ export default function ShipOutboundOrderPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6">
         <Card>
           <CardContent className="py-12 text-center">
             加载中...
@@ -166,7 +166,7 @@ export default function ShipOutboundOrderPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-6">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -176,7 +176,7 @@ export default function ShipOutboundOrderPage() {
         <span className="text-muted-foreground">{order.outboundNo}</span>
       </div>
 
-      <div className="grid gap-6 max-w-4xl">
+      <div className="grid gap-6 w-full">
         {/* 出库单信息 */}
         <Card>
           <CardHeader>

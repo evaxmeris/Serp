@@ -122,24 +122,25 @@ export default function QuotationsPage() {
     <div className="container mx-auto py-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">报价管理</CardTitle>
             <Button onClick={() => router.push('/quotations/new')}>
               <Plus className="w-4 h-4 mr-2" />
-              新增报价
+              <span className="hidden sm:inline">新增报价</span>
+              <span className="sm:hidden">新增</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {/* 筛选和搜索 */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+            <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="搜索报价单号、客户名称..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                className="pl-10 w-full"
               />
             </div>
             <select

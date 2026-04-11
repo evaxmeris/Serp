@@ -267,27 +267,30 @@ export default function CustomersPage() {
   const selectedCount = selectedIds.size;
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">客户管理</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
-                批量导入
+                <span className="hidden sm:inline">批量导入</span>
+                <span className="sm:hidden">导入</span>
               </Button>
               {selectedCount > 0 && (
                 <Button variant="outline" onClick={() => setTagsDialogOpen(true)}>
                   <Tag className="h-4 w-4 mr-2" />
-                  批量标签
+                  <span className="hidden sm:inline">批量标签</span>
+                  <span className="sm:hidden">标签</span>
                 </Button>
               )}
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    新增客户
+                    <span className="hidden sm:inline">新增客户</span>
+                    <span className="sm:hidden">新增</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent>

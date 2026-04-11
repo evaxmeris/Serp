@@ -7,7 +7,9 @@
  */
 
 import { NextResponse } from 'next/server';
-import { login } from '@/lib/auth-simple';
+import { SignJWT } from 'jose';
+import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
 // 失败登录计数 Map（只记录失败登录）
 const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
@@ -27,53 +29,80 @@ export async function POST(request: Request) {
       );
     }
 
-    // 调用简化认证
-    const result = await login(email, password);
-
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        user: result.user,
-        message: '登录成功',
-      });
-    } else {
+    // 查找用户并验证密码
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user || !user.passwordHash) {
       // 登录失败，计数
-      const ip = request.headers.get('x-forwarded-for') || 
-                 request.headers.get('x-real-ip') || 
-                 'unknown';
-      
-      const now = Date.now();
-      let record = failedLoginMap.get(ip);
-      
-      if (!record || now > record.resetTime) {
-        record = { count: 1, resetTime: now + 15 * 60 * 1000 };
-      } else {
-        record.count += 1;
-      }
-      
-      failedLoginMap.set(ip, record);
-      
-      // 检查是否超过限制
-      if (record.count > 5) {
-        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+      const failedResponse = handleFailedLogin(request);
+      if (failedResponse) {
         return NextResponse.json(
-          { 
-            error: '请求过于频繁，请稍后再试',
-            retryAfter: retryAfter,
-            message: `请在 ${retryAfter} 秒后重试`
-          },
-          { 
-            status: 429,
-            headers: { 'Retry-After': retryAfter.toString() }
-          }
+          { error: failedResponse.error, retryAfter: failedResponse.retryAfter },
+          { status: failedResponse.status, headers: failedResponse.headers }
         );
       }
-      
       return NextResponse.json(
-        { error: result.error },
+        { error: '账号或密码错误' },
         { status: 401 }
       );
     }
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      // 登录失败，计数
+      const failedResponse = handleFailedLogin(request);
+      if (failedResponse) {
+        return NextResponse.json(
+          { error: failedResponse.error, retryAfter: failedResponse.retryAfter },
+          { status: failedResponse.status, headers: failedResponse.headers }
+        );
+      }
+      return NextResponse.json(
+        { error: '账号或密码错误' },
+        { status: 401 }
+      );
+    }
+
+    if (!user.isApproved) {
+      return NextResponse.json(
+        { error: '账号尚未批准，请联系管理员审批。' },
+        { status: 403 }
+      );
+    }
+
+    // 生成 JWT token
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+    const token = await new SignJWT({ 
+      id: user.id, 
+      email: user.email,
+      name: user.name,
+      role: user.role 
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('7d')
+      .sign(secret);
+
+    // 创建响应并设置 cookie
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      message: '登录成功',
+    });
+
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60, // 7 天
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
@@ -81,4 +110,36 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+// 失败登录计数辅助函数
+function handleFailedLogin(request: Request) {
+  const ip = request.headers.get('x-forwarded-for') || 
+             request.headers.get('x-real-ip') || 
+             'unknown';
+  
+  const now = Date.now();
+  let record = failedLoginMap.get(ip);
+  
+  if (!record || now > record.resetTime) {
+    record = { count: 1, resetTime: now + 15 * 60 * 1000 };
+  } else {
+    record.count += 1;
+  }
+  
+  failedLoginMap.set(ip, record);
+  
+  // 检查是否超过限制
+  if (record.count > 5) {
+    const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+    return {
+      error: '请求过于频繁，请稍后再试',
+      retryAfter: retryAfter,
+      message: `请在 ${retryAfter} 秒后重试`,
+      status: 429,
+      headers: { 'Retry-After': retryAfter.toString() }
+    };
+  }
+  
+  return null;
 }

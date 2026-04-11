@@ -1325,7 +1325,7 @@ export default function ProductNewPage() {
 
       {renderStepIndicator()}
 
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full px-4 md:px-6 lg:px-8">
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}

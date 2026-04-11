@@ -113,7 +113,7 @@ export default function PurchaseEditPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-8">
         <div className="text-center py-8">加载中...</div>
       </div>
     );
@@ -121,7 +121,7 @@ export default function PurchaseEditPage() {
 
   if (!purchase) {
     return (
-      <div className="container mx-auto py-8">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-8">
         <Card>
           <CardContent className="py-8">
             <div className="text-center text-gray-500">采购单不存在</div>
@@ -132,7 +132,7 @@ export default function PurchaseEditPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>

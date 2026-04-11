@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     }
 
     // 查询属性值
-    const attributeValues = await prisma.productAttributeValue.findMany({
+    const attributeValues = await prisma.productResearchAttributeValue.findMany({
       where,
       include: {
         // 包含属性模板信息
@@ -194,7 +194,7 @@ export async function POST(request: Request) {
         };
 
         // 使用 upsert 实现创建或更新
-        return prisma.productAttributeValue.upsert({
+        return prisma.productResearchAttributeValue.upsert({
           where: {
             productId_attributeId: {
               productId,

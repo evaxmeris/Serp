@@ -174,7 +174,7 @@ async function getComparisonDetail(comparisonId: string) {
   // 批量获取所有产品的属性值
   const productIds = productsWithAttributes.map(item => item.productId);
   const allAttributes = productIds.length > 0 
-    ? await prisma.productAttributeValue.findMany({
+    ? await prisma.productResearchAttributeValue.findMany({
         where: { 
           productId: { in: productIds },
           attribute: { isComparable: true },

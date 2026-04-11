@@ -162,31 +162,32 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">订单管理</CardTitle>
             <Button onClick={() => router.push('/orders/new')}>
               <Plus className="w-4 h-4 mr-2" />
-              新增订单
+              <span className="hidden sm:inline">新增订单</span>
+              <span className="sm:hidden">新增</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {/* 筛选区 */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="relative w-full md:max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="搜索订单号/客户..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 max-w-sm"
+                className="pl-10 w-full"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full md:w-40">
                 <SelectValue placeholder="全部状态" />
               </SelectTrigger>
               <SelectContent>

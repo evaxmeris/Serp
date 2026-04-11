@@ -124,7 +124,7 @@ async function getInventoryData(params: {
     where: {
       ...(warehouseId && { warehouse: warehouseId }),
       ...(productId && { productId }),
-      ...(categoryId && { product: { category: categoryId } }),
+      ...(categoryId && { product: { categoryId: categoryId } }),
       ...(!includeZero && { quantity: { gt: 0 } })
     },
     include: {
@@ -202,11 +202,11 @@ async function getInventoryData(params: {
   // 按品类分组
   const byCategory = categoryId
     ? []
-    : Array.from(new Set(itemsWithAging.map(item => item.product.category))).map(categoryId => {
-        const items = itemsWithAging.filter(item => item.product.category === categoryId);
+    : Array.from(new Set(itemsWithAging.map(item => item.product.categoryId))).map(categoryId => {
+        const items = itemsWithAging.filter(item => item.product.categoryId === categoryId);
         return {
           categoryId,
-          categoryName: items[0]?.product.category || '未知品类',
+          categoryName: items[0]?.product.categoryId || '未知品类',
           totalItems: items.length,
           totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
           totalValue: items.reduce((sum, item) => sum + (item.quantity * Number(item.product.costPrice || 0)), 0)

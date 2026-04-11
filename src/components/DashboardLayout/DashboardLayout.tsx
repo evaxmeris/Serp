@@ -17,8 +17,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     // 客户端获取用户角色和侧边栏状态偏好
-    const userRole = getCurrentUserRole();
-    setRole(userRole);
+    const loadUserRole = async () => {
+      const userRole = await getCurrentUserRole();
+      setRole(userRole);
+    };
+    loadUserRole();
     
     const savedCollapsed = localStorage.getItem('sidebarCollapsed');
     if (savedCollapsed !== null) {

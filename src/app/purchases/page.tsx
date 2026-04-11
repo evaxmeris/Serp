@@ -248,7 +248,7 @@ export default function PurchasesPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

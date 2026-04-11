@@ -348,11 +348,11 @@ export default function OutboundOrdersPage() {
     <div className="container mx-auto py-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">出库单管理</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {selectedIds.size > 0 && (
-                <div className="flex items-center gap-2 mr-4">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <span className="text-sm text-muted-foreground">
                     已选择 {selectedIds.size} 个
                   </span>
@@ -363,7 +363,8 @@ export default function OutboundOrdersPage() {
                     disabled={batchProcessing}
                   >
                     <CheckCircle className="h-4 w-4 mr-1 text-green-600" />
-                    批量确认
+                    <span className="hidden sm:inline">批量确认</span>
+                    <span className="sm:hidden">确认</span>
                   </Button>
                   <Button
                     size="sm"
@@ -372,7 +373,8 @@ export default function OutboundOrdersPage() {
                     disabled={batchProcessing}
                   >
                     <XCircle className="h-4 w-4 mr-1 text-red-600" />
-                    批量取消
+                    <span className="hidden sm:inline">批量取消</span>
+                    <span className="sm:hidden">取消</span>
                   </Button>
                   <Button
                     size="sm"
@@ -381,7 +383,8 @@ export default function OutboundOrdersPage() {
                     disabled={batchProcessing}
                   >
                     <Download className="h-4 w-4 mr-1" />
-                    批量导出
+                    <span className="hidden sm:inline">批量导出</span>
+                    <span className="sm:hidden">导出</span>
                   </Button>
                   <Button
                     size="sm"
@@ -394,29 +397,30 @@ export default function OutboundOrdersPage() {
               )}
               <Button onClick={() => router.push('/outbound-orders/new')}>
                 <Plus className="mr-2 h-4 w-4" />
-                创建出库单
+                <span className="hidden sm:inline">创建出库单</span>
+                <span className="sm:hidden">创建</span>
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {/* 筛选栏 */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
               <Input
                 placeholder="搜索出库单号、备注..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyPress={handleKeyPress}
-                className="max-w-sm"
+                className="w-full sm:max-w-sm"
               />
-              <Button onClick={handleSearch} variant="outline">
+              <Button onClick={handleSearch} variant="outline" className="w-full sm:w-auto">
                 <Search className="h-4 w-4 mr-2" />
                 搜索
               </Button>
             </div>
             <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="状态" />
               </SelectTrigger>
               <SelectContent>

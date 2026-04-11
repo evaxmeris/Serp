@@ -24,6 +24,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 RUN npx next build
 
+# standalone 模式需要手动复制 public 文件夹和 .next/static
+RUN cp -r public .next/standalone/
+RUN cp -r .next/static .next/standalone/.next/
+
 # 暴露端口
 EXPOSE 3000
 
@@ -31,5 +35,5 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# 启动生产服务器
-CMD ["npm", "start"]
+# 启动生产服务器（output: standalone 模式需要直接运行 node）
+CMD ["node", ".next/standalone/server.js"]

@@ -128,13 +128,27 @@ export async function PUT(
       }
     }
 
-    // 如果修改了父品类，需要重新计算层级和路径
-    let updateData: any = { ...body };
+    // 构建更新数据，只添加存在的字段，避免 undefined 导致错误
+    const updateData: any = {};
     
-    if (body.parentId !== undefined && body.parentId !== existingCategory.parentId) {
-      if (body.parentId) {
+    // 将空字符串转换为 null（前端选择"无"时传递空字符串）
+    const normalizedParentId = body.parentId === '' ? null : body.parentId;
+    
+    // 只在字段存在时才添加到更新数据中
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.nameEn !== undefined) updateData.nameEn = body.nameEn || null;
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.description !== undefined) updateData.description = body.description || null;
+    if (body.icon !== undefined) updateData.icon = body.icon || null;
+    if (body.sortOrder !== undefined) updateData.sortOrder = body.sortOrder;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if (body.parentId !== undefined) updateData.parentId = normalizedParentId;
+    
+    // 如果父品类发生了变化，需要重新计算层级和路径
+    if (body.parentId !== undefined && normalizedParentId !== existingCategory.parentId) {
+      if (normalizedParentId) {
         const parentCategory = await prisma.productCategory.findUnique({
-          where: { id: body.parentId },
+          where: { id: normalizedParentId },
         });
 
         if (!parentCategory) {
@@ -148,22 +162,27 @@ export async function PUT(
         }
 
         // 不能将自己设为父品类
-        if (body.parentId === id) {
+        if (normalizedParentId === id) {
           return NextResponse.json(
-            { 
-              success: false, 
-              error: '不能将自己设为父品类' 
-            },
-            { status: 400 }
-          );
+          { 
+            success: false, 
+            error: '不能将自己设为父品类' 
+          },
+          { status: 400 }
+        );
         }
 
         updateData.level = parentCategory.level + 1;
         updateData.path = parentCategory.path ? `${parentCategory.path}/${parentCategory.id}` : parentCategory.id;
       } else {
+        // 没有父品类，设为顶级品类
         updateData.level = 1;
         updateData.path = null;
       }
+    } else {
+      // 如果父品类没有变化，保持原有的 level 和 path
+      updateData.level = existingCategory.level;
+      updateData.path = existingCategory.path;
     }
 
     // 更新品类

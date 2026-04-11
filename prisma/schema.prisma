@@ -14,9 +14,9 @@ model User {
   passwordHash                 String?
   role                         RoleEnum            @default(ADMIN)
   avatar                       String?
-  isApproved                   Boolean             @default(false)
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
+  isApproved                   Boolean             @default(false)
   approvalHistory              ApprovalHistory[]   @relation("ApprovalHistoryApprover")
   approvalApprovals            ApprovalRecord[]    @relation("ApprovalApprover")
   approvalInitiations          ApprovalRecord[]    @relation("ApprovalInitiator")
@@ -83,33 +83,36 @@ model CustomerContact {
 }
 
 model Product {
-  id                 String              @id @default(cuid())
-  sku                String              @unique
+  id                 String                  @id @default(cuid())
+  sku                String                  @unique
   name               String
   nameEn             String?
-  category           String?
   specification      String?
-  unit               String              @default("PCS")
-  costPrice          Decimal             @db.Decimal(10, 2)
-  salePrice          Decimal             @db.Decimal(10, 2)
-  currency           String              @default("USD")
+  unit               String                  @default("PCS")
+  costPrice          Decimal                 @db.Decimal(10, 2)
+  salePrice          Decimal                 @db.Decimal(10, 2)
+  currency           String                  @default("USD")
   images             String[]
   description        String?
   descriptionEn      String?
-  weight             Decimal?            @db.Decimal(10, 2)
-  volume             Decimal?            @db.Decimal(10, 2)
+  weight             Decimal?                @db.Decimal(10, 2)
+  volume             Decimal?                @db.Decimal(10, 2)
   moq                Int?
   leadTime           Int?
-  status             ProductStatus       @default(ACTIVE)
+  status             ProductStatus           @default(ACTIVE)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
   deletedAt          DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  categoryId         String?
+  categoryOld        String?
   inboundOrderItems  InboundOrderItem[]
   inventoryItems     InventoryItem[]
   inventoryLogs      InventoryLog[]
   orderItems         OrderItem[]
   outboundOrderItems OutboundOrderItem[]
   overseasInventory  OverseasInventory[]
+  attributeValues    ProductAttributeValue[]
+  category           ProductCategory?        @relation(fields: [categoryId], references: [id])
   profitDetails      ProfitDetail[]
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
@@ -755,7 +758,8 @@ model ProductCategory {
   parent             ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children           ProductCategory[]   @relation("CategoryHierarchy")
   productComparisons ProductComparison[]
-  products           ProductResearch[]
+  productResearches  ProductResearch[]
+  products           Product[]
   researchTasks      ResearchTask[]
 
   @@index([parentId])
@@ -765,26 +769,27 @@ model ProductCategory {
 }
 
 model AttributeTemplate {
-  id             String                  @id @default(cuid())
+  id             String                          @id @default(cuid())
   name           String
   nameEn         String?
-  code           String                  @unique
+  code           String                          @unique
   categoryId     String
-  type           AttributeType           @default(TEXT)
+  type           AttributeType                   @default(TEXT)
   unit           String?
   options        String[]
-  isRequired     Boolean                 @default(false)
-  isComparable   Boolean                 @default(true)
-  sortOrder      Int                     @default(0)
+  isRequired     Boolean                         @default(false)
+  isComparable   Boolean                         @default(true)
+  sortOrder      Int                             @default(0)
   description    String?
   validationRule String?
   defaultValue   String?
   placeholder    String?
-  isActive       Boolean                 @default(true)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
-  category       ProductCategory         @relation(fields: [categoryId], references: [id])
-  values         ProductAttributeValue[]
+  isActive       Boolean                         @default(true)
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+  category       ProductCategory                 @relation(fields: [categoryId], references: [id])
+  productValues  ProductAttributeValue[]
+  researchValues ProductResearchAttributeValue[]
 
   @@index([categoryId])
   @@index([code])
@@ -793,8 +798,32 @@ model AttributeTemplate {
   @@map("attribute_templates")
 }
 
+model ProductAttributeValue {
+  id           String            @id @default(cuid())
+  productId    String
+  attributeId  String
+  valueText    String?
+  valueNumber  Decimal?          @db.Decimal(20, 4)
+  valueBoolean Boolean?
+  valueDate    DateTime?
+  valueOptions String[]
+  unit         String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  attribute    AttributeTemplate @relation(fields: [attributeId], references: [id])
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, attributeId])
+  @@index([productId])
+  @@index([attributeId])
+  @@index([attributeId], map: "ProductAttributeValue_attributeId_idx")
+  @@index([productId], map: "ProductAttributeValue_productId_idx")
+  @@map("product_attribute_values")
+}
+
 model ProductResearch {
-  id                     String                  @id @default(cuid())
+  id                     String                          @id @default(cuid())
   name                   String
   nameEn                 String?
   categoryId             String
@@ -803,43 +832,41 @@ model ProductResearch {
   model                  String?
   manufacturer           String?
   manufacturerEn         String?
-  originCountry          String?                 @default("CN")
+  originCountry          String?                         @default("CN")
   sourceUrl              String?
   sourcePlatform         String?
   mainImage              String?
   images                 String[]
-  status                 ResearchStatus          @default(DRAFT)
-  priority               Priority                @default(MEDIUM)
+  status                 ResearchStatus                  @default(DRAFT)
+  priority               Priority                        @default(MEDIUM)
   assignedTo             String?
   tags                   String[]
   notes                  String?
   conclusion             String?
-  rating                 Decimal?                @db.Decimal(2, 1)
-  costPrice              Decimal?                @db.Decimal(10, 2)
-  salePrice              Decimal?                @db.Decimal(10, 2)
-  currency               String                  @default("CNY")
+  rating                 Decimal?                        @db.Decimal(2, 1)
+  costPrice              Decimal?                        @db.Decimal(10, 2)
+  salePrice              Decimal?                        @db.Decimal(10, 2)
+  currency               String                          @default("CNY")
   moq                    Int?
   leadTime               Int?
   specification          String?
-  weight                 Decimal?                @db.Decimal(10, 2)
-  volume                 Decimal?                @db.Decimal(10, 2)
+  weight                 Decimal?                        @db.Decimal(10, 2)
+  volume                 Decimal?                        @db.Decimal(10, 2)
   dimensions             String?
   researchedAt           DateTime?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
   researchTaskId         String?
-  attributes             ProductAttributeValue[]
   productComparisonItems ProductComparisonItem[]
   comparisons            ProductComparison[]
-  category               ProductCategory         @relation(fields: [categoryId], references: [id])
-  researchTask           ResearchTask?           @relation(fields: [researchTaskId], references: [id])
+  category               ProductCategory                 @relation(fields: [categoryId], references: [id])
+  researchTask           ResearchTask?                   @relation(fields: [researchTaskId], references: [id])
+  attributes             ProductResearchAttributeValue[]
   researchAttachments    ResearchAttachment[]
-  
-  // Composite indexes for common query patterns
+
   @@index([categoryId, status])
   @@index([status, createdAt])
   @@index([assignedTo, status])
-
   @@index([categoryId])
   @@index([status])
   @@index([assignedTo])
@@ -848,10 +875,13 @@ model ProductResearch {
   @@index([name])
   @@index([conclusion])
   @@index([priority])
+  @@index([assignedTo], map: "ProductResearch_assignedTo_idx")
+  @@index([categoryId], map: "ProductResearch_categoryId_idx")
+  @@index([status], map: "ProductResearch_status_idx")
   @@map("product_research")
 }
 
-model ProductAttributeValue {
+model ProductResearchAttributeValue {
   id           String            @id @default(cuid())
   productId    String
   attributeId  String
@@ -870,7 +900,7 @@ model ProductAttributeValue {
   @@unique([productId, attributeId])
   @@index([productId])
   @@index([attributeId])
-  @@map("product_attribute_values")
+  @@map("product_research_attribute_values")
 }
 
 model ProductComparison {
@@ -1168,6 +1198,7 @@ model ReportSchedule {
 model Permission {
   id          String           @id @default(cuid())
   name        String           @unique
+  code        String           @unique
   displayName String
   module      String
   description String?
@@ -1177,6 +1208,7 @@ model Permission {
   roles       RolePermission[]
 
   @@index([module, isActive])
+  @@index([code])
   @@map("permissions")
 }
 
@@ -1757,11 +1789,11 @@ model Commission {
 }
 
 enum RoleEnum {
-  ADMIN       // 管理员：全部权限
-  SALES       // 业务员：客户/报价/订单
-  PURCHASING  // 采购员：供应商/采购/入库
-  WAREHOUSE   // 仓管员：出入库/库存
-  VIEWER      // 只读访客
+  ADMIN
+  SALES
+  PURCHASING
+  WAREHOUSE
+  VIEWER
 }
 
 enum CustomerStatus {
