@@ -50,6 +50,7 @@ interface User {
   email: string;
   name: string;
   role: 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER';
+  roles?: Role[]; // 多角色支持
   avatar?: string;
   createdAt: string;
   updatedAt: string;
@@ -107,7 +108,7 @@ export default function UsersPage() {
     email: '',
     name: '',
     password: '',
-    role: 'SALES' as 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER',
+    roleIds: [] as string[], // 多角色支持
   });
   
   // 审批相关状态
@@ -153,7 +154,22 @@ export default function UsersPage() {
       if (response.ok) {
         const data = await response.json();
         const usersData = Array.isArray(data) ? data : [];
-        setUsers(usersData);
+        // 为每个用户获取角色列表
+        const usersWithRoles = await Promise.all(
+          usersData.map(async (user: User) => {
+            try {
+              const res = await fetch(`/api/users/${user.id}/roles`);
+              if (res.ok) {
+                const rolesData = await res.json();
+                return { ...user, roles: rolesData.data || rolesData || [] };
+              }
+            } catch (error) {
+              console.error(`Failed to fetch roles for user ${user.id}:`, error);
+            }
+            return { ...user, roles: [] };
+          })
+        );
+        setUsers(usersWithRoles);
       } else {
         setUsers([]);
       }
@@ -218,12 +234,15 @@ export default function UsersPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userFormData),
+        body: JSON.stringify({
+          ...userFormData,
+          roleIds: userFormData.roleIds, // 多角色支持
+        }),
       });
       if (response.ok) {
         await fetchUsers();
         setIsCreateUserDialogOpen(false);
-        setUserFormData({ email: '', name: '', password: '', role: 'SALES' });
+        setUserFormData({ email: '', name: '', password: '', roleIds: [] });
       }
     } catch (error) {
       console.error('Failed to create user:', error);
@@ -233,16 +252,29 @@ export default function UsersPage() {
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
     try {
+      // 更新用户基本信息
       const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userFormData),
+        body: JSON.stringify({
+          email: userFormData.email,
+          name: userFormData.name,
+          password: userFormData.password || undefined, // 空密码则不修改
+        }),
       });
       if (response.ok) {
+        // 更新用户角色
+        if (selectedUser) {
+          await fetch(`/api/users/${selectedUser.id}/roles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roleIds: userFormData.roleIds }),
+          });
+        }
         await fetchUsers();
         setIsEditUserDialogOpen(false);
         setSelectedUser(null);
-        setUserFormData({ email: '', name: '', password: '', role: 'SALES' });
+        setUserFormData({ email: '', name: '', password: '', roleIds: [] });
       }
     } catch (error) {
       console.error('Failed to update user:', error);
@@ -269,8 +301,16 @@ export default function UsersPage() {
       email: user.email,
       name: user.name || '',
       password: '',
-      role: user.role,
+      roleIds: [], // 编辑时从 API 获取实际角色
     });
+    // 获取用户当前角色
+    fetch(`/api/users/${user.id}/roles`)
+      .then(res => res.json())
+      .then(data => {
+        const roleIds = (data.data || data || []).map((r: any) => r.id);
+        setUserFormData(prev => ({ ...prev, roleIds }));
+      })
+      .catch(() => setUserFormData(prev => ({ ...prev, roleIds: [] })));
     setIsEditUserDialogOpen(true);
   };
 
@@ -731,10 +771,21 @@ export default function UsersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={roleLabels[user.role].color}>
-                              <Shield className="h-3 w-3 mr-1" />
-                              {roleLabels[user.role].label}
-                            </Badge>
+                            {user.roles && user.roles.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {user.roles.map((role) => (
+                                  <Badge key={role.id} className={roleLabels[role.name as keyof typeof roleLabels]?.color || 'bg-zinc-100 text-zinc-800'}>
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    {role.displayName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <Badge className={roleLabels[user.role].color}>
+                                <Shield className="h-3 w-3 mr-1" />
+                                {roleLabels[user.role].label}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>
                             {new Date(user.createdAt).toLocaleDateString('zh-CN')}
@@ -1003,10 +1054,10 @@ export default function UsersPage() {
         setIsEditUserDialogOpen(open);
         if (!open) {
           setSelectedUser(null);
-          setUserFormData({ email: '', name: '', password: '', role: 'SALES' });
+          setUserFormData({ email: '', name: '', password: '', roleIds: [] });
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedUser ? '编辑用户' : '创建新用户'}</DialogTitle>
           </DialogHeader>
@@ -1041,22 +1092,55 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">角色</Label>
-              <Select
-                value={userFormData.role}
-                onValueChange={(value: any) => setUserFormData({ ...userFormData, role: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ADMIN">管理员</SelectItem>
-                  <SelectItem value="SALES">业务员</SelectItem>
-                  <SelectItem value="PURCHASING">采购员</SelectItem>
-                  <SelectItem value="WAREHOUSE">仓管员</SelectItem>
-                  <SelectItem value="VIEWER">访客</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>角色（支持多选）</Label>
+              <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                {rolesLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">加载角色列表中...</div>
+                ) : roles.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>暂无角色</p>
+                    <p className="text-xs mt-1">请先在“角色权限管理”标签页创建角色</p>
+                  </div>
+                ) : (
+                  roles.map((role) => (
+                    <div
+                      key={role.id}
+                      className="flex items-center gap-2 p-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer"
+                      onClick={() => {
+                        const newRoleIds = userFormData.roleIds.includes(role.id)
+                          ? userFormData.roleIds.filter(id => id !== role.id)
+                          : [...userFormData.roleIds, role.id];
+                        setUserFormData({ ...userFormData, roleIds: newRoleIds });
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={userFormData.roleIds.includes(role.id)}
+                        onChange={() => {
+                          const newRoleIds = userFormData.roleIds.includes(role.id)
+                            ? userFormData.roleIds.filter(id => id !== role.id)
+                            : [...userFormData.roleIds, role.id];
+                          setUserFormData({ ...userFormData, roleIds: newRoleIds });
+                        }}
+                        className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                        id={`role-${role.id}`}
+                      />
+                      <label htmlFor={`role-${role.id}`} className="flex-1 cursor-pointer text-sm">
+                        <span className="font-medium">{role.displayName}</span>
+                        {role.isSystem && (
+                          <Badge variant="secondary" className="text-xs ml-2">系统</Badge>
+                        )}
+                        {role.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
+                        )}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                已选择 {userFormData.roleIds.length} 个角色
+              </p>
             </div>
             <Button className="w-full" onClick={selectedUser ? handleUpdateUser : handleCreateUser}>
               {selectedUser ? '保存修改' : '创建用户'}

@@ -1,0 +1,43 @@
+
+> trade-erp@0.9.3 dev
+> next dev -p 3001
+
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/apple/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/apple/clawd/trade-erp/package-lock.json
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.50.66:3001
+- Environments: .env.local, .env
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 522ms
+ GET /login 200 in 630ms (compile: 498ms, proxy.ts: 37ms, render: 96ms)
+ GET / 200 in 97ms (compile: 41ms, proxy.ts: 2ms, render: 53ms)
+ GET / 200 in 35ms (compile: 1433µs, proxy.ts: 1389µs, render: 32ms)
+⚠ Unsupported metadata viewport is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata viewport is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET / 200 in 49ms (compile: 14ms, proxy.ts: 1856µs, render: 33ms)
+⚠ Unsupported metadata viewport is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET / 200 in 16ms (compile: 917µs, proxy.ts: 1390µs, render: 14ms)
+⚠ Unsupported metadata viewport is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET / 200 in 14ms (compile: 1277µs, proxy.ts: 1170µs, render: 12ms)
+ GET / 200 in 7ms (compile: 932µs, proxy.ts: 935µs, render: 5ms)
+ GET / 200 in 44ms (compile: 12ms, proxy.ts: 1548µs, render: 30ms)
+ GET / 200 in 21ms (compile: 1099µs, proxy.ts: 1342µs, render: 19ms)
+ GET / 200 in 14ms (compile: 1030µs, proxy.ts: 740µs, render: 13ms)
+ GET / 200 in 8ms (compile: 781µs, proxy.ts: 815µs, render: 7ms)
+ GET /login 200 in 98ms (compile: 21ms, proxy.ts: 1402µs, render: 75ms)
+ GET /login 200 in 18ms (compile: 1233µs, proxy.ts: 1255µs, render: 15ms)
+ GET /login?from=%2Fproducts 200 in 15ms (compile: 886µs, proxy.ts: 679µs, render: 14ms)
+✓ Compiled in 53ms
+[?25h
