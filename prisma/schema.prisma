@@ -230,6 +230,9 @@ model Order {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?              // 软删除
+  sourcePlatform    String?                // 来源平台：'alibaba', 'tiktok', 'amazon', 'shopify'
+  platformOrderId   String?                // 平台原始订单号
+  platformData      Json?                  // 平台原始数据（用于调试）
   items             OrderItem[]
   customer          Customer           @relation(fields: [customerId], references: [id])
   salesRep          User?              @relation("SalesRep", fields: [salesRepId], references: [id])
@@ -2188,4 +2191,43 @@ enum CommissionStatus {
   APPROVED
   PAID
   CANCELLED
+}
+
+// ============================================
+// 多平台订单同步模块 (v0.9.7)
+// 支持：阿里国际站、TikTok Shop、Amazon、Shopify 等
+// ============================================
+
+model PlatformSyncConfig {
+  id              String   @id @default(cuid())
+  platformCode    String   // 'alibaba', 'tiktok', 'amazon', 'shopify'
+  platformName    String   // 显示名称
+  enabled         Boolean  @default(true)
+  syncIntervalMin Int      @default(120)  // 默认 2 小时
+  lastSyncAt      DateTime?
+  lastSyncStatus  String?  // success, failed, partial, not_configured
+  credentials     Json     // 平台凭据（加密存储）
+  settings        Json?    // 平台特定设置
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([platformCode])
+  @@map("platform_sync_configs")
+}
+
+model PlatformSyncLog {
+  id          String   @id @default(cuid())
+  platformCode String  // 来源平台
+  triggerType String   // manual, scheduled, webhook
+  status      String   // success, failed, partial
+  ordersFound Int      @default(0)
+  ordersSynced Int     @default(0)
+  ordersFailed Int     @default(0)
+  errorMessage String?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  @@map("platform_sync_logs")
+  @@index([platformCode, startedAt])
 }
