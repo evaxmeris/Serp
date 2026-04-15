@@ -7,15 +7,25 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchCategorySchema } from '@/lib/api-schemas';
 
 // ============================================
 // GET /api/product-research/categories
 // 获取品类列表（支持树形结构）
 // ============================================
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get('parentId'); // 父品类 ID（获取子品类）
     const isActive = searchParams.get('isActive'); // 是否只获取启用品类
@@ -86,9 +96,16 @@ export async function GET(request: Request) {
 // POST /api/product-research/categories
 // 创建新品类
 // ============================================
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
+    const v = validateOrReturn(CreateResearchCategorySchema, body);
+    if (!v.success) return v.response;
     const {
       name,
       nameEn,
@@ -99,18 +116,7 @@ export async function POST(request: Request) {
       icon,
       sortOrder,
       isActive,
-    } = body;
-
-    // 验证必填字段
-    if (!name || !code) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '品类名称和编码为必填项' 
-        },
-        { status: 400 }
-      );
-    }
+    } = v.data;
 
     // 检查编码是否已存在
     const existingCategory = await prisma.productCategory.findUnique({

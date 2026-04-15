@@ -117,11 +117,8 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
   // 1. 先尝试从缓存获取
   const cachedPermissions = getPermissionsFromCache(userId);
   if (cachedPermissions) {
-    console.log(`[Permissions Cache] HIT for userId: ${userId}`);
     return cachedPermissions;
   }
-  
-  console.log(`[Permissions Cache] MISS for userId: ${userId}, fetching from DB...`);
   
   // 2. 缓存未命中，从数据库查询
   // 从用户角色关联表获取用户的所有角色
@@ -150,7 +147,6 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
       const permissions = getDefaultPermissionsForRole(user.role);
       // 存入缓存
       setPermissionsToCache(userId, permissions);
-      console.log(`[Permissions Cache] STORED for userId: ${userId} (${permissions.length} permissions)`);
       return permissions;
     }
     const emptyPermissions: string[] = [];
@@ -168,7 +164,6 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
   
   // 3. 存入缓存
   setPermissionsToCache(userId, uniquePermissions);
-  console.log(`[Permissions Cache] STORED for userId: ${userId} (${uniquePermissions.length} permissions)`);
   
   return uniquePermissions;
 }

@@ -6,14 +6,22 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // ============================================
 // DELETE /api/product-research/products/batch-delete
 // 批量删除产品调研
 // ============================================
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
     const { ids } = body;
 

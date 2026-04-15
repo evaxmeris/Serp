@@ -268,7 +268,7 @@ export default function PurchaseOrdersPage() {
                       </TableCell>
                       <TableCell>{po._count?.items || 0}</TableCell>
                       <TableCell>
-                        {po.currency} {po.totalAmount.toFixed(2)}
+                        {po.currency} {(po.totalAmount ?? 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         {po.deliveryDate

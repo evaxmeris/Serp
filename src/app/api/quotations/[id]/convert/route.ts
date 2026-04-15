@@ -1,6 +1,19 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { quotationConvertSchema } from '@/lib/validators/quotation';
+import { validateOrReturn } from '@/lib/api-validation';
+
+const ConvertSchema = z.object({
+  paymentTerms: z.string().optional(),
+  deliveryTerms: z.string().optional(),
+  deliveryDate: z.string().datetime().optional(),
+  deliveryDeadline: z.string().datetime().optional(),
+  shippingAddress: z.string().optional(),
+  shippingContact: z.string().optional(),
+  shippingPhone: z.string().optional(),
+  notes: z.string().optional(),
+  internalNotes: z.string().optional(),
+});
 
 // POST /api/quotations/[id]/convert - 报价单转订单
 export async function POST(
@@ -11,8 +24,9 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    // 验证输入
-    const validatedData = quotationConvertSchema.parse(body);
+    // Zod 验证
+    const v = validateOrReturn(ConvertSchema, body);
+    if (!v.success) return v.response;
 
     // 检查报价单是否存在
     const quotation = await prisma.quotation.findUnique({
@@ -63,15 +77,15 @@ export async function POST(
         totalAmount: quotation.totalAmount,
         paidAmount: 0,
         balanceAmount: quotation.totalAmount,
-        paymentTerms: validatedData.paymentTerms || quotation.paymentTerms,
-        deliveryTerms: validatedData.deliveryTerms || quotation.deliveryTerms,
-        deliveryDate: validatedData.deliveryDate ? new Date(validatedData.deliveryDate) : null,
-        deliveryDeadline: validatedData.deliveryDeadline ? new Date(validatedData.deliveryDeadline) : null,
-        shippingAddress: validatedData.shippingAddress,
-        shippingContact: validatedData.shippingContact,
-        shippingPhone: validatedData.shippingPhone,
-        notes: validatedData.notes,
-        internalNotes: validatedData.internalNotes,
+        paymentTerms: body.paymentTerms || quotation.paymentTerms,
+        deliveryTerms: body.deliveryTerms || quotation.deliveryTerms,
+        deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
+        deliveryDeadline: body.deliveryDeadline ? new Date(body.deliveryDeadline) : null,
+        shippingAddress: body.shippingAddress,
+        shippingContact: body.shippingContact,
+        shippingPhone: body.shippingPhone,
+        notes: body.notes,
+        internalNotes: body.internalNotes,
         items: {
           create: quotation.items.map((item: any) => ({
             productId: item.productId,

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { quotationCreateSchema, quotationListQuerySchema } from '@/lib/validators/quotation';
+import { quotationListQuerySchema } from '@/lib/validators/quotation';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateQuotationSchema } from '@/lib/api-schemas';
 
 // GET /api/quotations - 获取报价列表（支持分页、筛选、搜索）
 export async function GET(request: Request) {
@@ -99,7 +101,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     
     // 验证输入
-    const validatedData = quotationCreateSchema.parse(body);
+    const v = validateOrReturn(CreateQuotationSchema, body);
+    if (!v.success) return v.response;
+    const validatedData = v.data;
 
     // 生成报价单号
     const quotationNo = `QT${Date.now()}`;
@@ -124,7 +128,7 @@ export async function POST(request: Request) {
         items: {
           create: validatedData.items.map((item) => ({
             productId: item.productId,
-            productName: item.productName,
+            productName: item.productName || '',
             specification: item.specification,
             quantity: item.quantity,
             unitPrice: item.unitPrice,

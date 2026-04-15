@@ -1077,7 +1077,7 @@ export default function ProductNewPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">毛利润</p>
                   <p className={`text-2xl font-bold ${profitData.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    ¥{profitData.profit.toFixed(2)}
+                    ¥{(profitData.profit ?? 0).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -1091,7 +1091,7 @@ export default function ProductNewPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">毛利率</p>
                   <p className={`text-2xl font-bold ${profitData.profitMargin >= 20 ? 'text-green-600' : profitData.profitMargin >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
-                    {profitData.profitMargin.toFixed(1)}%
+                    {(profitData.profitMargin ?? 0).toFixed(1)}%
                   </p>
                 </div>
               </div>
@@ -1105,7 +1105,7 @@ export default function ProductNewPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">月毛利</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    ¥{(profitData.profit * (parseFloat(marketData.monthlySales) || 0)).toFixed(0)}
+                    ¥{((profitData.profit ?? 0) * (parseFloat(marketData.monthlySales) || 0)).toFixed(0)}
                   </p>
                 </div>
               </div>
@@ -1122,7 +1122,7 @@ export default function ProductNewPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">平台佣金:</span>
-              <span>¥{profitData.platformFee.toFixed(2)}</span>
+              <span>¥{(profitData.platformFee ?? 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">头程运费:</span>
@@ -1134,7 +1134,7 @@ export default function ProductNewPage() {
             </div>
             <div className="flex justify-between font-medium border-t pt-2 mt-2">
               <span>总成本:</span>
-              <span>¥{profitData.totalCost.toFixed(2)}</span>
+              <span>¥{(profitData.totalCost ?? 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -1292,7 +1292,7 @@ export default function ProductNewPage() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">毛利率:</span>
               <span className={`font-medium ${profitData.profitMargin >= 20 ? 'text-green-600' : 'text-yellow-600'}`}>
-                {profitData.profitMargin.toFixed(1)}%
+                {(profitData.profitMargin ?? 0).toFixed(1)}%
               </span>
             </div>
           </div>

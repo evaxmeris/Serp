@@ -5,6 +5,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/orders/batch-ship
@@ -23,22 +25,10 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { ids, trackingNumbers } = body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: '订单 ID 不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (ids.length > 100) {
-      return NextResponse.json(
-        { error: '单次最多发货 100 条订单' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.object({ ids: z.array(z.string()) }), body);
+    if (!v.success) return v.response;
+    const { ids } = v.data;
+    const trackingNumbers = (body as any).trackingNumbers;
 
     // 查询订单
     const orders = await prisma.order.findMany({
@@ -61,40 +51,44 @@ export async function POST(request: Request) {
       );
     }
 
-    // 批量更新订单状态
-    const result = await prisma.order.updateMany({
-      where: { id: { in: ids } },
-      data: {
-        status: 'SHIPPED',
-        // 如果有物流单号，更新到第一个出库单
-      },
-    });
-
-    // 创建出库单（如果还没有）
-    for (const orderId of ids) {
-      const existingOutbound = await prisma.outboundOrder.findFirst({
-        where: { orderId },
+    // 使用事务包装所有数据库操作
+    const result = await prisma.$transaction(async (tx) => {
+      // 批量更新订单状态
+      const orderResult = await tx.order.updateMany({
+        where: { id: { in: ids } },
+        data: {
+          status: 'SHIPPED',
+        },
       });
 
-      if (!existingOutbound) {
-        await prisma.outboundOrder.create({
-          data: {
-            orderId,
-            warehouseId: 'default',
-            status: 'SHIPPED',
-            shipmentId: trackingNumbers?.[orderId] || null,
-          },
+      // 处理出库单
+      for (const orderId of ids) {
+        const existingOutbound = await tx.outboundOrder.findFirst({
+          where: { orderId },
         });
-      } else {
-        await prisma.outboundOrder.update({
-          where: { id: existingOutbound.id },
-          data: {
-            status: 'SHIPPED',
-            shipmentId: trackingNumbers?.[orderId] || existingOutbound.shipmentId,
-          },
-        });
+
+        if (!existingOutbound) {
+          await tx.outboundOrder.create({
+            data: {
+              orderId,
+              warehouseId: 'default',
+              status: 'SHIPPED',
+              shipmentId: trackingNumbers?.[orderId] || null,
+            },
+          });
+        } else {
+          await tx.outboundOrder.update({
+            where: { id: existingOutbound.id },
+            data: {
+              status: 'SHIPPED',
+              shipmentId: trackingNumbers?.[orderId] || existingOutbound.shipmentId,
+            },
+          });
+        }
       }
-    }
+
+      return orderResult;
+    });
 
     return NextResponse.json({
       success: true,

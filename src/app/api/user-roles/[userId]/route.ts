@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/user-roles/:userId - 获取用户的所有角色
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { userId } = await params;
     const userRoles = await prisma.userRole.findMany({
       where: { userId },
@@ -49,10 +57,15 @@ export async function GET(
  * DELETE /api/user-roles/:userId - 移除用户的某个角色
  */
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { userId } = await params;
     const { searchParams } = new URL(request.url);
     const roleId = searchParams.get('roleId');

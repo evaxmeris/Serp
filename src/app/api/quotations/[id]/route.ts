@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { quotationUpdateSchema } from '@/lib/validators/quotation';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdateQuotationSchema } from '@/lib/api-schemas';
 
 // GET /api/quotations/[id] - 获取报价单详情
 export async function GET(
@@ -62,7 +63,9 @@ export async function PUT(
     const body = await request.json();
 
     // 验证输入
-    const validatedData = quotationUpdateSchema.parse(body);
+    const v = validateOrReturn(UpdateQuotationSchema, body);
+    if (!v.success) return v.response;
+    const validatedData = v.data;
 
     // 检查报价单是否存在
     const existingQuotation = await prisma.quotation.findUnique({

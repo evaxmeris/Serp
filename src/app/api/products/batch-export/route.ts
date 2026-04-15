@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/products/batch-export
@@ -24,7 +26,9 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { ids } = body;
+    const v = validateOrReturn(z.object({ ids: z.array(z.string()).optional(), format: z.enum(['csv','excel']).optional() }), body);
+    if (!v.success) return v.response;
+    const { ids } = v.data;
 
     // 构建查询条件
     const whereClause: any = {};

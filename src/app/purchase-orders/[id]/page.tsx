@@ -171,9 +171,9 @@ export default function PurchaseOrderDetailPage() {
                   <tr key={item.id} className="border-b">
                     <td className="py-3">{item.productName}</td>
                     <td className="text-right">{item.quantity}</td>
-                    <td className="text-right">{item.unitPrice.toFixed(2)}</td>
+                    <td className="text-right">{(item.unitPrice ?? 0).toFixed(2)}</td>
                     <td className="text-right font-semibold">
-                      {item.amount.toFixed(2)}
+                      {(item.amount ?? 0).toFixed(2)}
                     </td>
                   </tr>
                 ))}

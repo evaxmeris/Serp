@@ -1,0 +1,22 @@
+[
+  {
+    "content": "P0: 实现 JWT 认证中间件",
+    "activeForm": "分析认证相关代码",
+    "status": "in_progress"
+  },
+  {
+    "content": "P1: API 响应格式统一化",
+    "activeForm": "等待 P0 完成",
+    "status": "pending"
+  },
+  {
+    "content": "P2: 数据库 Schema 优化",
+    "activeForm": "等待 P1 完成",
+    "status": "pending"
+  },
+  {
+    "content": "P3: 代码质量清理",
+    "activeForm": "等待 P2 完成",
+    "status": "pending"
+  }
+]

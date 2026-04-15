@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CashflowReportSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/v1/reports/cashflow
@@ -59,7 +61,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+const body = await request.json();
+
+    // Zod 验证
+    const v = validateOrReturn(CashflowReportSchema, body);
+    if (!v.success) return v.response;
     const { startDate, endDate } = body;
 
     if (!startDate || !endDate) {

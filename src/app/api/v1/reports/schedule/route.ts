@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * GET /api/v1/reports/schedule
@@ -68,7 +70,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { reportId, name, cronExpression, timezone = 'Asia/Shanghai', config } = body;
+    const v = validateOrReturn(z.object({ reportId: z.string(), name: z.string(), cronExpression: z.string(), timezone: z.string().optional(), config: z.record(z.string(), z.any()).optional() }), body);
+    if (!v.success) return v.response;
+    const { reportId, name, cronExpression, timezone = 'Asia/Shanghai', config } = v.data;
 
     if (!reportId || !name || !cronExpression) {
       return NextResponse.json(
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
         name,
         cronExpression,
         timezone,
-        config: config || {},
+        config: config ? (JSON.parse(JSON.stringify(config)) as any) : {},
         isActive: true
       },
       include: {

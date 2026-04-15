@@ -91,6 +91,20 @@ export default function CashflowReportPage() {
     }
   }
 
+  if (!data) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">💰 现金流报表</h1>
+          <p className="text-muted-foreground">监控企业现金流入流出，保障资金安全</p>
+        </div>
+        <div className="text-center py-12 text-gray-500">
+          <p>请选择统计周期并点击「加载报表」查看数据</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">

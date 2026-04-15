@@ -6,6 +6,9 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateProductSchema } from '@/lib/api-schemas';
+import { z } from 'zod';
 
 /**
  * POST /api/products/batch-import
@@ -24,22 +27,10 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { products, mode = 'create' } = body;
-
-    if (!Array.isArray(products) || products.length === 0) {
-      return NextResponse.json(
-        { error: '产品数据不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (products.length > 1000) {
-      return NextResponse.json(
-        { error: '单次最多导入 1000 条产品' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.array(CreateProductSchema), body);
+    if (!v.success) return v.response;
+    const products = v.data;
+    const mode: 'create' | 'update' = body.mode === 'update' ? 'update' : 'create';
 
     const results = {
       success: 0,
@@ -51,16 +42,6 @@ export async function POST(request: Request) {
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       try {
-        // 验证必填字段
-        if (!product.sku || !product.name) {
-          results.failed++;
-          results.errors.push({
-            index: i + 1,
-            error: '缺少必填字段：SKU 或名称',
-          });
-          continue;
-        }
-
         // 检查 SKU 是否重复
         const existing = await prisma.product.findUnique({
           where: { sku: product.sku },
@@ -86,8 +67,8 @@ export async function POST(request: Request) {
               costPrice: product.costPrice || 0,
               salePrice: product.salePrice || 0,
               currency: product.currency || 'USD',
-              status: product.status || 'ACTIVE',
-              category: product.category,
+              status: product.status as any,
+              categoryId: product.categoryId || undefined,
               description: product.description,
               images: product.images || [],
             },
@@ -102,8 +83,8 @@ export async function POST(request: Request) {
               costPrice: product.costPrice || 0,
               salePrice: product.salePrice || 0,
               currency: product.currency || 'USD',
-              status: product.status || 'ACTIVE',
-              category: product.category,
+              status: product.status as any,
+              categoryId: product.categoryId || undefined,
               description: product.description,
               images: product.images || [],
             },

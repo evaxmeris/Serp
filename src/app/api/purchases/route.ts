@@ -1,6 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreatePurchaseOrderSchema } from '@/lib/api-schemas';
 
 // GET /api/purchases - 获取采购单列表（行级隔离）
 // 普通用户只能看到自己负责的采购单，管理员可以看到所有
@@ -104,6 +106,8 @@ export async function POST(request: NextRequest) {
     const currentUser = session;
 
     const body = await request.json();
+    const v = validateOrReturn(CreatePurchaseOrderSchema, body);
+    if (!v.success) return v.response;
     const {
       supplierId,
       currency,
@@ -113,21 +117,7 @@ export async function POST(request: NextRequest) {
       notes,
       items,
       purchaserId,
-    } = body;
-
-    if (!supplierId) {
-      return NextResponse.json(
-        { error: 'Supplier ID is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Purchase order items are required' },
-        { status: 400 }
-      );
-    }
+    } = v.data;
 
     // BUG-PERM-007: 如果没有指定采购人，自动设置为当前用户
     const finalPurchaserId = purchaserId || currentUser.id;

@@ -7,6 +7,8 @@ import {
   notFoundResponse,
   conflictResponse,
 } from '@/lib/api-response';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * 出库单确认 API
@@ -29,7 +31,10 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json();
+    const v = validateOrReturn(z.object({ notes: z.string().optional() }), body);
+    if (!v.success) return v.response;
+    const { notes } = v.data;
 
     // 检查出库单是否存在
     const outboundOrder = await prisma.outboundOrder.findUnique({

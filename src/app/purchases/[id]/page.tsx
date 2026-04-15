@@ -170,7 +170,7 @@ export default function PurchaseDetailPage() {
                 <CreditCard className="h-4 w-4 text-gray-500" />
                 <div>
                   <label className="text-sm text-gray-500">金额</label>
-                  <p className="font-medium">{purchase.currency} {purchase.totalAmount.toFixed(2)}</p>
+                  <p className="font-medium">{purchase.currency} {(purchase.totalAmount ?? 0).toFixed(2)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -226,8 +226,8 @@ export default function PurchaseDetailPage() {
                   <TableCell>{item.specification || '-'}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">{item.receivedQty}</TableCell>
-                  <TableCell className="text-right">{item.unitPrice.toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-medium">{item.amount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">{(item.unitPrice ?? 0).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-medium">{(item.amount ?? 0).toFixed(2)}</TableCell>
                   <TableCell>{item.notes || '-'}</TableCell>
                 </TableRow>
               ))}
@@ -238,7 +238,7 @@ export default function PurchaseDetailPage() {
             <div className="text-right">
               <span className="text-lg font-semibold">总计：</span>
               <span className="text-2xl font-bold ml-2">
-                {purchase.currency} {purchase.totalAmount.toFixed(2)}
+                {purchase.currency} {(purchase.totalAmount ?? 0).toFixed(2)}
               </span>
             </div>
           </div>

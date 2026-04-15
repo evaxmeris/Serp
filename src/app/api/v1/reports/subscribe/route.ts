@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { sendEmail } from '@/lib/email';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateSubscriptionSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/v1/reports/subscribe
@@ -71,7 +73,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { reportId, userId, frequency, format = 'pdf', email } = body;
+    const v = validateOrReturn(CreateSubscriptionSchema, body);
+    if (!v.success) return v.response;
+    const { reportId, frequency, format = 'pdf' as const, email } = v.data;
+    const { userId } = body as any;
 
     if (!reportId || !userId || !frequency) {
       return NextResponse.json(
@@ -286,6 +291,4 @@ async function sendConfirmationEmail(email: string, subscription: any) {
     html,
     text: `您已成功订阅报表：${subscription.report.name}，发送频率：${frequencyMap[subscription.frequency] || subscription.frequency}`
   });
-
-  console.log(`订阅确认邮件已发送至：${email}`);
 }

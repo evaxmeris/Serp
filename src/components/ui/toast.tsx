@@ -83,17 +83,9 @@ export function ToastContainer({ toasts, removeToast, position = 'top-right' }: 
     'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2',
   };
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('[ToastContainer] Rendered with toasts:', toasts.length, toasts);
-  }, [toasts]);
-
   if (typeof window === 'undefined') {
-    console.log('[ToastContainer] SSR - returning null');
     return null;
   }
-
-  console.log('[ToastContainer] Creating portal, toasts count:', toasts.length);
 
   return createPortal(
     <div
@@ -121,44 +113,29 @@ export function useToast() {
 
   const addToast = React.useCallback((message: string, type: ToastProps['type'] = 'info', duration?: number) => {
     const id = Math.random().toString(36).substr(2, 9);
-    console.log('[useToast] Adding toast:', { id, message, type, duration });
-    setToasts((prev) => {
-      const newToasts = [...prev, { id, message, type, duration }];
-      console.log('[useToast] New toasts state:', newToasts);
-      return newToasts;
-    });
+    setToasts((prev) => [...prev, { id, message, type, duration }]);
     return id;
   }, []);
 
   const removeToast = React.useCallback((id: string) => {
-    console.log('[useToast] Removing toast:', id);
-    setToasts((prev) => {
-      const newToasts = prev.filter((t) => t.id !== id);
-      console.log('[useToast] After remove:', newToasts);
-      return newToasts;
-    });
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const toast = React.useMemo(() => ({
     success: (message: string, duration?: number) => {
-      console.log('[useToast.toast] Calling success:', message);
       return addToast(message, 'success', duration);
     },
     error: (message: string, duration?: number) => {
-      console.log('[useToast.toast] Calling error:', message);
       return addToast(message, 'error', duration);
     },
     warning: (message: string, duration?: number) => {
-      console.log('[useToast.toast] Calling warning:', message);
       return addToast(message, 'warning', duration);
     },
     info: (message: string, duration?: number) => {
-      console.log('[useToast.toast] Calling info:', message);
       return addToast(message, 'info', duration);
     },
   }), [addToast]);
 
-  console.log('[useToast] Returning:', { toastsCount: toasts.length, toasts });
   return { toasts, removeToast, toast };
 }
 

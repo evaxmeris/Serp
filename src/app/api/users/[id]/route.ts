@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import bcrypt from 'bcryptjs';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // PATCH/PUT /api/users/[id] - 更新用户
 export async function PUT(
@@ -29,7 +31,9 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { email, name, password, role, isApproved } = body;
+    const v = validateOrReturn(z.object({ email: z.string().email().optional(), name: z.string().optional(), role: z.string().optional(), password: z.string().optional(), isApproved: z.boolean().optional() }), body);
+    if (!v.success) return v.response;
+    const { email, name, password, role, isApproved } = v.data;
 
     // 检查用户是否存在
     const existingUser = await prisma.user.findUnique({

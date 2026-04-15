@@ -1,6 +1,9 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { listResponse, createdResponse, errorResponse } from '@/lib/api-response';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateSupplierSchema } from '@/lib/api-schemas';
 
 // GET /api/suppliers - 获取供应商列表（行级隔离）
 // 管理员可以看到所有供应商，普通用户只能看到自己的供应商
@@ -9,7 +12,7 @@ export async function GET(request: NextRequest) {
     // 获取当前用户会话
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
     const currentUser = session;
 
@@ -51,21 +54,15 @@ export async function GET(request: NextRequest) {
       prisma.supplier.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: suppliers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+    return listResponse(suppliers, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
     console.error('Error fetching suppliers:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch suppliers' },
-      { status: 500 }
-    );
+    return errorResponse('获取供应商列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -75,11 +72,13 @@ export async function POST(request: NextRequest) {
     // 获取当前用户会话
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
     const currentUser = session;
 
     const body = await request.json();
+    const v = validateOrReturn(CreateSupplierSchema, body);
+    if (!v.success) return v.response;
     const {
       companyName,
       companyEn,
@@ -94,14 +93,7 @@ export async function POST(request: NextRequest) {
       products,
       creditTerms,
       notes,
-    } = body;
-
-    if (!companyName) {
-      return NextResponse.json(
-        { error: 'Company name is required' },
-        { status: 400 }
-      );
-    }
+    } = v.data;
 
     // 生成供应商编号
     const date = new Date();
@@ -144,12 +136,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(supplier, { status: 201 });
+    return createdResponse(supplier, '供应商创建成功');
   } catch (error) {
     console.error('Error creating supplier:', error);
-    return NextResponse.json(
-      { error: 'Failed to create supplier' },
-      { status: 500 }
-    );
+    return errorResponse('创建供应商失败', 'INTERNAL_ERROR', 500);
   }
 }

@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/roles - 获取角色列表
  * 支持分页和搜索
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');

@@ -1,25 +1,30 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/users/[id]/roles - 分配用户角色
  * 替换现有的角色分配
  */
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     const body = await request.json();
-    const { roleIds } = body;
-
-    if (!roleIds || !Array.isArray(roleIds)) {
-      return NextResponse.json(
-        { error: 'roleIds array is required' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.object({ roleIds: z.array(z.string()) }), body);
+    if (!v.success) return v.response;
+    const { roleIds } = v.data;
 
     // 检查用户是否存在
     const user = await prisma.user.findUnique({
@@ -78,10 +83,15 @@ export async function POST(
  * GET /api/users/[id]/roles - 获取用户角色列表
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     // 检查用户是否存在
     const user = await prisma.user.findUnique({

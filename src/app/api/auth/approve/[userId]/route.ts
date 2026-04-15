@@ -1,6 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 interface ApproveParams {
   userId: string;
@@ -17,7 +19,9 @@ export async function POST(
   try {
     const { userId: registrationId } = await params;
     const body = await request.json();
-    const { approved, rejectReason } = body;
+    const v = validateOrReturn(z.object({ approved: z.boolean().optional(), reason: z.string().optional() }), body);
+    if (!v.success) return v.response;
+    const { approved, reason: rejectReason } = v.data;
 
     // 获取当前登录用户（审批人）
     const currentSession = await getCurrentUser(request);

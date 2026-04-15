@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withCache, generateCacheKey } from '@/lib/cache';
 
@@ -67,8 +70,13 @@ interface OverviewDashboardData {
  * 
  * 返回所有核心指标的汇总数据
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days') || '30');
     

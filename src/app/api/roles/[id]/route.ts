@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdateRoleSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/roles/:id - 获取单个角色详情
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -50,13 +55,15 @@ export async function GET(
  * PUT /api/roles/:id - 更新角色
  */
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, displayName, description, isActive, permissions } = body;
+    const v = validateOrReturn(UpdateRoleSchema, body);
+    if (!v.success) return v.response;
+    const { name, displayName, description, isActive, permissions } = v.data;
 
     // 检查角色是否存在
     const existingRole = await prisma.role.findUnique({
@@ -118,10 +125,15 @@ export async function PUT(
  * DELETE /api/roles/:id - 删除角色
  */
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
     // 检查角色是否存在
     const role = await prisma.role.findUnique({

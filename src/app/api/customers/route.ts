@@ -1,7 +1,9 @@
 import { NextResponse, NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { listResponse, createdResponse, errorResponse, notFoundResponse, validationErrorResponse } from '@/lib/api-response';
+import { CreateCustomerSchema, PaginationSchema } from '@/lib/api-schemas';
 
 // GET /api/customers - 获取客户列表（行级隔离：只能看到自己的客户）
 export async function GET(request: NextRequest) {
@@ -9,10 +11,7 @@ export async function GET(request: NextRequest) {
     // 获取当前登录用户（修复 API 认证问题）
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { searchParams } = new URL(request.url);
@@ -59,21 +58,15 @@ export async function GET(request: NextRequest) {
       prisma.customer.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: customers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+    return listResponse(customers, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
     console.error('Error fetching customers:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch customers' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch customers', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -83,56 +76,32 @@ export async function POST(request: NextRequest) {
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const body = await request.json();
-    const {
-      companyName,
-      contactName,
-      email,
-      phone,
-      country,
-      address,
-      website,
-      source,
-      creditLevel,
-      notes,
-    } = body;
 
-    if (!companyName) {
-      return NextResponse.json(
-        { error: 'Company name is required' },
-        { status: 400 }
+    // Zod 验证
+    const validation = CreateCustomerSchema.safeParse(body);
+    if (!validation.success) {
+      return validationErrorResponse(
+        validation.error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message,
+        }))
       );
     }
 
-    // BUG-PERM-007: 自动设置 ownerId 为当前登录用户
     const customer = await prisma.customer.create({
       data: {
-        companyName,
-        contactName,
-        email,
-        phone,
-        country,
-        address,
-        website,
-        source,
-        creditLevel,
-        notes,
+        ...validation.data,
         ownerId: currentUser.id,
       },
     });
 
-    return NextResponse.json(customer, { status: 201 });
+    return createdResponse(customer, '客户创建成功');
   } catch (error) {
     console.error('Error creating customer:', error);
-    return NextResponse.json(
-      { error: 'Failed to create customer' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to create customer', 'INTERNAL_ERROR', 500);
   }
 }

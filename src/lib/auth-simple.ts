@@ -29,23 +29,17 @@ function getSecret() {
  */
 export async function login(email: string, password: string) {
   try {
-    console.log('开始登录:', email);
-    
     // 查找用户
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
-    console.log('查询到的用户:', user ? user.email : 'null');
-
     if (!user || !user.passwordHash) {
-      console.log('认证失败：用户不存在');
       return { success: false, error: '账号或密码错误' };
     }
 
     // 验证密码
     const isValid = await bcrypt.compare(password, user.passwordHash);
-    console.log('密码验证:', isValid);
 
     if (!isValid) {
       return { success: false, error: '账号或密码错误' };
@@ -77,8 +71,6 @@ export async function login(email: string, password: string) {
       maxAge: 7 * 24 * 60 * 60, // 7 天
       path: '/',
     });
-
-    console.log('登录成功:', user.email);
 
     return { 
       success: true, 

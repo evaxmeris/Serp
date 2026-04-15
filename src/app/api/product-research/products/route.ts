@@ -7,10 +7,14 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { ResearchStatus, Priority } from '@prisma/client';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchProductSchema } from '@/lib/api-schemas';
 import { 
-  CreateProductResearchSchema, 
   ProductResearchQuerySchema,
   formatValidationError 
 } from '@/lib/validators/product-research';
@@ -19,8 +23,13 @@ import {
 // GET /api/product-research/products
 // 获取产品调研列表
 // ============================================
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     
     // 获取 includeAttributes 参数
@@ -224,25 +233,19 @@ export async function GET(request: Request) {
 // POST /api/product-research/products
 // 创建产品调研
 // ============================================
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
 
     // 验证请求体
-    const validationResult = CreateProductResearchSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '请求数据验证失败',
-          details: formatValidationError(validationResult.error)
-        },
-        { status: 422 }
-      );
-    }
-
-    const data = validationResult.data;
+    const v = validateOrReturn(CreateResearchProductSchema, body);
+    if (!v.success) return v.response;
+    const data = v.data;
 
     // 验证品类是否存在
     const category = await prisma.productCategory.findUnique({

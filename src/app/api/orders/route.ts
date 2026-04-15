@@ -11,7 +11,9 @@ import {
   conflictResponse,
   extractZodErrors,
 } from '@/lib/api-response';
-import { orderCreateSchema, orderListQuerySchema } from '@/lib/validators/order';
+import { orderListQuerySchema } from '@/lib/validators/order';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateOrderSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/orders - 获取订单列表（行级隔离）
@@ -188,11 +190,8 @@ export async function POST(request: NextRequest) {
 
     // 解析并验证请求体
     const body = await request.json();
-    const validationResult = orderCreateSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return validationErrorResponse(extractZodErrors(validationResult.error));
-    }
+    const v = validateOrReturn(CreateOrderSchema, body);
+    if (!v.success) return v.response;
 
     const {
       customerId,
@@ -213,7 +212,7 @@ export async function POST(request: NextRequest) {
       internalNotes,
       attachments,
       items,
-    } = validationResult.data;
+    } = v.data;
 
     // BUG-PERM-007: 如果没有指定业务员，自动设置为当前用户
     const finalSalesRepId = salesRepId || currentUser.id;

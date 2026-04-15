@@ -81,8 +81,6 @@ export default function ProfitReportPage() {
       // 导出成功提示
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
-      
-      console.log('利润报表导出成功');
     } catch (error) {
       console.error('导出利润报表失败:', error);
       alert('导出失败，请重试');

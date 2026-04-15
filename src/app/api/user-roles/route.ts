@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * GET /api/user-roles - 获取用户角色分配列表
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
@@ -67,17 +77,17 @@ export async function GET(request: Request) {
 /**
  * POST /api/user-roles - 为用户分配角色
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, roleIds } = body;
-
-    if (!userId || !roleIds || !Array.isArray(roleIds)) {
-      return NextResponse.json(
-        { error: 'userId and roleIds array are required' },
-        { status: 400 }
-      );
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
+
+    const body = await request.json();
+    const v = validateOrReturn(z.object({ userId: z.string(), roleIds: z.array(z.string()) }), body);
+    if (!v.success) return v.response;
+    const { userId, roleIds } = v.data;
 
     // 删除现有的用户角色分配
     await prisma.userRole.deleteMany({

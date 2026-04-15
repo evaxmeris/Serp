@@ -1,21 +1,25 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateRoleSchema } from '@/lib/api-schemas';
 
 /**
  * POST /api/roles/create - 创建新角色
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, displayName, description, permissions } = body;
-
-    // 验证必填字段
-    if (!name || !displayName) {
-      return NextResponse.json(
-        { error: 'Name and display name are required' },
-        { status: 400 }
-      );
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
+
+    const body = await request.json();
+    const v = validateOrReturn(CreateRoleSchema, body);
+    if (!v.success) return v.response;
+    const { name, displayName, description, permissions } = v.data;
 
     // 检查名称是否重复
     const existingRole = await prisma.role.findUnique({

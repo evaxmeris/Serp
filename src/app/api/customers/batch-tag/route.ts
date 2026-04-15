@@ -5,6 +5,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { BatchTagSchema } from '@/lib/api-schemas';
 
 /**
  * POST /api/customers/batch-tag
@@ -23,29 +25,11 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { ids, tags, mode = 'add' } = body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: '客户 ID 不能为空' },
-        { status: 400 }
-      );
-    }
-
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return NextResponse.json(
-        { error: '标签不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (ids.length > 500) {
-      return NextResponse.json(
-        { error: '单次最多操作 500 条客户' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(BatchTagSchema, body);
+    if (!v.success) return v.response;
+    const { customerIds, tags } = v.data;
+    const ids = customerIds;
+    const mode = 'add';
 
     // 查询客户 - tags 字段暂未添加到 schema
     const customers = await prisma.customer.findMany({

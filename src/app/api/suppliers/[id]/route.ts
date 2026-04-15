@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdateSupplierSchema } from '@/lib/api-schemas';
 
 // GET /api/suppliers/[id] - 获取供应商详情
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -40,12 +45,14 @@ export async function GET(
 
 // PUT /api/suppliers/[id] - 更新供应商
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
+    const v = validateOrReturn(UpdateSupplierSchema, body);
+    if (!v.success) return v.response;
     const {
       companyName,
       contactName,
@@ -58,7 +65,7 @@ export async function PUT(
       status,
       creditTerms,
       notes,
-    } = body;
+    } = v.data;
 
     const supplier = await prisma.supplier.update({
       where: { id },
@@ -89,10 +96,15 @@ export async function PUT(
 
 // DELETE /api/suppliers/[id] - 删除供应商
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
     await prisma.supplier.delete({
       where: { id },

@@ -556,20 +556,20 @@ export default function CreatePurchaseOrderPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">小计</span>
                   <span className="font-medium">
-                    {form.getValues('currency')} {totals.subtotal.toFixed(2)}
+                    {form.getValues('currency')} {(totals.subtotal ?? 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">税额</span>
                   <span className="font-medium">
-                    {form.getValues('currency')} {totals.tax.toFixed(2)}
+                    {form.getValues('currency')} {(totals.tax ?? 0).toFixed(2)}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>总计</span>
                   <span>
-                    {form.getValues('currency')} {totals.total.toFixed(2)}
+                    {form.getValues('currency')} {(totals.total ?? 0).toFixed(2)}
                   </span>
                 </div>
               </div>

@@ -81,7 +81,7 @@ export default function OrdersPage() {
   });
   const deleteOrder = useDeleteOrder();
 
-  const orders = data?.data || [];
+  const orders = data?.items || [];
   const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 };
 
   // 键盘快捷键
@@ -262,20 +262,20 @@ export default function OrdersPage() {
                             {order.orderNo}
                           </Link>
                         </TableCell>
-                        <TableCell>{order.customer.companyName}</TableCell>
+                        <TableCell>{order.customer?.companyName || '-'}</TableCell>
                         <TableCell>
-                          <Badge className={statusConfig.color}>
-                            {statusConfig.label}
+                          <Badge className={statusConfig?.color || 'bg-gray-100 text-gray-800'}>
+                            {statusConfig?.label || order.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {order.currency} {order.totalAmount.toFixed(2)}
+                          {order.currency} {(order.totalAmount ?? 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {order.currency} {order.paidAmount.toFixed(2)}
+                          {order.currency} {(order.paidAmount ?? 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {order.currency} {(order.totalAmount - order.paidAmount).toFixed(2)}
+                          {order.currency} {((order.totalAmount ?? 0) - (order.paidAmount ?? 0)).toFixed(2)}
                         </TableCell>
                         <TableCell>
                           {order.deliveryDate

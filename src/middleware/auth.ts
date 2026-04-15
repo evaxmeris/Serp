@@ -11,9 +11,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
+import { jwtVerify } from 'jose';
 
 /**
  * 权限定义类型 - 格式：module:action
@@ -64,15 +63,21 @@ interface AuthErrorResponse {
 }
 
 /**
- * 从 JWT token 解析用户 ID
- * 这是一个占位实现，实际应使用 JWT 验证库
+ * 从 JWT token 解析用户信息
+ * 使用 jose 库验证 JWT 签名并提取 payload
  */
-async function parseUserIdFromToken(token: string): Promise<string | null> {
+function getSecret() {
+  if (!process.env.NEXTAUTH_SECRET) {
+    throw new Error('NEXTAUTH_SECRET 环境变量必须设置！请在 .env.local 中配置');
+  }
+  return new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+}
+
+async function verifyToken(token: string): Promise<{ id: string } | null> {
   try {
-    // TODO: 集成真实的 JWT 验证
-    // 当前简化实现：直接返回用户 ID（开发环境）
-    // 生产环境应使用 jsonwebtoken 验证并解析 payload
-    return token;
+    const SECRET = getSecret();
+    const { payload } = await jwtVerify(token, SECRET);
+    return { id: payload.id as string };
   } catch {
     return null;
   }
@@ -81,12 +86,12 @@ async function parseUserIdFromToken(token: string): Promise<string | null> {
 /**
  * 从 Cookie 读取 token
  * 支持两种来源：
- * 1. httpOnly cookie (auth_token) - 生产环境
+ * 1. httpOnly cookie (auth-token) - 生产环境
  * 2. Bearer header - 开发环境/向后兼容
  */
 function getTokenFromRequest(request: NextRequest): string | null {
   // 优先尝试从 cookie 读取（httpOnly）
-  const cookieToken = request.cookies.get('auth_token')?.value;
+  const cookieToken = request.cookies.get('auth-token')?.value;
   if (cookieToken) {
     return cookieToken;
   }
@@ -180,11 +185,11 @@ export async function getSession(request: NextRequest): Promise<AuthSession | nu
       return null;
     }
 
-    const userId = await parseUserIdFromToken(token);
-    
-    if (!userId) {
+    const tokenResult = await verifyToken(token);
+    if (!tokenResult) {
       return null;
     }
+    const userId = tokenResult.id;
 
     // 查询用户基本信息
     const user = await prisma.user.findUnique({

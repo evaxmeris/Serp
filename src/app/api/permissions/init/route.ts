@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -179,8 +182,13 @@ const defaultRoles = [
 /**
  * POST /api/permissions/init - 初始化默认权限和角色
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     let createdPermissions = 0;
     let createdRoles = 0;
 
@@ -254,8 +262,13 @@ export async function POST(request: Request) {
 /**
  * GET /api/permissions/init - 获取初始化状态
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const [permissionCount, roleCount] = await Promise.all([
       prisma.permission.count(),
       prisma.role.count(),

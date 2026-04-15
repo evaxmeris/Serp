@@ -8,14 +8,24 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // ============================================
 // GET /api/product-research/attributes
 // 获取产品的属性值列表
 // ============================================
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId'); // 产品 ID（必填）
     const attributeId = searchParams.get('attributeId'); // 属性 ID（可选）
@@ -139,10 +149,17 @@ export async function GET(request: Request) {
 // POST /api/product-research/attributes
 // 批量保存产品属性值
 // ============================================
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
-    const { productId, attributes } = body;
+    const v = validateOrReturn(z.object({ productId: z.string(), attributes: z.array(z.object({}).passthrough()).min(1) }), body);
+    if (!v.success) return v.response;
+    const { productId, attributes } = v.data;
 
     // 验证必填参数
     if (!productId || !attributes || !Array.isArray(attributes)) {
@@ -240,7 +257,7 @@ export async function POST(request: Request) {
 // PUT /api/product-research/attributes
 // 批量更新产品属性值（与 POST 相同，使用 upsert）
 // ============================================
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   // PUT 请求的处理逻辑与 POST 相同
   return POST(request);
 }

@@ -8,14 +8,19 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchCategorySchema } from '@/lib/api-schemas';
 
 // ============================================
 // GET /api/product-research/categories/[id]
 // 获取品类详情
 // ============================================
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -89,12 +94,15 @@ export async function GET(
 // 更新品类信息
 // ============================================
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
+    const v = validateOrReturn(CreateResearchCategorySchema.partial(), body);
+    if (!v.success) return v.response;
+    const validatedBody = v.data;
 
     // 检查品类是否存在
     const existingCategory = await prisma.productCategory.findUnique({
@@ -112,9 +120,9 @@ export async function PUT(
     }
 
     // 如果修改了编码，检查新编码是否已被使用
-    if (body.code && body.code !== existingCategory.code) {
+    if (validatedBody.code && validatedBody.code !== existingCategory.code) {
       const codeExists = await prisma.productCategory.findUnique({
-        where: { code: body.code },
+        where: { code: validatedBody.code },
       });
 
       if (codeExists) {
@@ -132,20 +140,20 @@ export async function PUT(
     const updateData: any = {};
     
     // 将空字符串转换为 null（前端选择"无"时传递空字符串）
-    const normalizedParentId = body.parentId === '' ? null : body.parentId;
+    const normalizedParentId = validatedBody.parentId === '' ? null : validatedBody.parentId;
     
     // 只在字段存在时才添加到更新数据中
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.nameEn !== undefined) updateData.nameEn = body.nameEn || null;
-    if (body.code !== undefined) updateData.code = body.code;
-    if (body.description !== undefined) updateData.description = body.description || null;
-    if (body.icon !== undefined) updateData.icon = body.icon || null;
-    if (body.sortOrder !== undefined) updateData.sortOrder = body.sortOrder;
-    if (body.isActive !== undefined) updateData.isActive = body.isActive;
-    if (body.parentId !== undefined) updateData.parentId = normalizedParentId;
+    if (validatedBody.name !== undefined) updateData.name = validatedBody.name;
+    if (validatedBody.nameEn !== undefined) updateData.nameEn = validatedBody.nameEn || null;
+    if (validatedBody.code !== undefined) updateData.code = validatedBody.code;
+    if (validatedBody.description !== undefined) updateData.description = validatedBody.description || null;
+    if (validatedBody.icon !== undefined) updateData.icon = validatedBody.icon || null;
+    if (validatedBody.sortOrder !== undefined) updateData.sortOrder = validatedBody.sortOrder;
+    if (validatedBody.isActive !== undefined) updateData.isActive = validatedBody.isActive;
+    if (validatedBody.parentId !== undefined) updateData.parentId = normalizedParentId;
     
     // 如果父品类发生了变化，需要重新计算层级和路径
-    if (body.parentId !== undefined && normalizedParentId !== existingCategory.parentId) {
+    if (validatedBody.parentId !== undefined && normalizedParentId !== existingCategory.parentId) {
       if (normalizedParentId) {
         const parentCategory = await prisma.productCategory.findUnique({
           where: { id: normalizedParentId },
@@ -223,10 +231,15 @@ export async function PUT(
 // 删除品类
 // ============================================
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
 
     // 检查品类是否存在

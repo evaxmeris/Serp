@@ -7,15 +7,25 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchTemplateSchema } from '@/lib/api-schemas';
 
 // ============================================
 // GET /api/product-research/templates
 // 获取属性模板列表
 // ============================================
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId'); // 按品类过滤
     const type = searchParams.get('type'); // 按属性类型过滤
@@ -86,9 +96,16 @@ export async function GET(request: Request) {
 // POST /api/product-research/templates
 // 创建属性模板
 // ============================================
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
+    const v = validateOrReturn(CreateResearchTemplateSchema, body);
+    if (!v.success) return v.response;
     const {
       name,
       nameEn,
@@ -105,7 +122,7 @@ export async function POST(request: Request) {
       defaultValue,
       placeholder,
       isActive,
-    } = body;
+    } = v.data;
 
     // 验证必填字段
     if (!name || !code || !categoryId) {

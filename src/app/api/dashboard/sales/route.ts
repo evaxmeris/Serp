@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -54,8 +57,13 @@ interface SalesDashboardData {
  * - period: day | week | month (默认 month)
  * - days: 统计天数 (默认 30)
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'month';
     const days = parseInt(searchParams.get('days') || '30');

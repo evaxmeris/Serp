@@ -105,6 +105,9 @@ export default function CreateOrderPage() {
   const onSubmit = (data: OrderFormValues) => {
     const orderData = {
       ...data,
+      // 将 "none" 转换回空字符串
+      paymentTerms: data.paymentTerms === 'none' ? '' : data.paymentTerms,
+      deliveryTerms: data.deliveryTerms === 'none' ? '' : data.deliveryTerms,
       items: data.items.map((item: any) => ({
         productId: item.productId,
         productName: item.productName,
@@ -214,7 +217,7 @@ export default function CreateOrderPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">不指定</SelectItem>
+                            <SelectItem value="none">不指定</SelectItem>
                             {paymentTermOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
@@ -240,7 +243,7 @@ export default function CreateOrderPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">不指定</SelectItem>
+                            <SelectItem value="none">不指定</SelectItem>
                             {incotermOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}

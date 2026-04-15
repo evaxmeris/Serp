@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { quotationSendSchema } from '@/lib/validators/quotation';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // POST /api/quotations/[id]/send - 发送报价单
 export async function POST(
@@ -12,7 +13,12 @@ export async function POST(
     const body = await request.json();
 
     // 验证输入
-    const validatedData = quotationSendSchema.parse(body);
+    const v = validateOrReturn(z.object({
+      recipientEmails: z.array(z.string().email()),
+      attachments: z.array(z.string()).optional(),
+    }), body);
+    if (!v.success) return v.response;
+    const validatedData = v.data;
 
     // 检查报价单是否存在
     const quotation = await prisma.quotation.findUnique({
@@ -61,17 +67,10 @@ export async function POST(
 
     // TODO: 实现邮件发送逻辑
     // 这里可以集成邮件服务发送报价单
-    console.log('Sending quotation to:', validatedData.recipientEmails);
-    console.log('Quotation details:', {
-      quotationNo: quotation.quotationNo,
-      customer: quotation.customer.companyName,
-      totalAmount: quotation.totalAmount,
-      currency: quotation.currency,
-    });
 
     // 如果有附件，处理附件逻辑
     if (validatedData.attachments && validatedData.attachments.length > 0) {
-      console.log('Attachments:', validatedData.attachments);
+      // 处理附件
     }
 
     return NextResponse.json({

@@ -5,6 +5,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { BatchImportSchema } from '@/lib/api-schemas';
 
 /**
  * POST /api/customers/batch-import
@@ -23,22 +25,9 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { customers, mode = 'create' } = body;
-
-    if (!Array.isArray(customers) || customers.length === 0) {
-      return NextResponse.json(
-        { error: '客户数据不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (customers.length > 1000) {
-      return NextResponse.json(
-        { error: '单次最多导入 1000 条客户' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(BatchImportSchema, body);
+    if (!v.success) return v.response;
+    const { customers, mode } = v.data;
 
     const results = {
       success: 0,
@@ -50,16 +39,6 @@ export async function POST(request: Request) {
     for (let i = 0; i < customers.length; i++) {
       const customer = customers[i];
       try {
-        // 验证必填字段
-        if (!customer.companyName || !customer.email) {
-          results.failed++;
-          results.errors.push({
-            index: i + 1,
-            error: '缺少必填字段：公司名或邮箱',
-          });
-          continue;
-        }
-
         // 检查邮箱是否重复
         const existing = await prisma.customer.findFirst({
           where: { email: customer.email },

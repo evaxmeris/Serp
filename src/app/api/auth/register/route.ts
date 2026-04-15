@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { RegisterSchema, validateBody } from '@/lib/api-schemas';
+import { validationErrorResponse } from '@/lib/api-response';
 
 /**
  * POST /api/auth/register - 用户注册（待审批状态）
@@ -9,32 +12,19 @@ import bcrypt from 'bcryptjs';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, name, password, username, department, position, phone } = body;
 
-    // 必填字段验证 - 前端也已经验证过，这里做后端双重验证
-    if (!email || !password || !name || !phone) {
-      return NextResponse.json(
-        { error: '请填写所有必填字段' },
-        { status: 400 }
-      );
+    // Zod 验证
+    const registerSchema = RegisterSchema.extend({
+      phone: z.string().min(1, '手机号不能为空').max(20, '手机号过长'),
+      username: z.string().max(100).optional(),
+      department: z.string().max(100).optional(),
+      position: z.string().max(100).optional(),
+    });
+    const validation = validateBody(registerSchema, body);
+    if (!validation.success) {
+      return validationErrorResponse(validation.errors);
     }
-
-    // 密码长度验证
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: '密码长度至少需要8个字符' },
-        { status: 400 }
-      );
-    }
-
-    // 邮箱格式验证
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: '请输入有效的邮箱地址' },
-        { status: 400 }
-      );
-    }
+    const { email, name, password, username, department, position, phone } = validation.data;
 
     // 检查邮箱是否已被注册（正式用户中）
     const existingUser = await prisma.user.findUnique({

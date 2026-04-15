@@ -58,6 +58,20 @@ export default function SalesReportPage() {
     }).format(value);
   }
 
+  if (!data) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">销售报表</h1>
+          <p className="mt-2 text-gray-600">分析销售数据和业绩表现</p>
+        </div>
+        <div className="text-center py-12 text-gray-500">
+          <p>请选择统计周期并点击「加载报表」查看数据</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* 页面标题 */}

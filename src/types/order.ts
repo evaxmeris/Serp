@@ -182,7 +182,7 @@ export interface OrderListQuery {
 
 // 订单列表响应
 export interface OrderListResponse {
-  data: OrderListItem[];
+  items: OrderListItem[];
   pagination: {
     page: number;
     limit: number;

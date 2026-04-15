@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     // 认证检查
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     // 解析和验证查询参数
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     // 认证检查
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const body = await request.json();

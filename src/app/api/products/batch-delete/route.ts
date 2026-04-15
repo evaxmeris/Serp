@@ -5,6 +5,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { BatchDeleteSchema } from '@/lib/api-schemas';
 
 /**
  * POST /api/products/batch-delete
@@ -23,22 +25,9 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { ids } = body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: '产品 ID 不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (ids.length > 100) {
-      return NextResponse.json(
-        { error: '单次最多删除 100 条产品' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(BatchDeleteSchema, body);
+    if (!v.success) return v.response;
+    const { ids } = v.data;
 
     // 检查是否有关联数据
     const relatedData = await prisma.$transaction([

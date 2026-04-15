@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-04-12T08:58:10.035222",
+  "total": 13,
+  "success": 13,
+  "failed": 0,
+  "avg_response_time_ms": 3.17,
+  "results": [
+    {
+      "name": "产品列表",
+      "url": "http://localhost:3001/api/products",
+      "status": 401,
+      "time": 0.007607936859130859,
+      "success": true
+    },
+    {
+      "name": "品类列表",
+      "url": "http://localhost:3001/api/product-research/categories",
+      "status": 401,
+      "time": 0.0060122013092041016,
+      "success": true
+    },
+    {
+      "name": "属性模板列表",
+      "url": "http://localhost:3001/api/product-research/templates",
+      "status": 401,
+      "time": 0.0030548572540283203,
+      "success": true
+    },
+    {
+      "name": "调研产品列表",
+      "url": "http://localhost:3001/api/product-research/products",
+      "status": 401,
+      "time": 0.0036699771881103516,
+      "success": true
+    },
+    {
+      "name": "销售订单列表",
+      "url": "http://localhost:3001/api/orders",
+      "status": 401,
+      "time": 0.0026102066040039062,
+      "success": true
+    },
+    {
+      "name": "出库单列表",
+      "url": "http://localhost:3001/api/outbound-orders",
+      "status": 401,
+      "time": 0.003208160400390625,
+      "success": true
+    },
+    {
+      "name": "采购订单列表",
+      "url": "http://localhost:3001/api/purchase-orders",
+      "status": 401,
+      "time": 0.0023431777954101562,
+      "success": true
+    },
+    {
+      "name": "供应商列表",
+      "url": "http://localhost:3001/api/suppliers",
+      "status": 401,
+      "time": 0.002576112747192383,
+      "success": true
+    },
+    {
+      "name": "销售报表",
+      "url": "http://localhost:3001/api/reports/sales",
+      "status": 401,
+      "time": 0.0020568370819091797,
+      "success": true
+    },
+    {
+      "name": "库存报表",
+      "url": "http://localhost:3001/api/reports/inventory",
+      "status": 401,
+      "time": 0.0020971298217773438,
+      "success": true
+    },
+    {
+      "name": "利润报表",
+      "url": "http://localhost:3001/api/reports/profit",
+      "status": 401,
+      "time": 0.0019161701202392578,
+      "success": true
+    },
+    {
+      "name": "用户列表",
+      "url": "http://localhost:3001/api/users",
+      "status": 401,
+      "time": 0.0022110939025878906,
+      "success": true
+    },
+    {
+      "name": "角色列表",
+      "url": "http://localhost:3001/api/roles",
+      "status": 401,
+      "time": 0.0018649101257324219,
+      "success": true
+    }
+  ]
+}

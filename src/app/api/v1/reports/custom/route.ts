@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { getCurrentUser } from '@/lib/auth';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * GET /api/v1/reports/custom
@@ -77,7 +79,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, code, description, config, columns, filters } = body;
+    const v = validateOrReturn(z.object({ name: z.string(), code: z.string(), description: z.string().optional(), config: z.record(z.string(), z.any()).optional(), columns: z.array(z.any()).optional(), filters: z.array(z.any()).optional() }), body);
+    if (!v.success) return v.response;
+    const { name, code, description, config, columns, filters } = v.data;
 
     if (!name || !code) {
       return NextResponse.json(
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
         code,
         type: 'CUSTOM',
         description: description || '',
-        config: config || {},
+        config: config ? (JSON.parse(JSON.stringify(config)) as any) : {},
         columns: columns || [],
         filters: filters || [],
         isSystem: false,

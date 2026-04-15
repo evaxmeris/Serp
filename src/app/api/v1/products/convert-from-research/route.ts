@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { generateProductSku } from '@/lib/sku-generator';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +19,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { researchProductId, overrideData } = body;
+    const v = validateOrReturn(z.object({ researchProductId: z.string(), overrideData: z.record(z.string(), z.any()).optional() }), body);
+    if (!v.success) return v.response;
+    const { researchProductId, overrideData } = v.data;
 
     if (!researchProductId) {
       return NextResponse.json(

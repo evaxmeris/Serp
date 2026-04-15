@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
 import { prisma } from '@/lib/prisma';
 import {
   successResponse,
@@ -8,7 +9,9 @@ import {
   validationErrorResponse,
   extractZodErrors,
 } from '@/lib/api-response';
-import { orderUpdateSchema, orderConfirmSchema, orderCancelSchema } from '@/lib/validators/order';
+import { orderConfirmSchema, orderCancelSchema } from '@/lib/validators/order';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdateOrderSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/orders/[id] - 获取订单详情
@@ -201,17 +204,15 @@ export async function PUT(
 
     // 解析并验证请求体
     const body = await request.json();
-    const validationResult = orderUpdateSchema.safeParse(body);
+    const v = validateOrReturn(UpdateOrderSchema, body);
+    if (!v.success) return v.response;
 
-    if (!validationResult.success) {
-      return validationErrorResponse(extractZodErrors(validationResult.error));
-    }
-
-    const updateData = validationResult.data;
+    const updateData = v.data;
+    const { items: _items, ...restData } = updateData;
 
     // 验证交货日期
-    if (updateData.deliveryDate) {
-      const deliveryDateTime = new Date(updateData.deliveryDate);
+    if (restData.deliveryDate) {
+      const deliveryDateTime = new Date(restData.deliveryDate);
       if (deliveryDateTime <= new Date()) {
         return conflictResponse('交货日期必须晚于当前日期', 'ORDER_INVALID_DELIVERY_DATE');
       }
@@ -221,15 +222,15 @@ export async function PUT(
     const order = await prisma.order.update({
       where: { id },
       data: {
-        ...updateData,
-        paymentDeadline: updateData.paymentDeadline
-          ? new Date(updateData.paymentDeadline)
+        ...restData,
+        paymentDeadline: restData.paymentDeadline
+          ? new Date(restData.paymentDeadline)
           : undefined,
-        deliveryDate: updateData.deliveryDate
-          ? new Date(updateData.deliveryDate)
+        deliveryDate: restData.deliveryDate
+          ? new Date(restData.deliveryDate)
           : undefined,
-        deliveryDeadline: updateData.deliveryDeadline
-          ? new Date(updateData.deliveryDeadline)
+        deliveryDeadline: restData.deliveryDeadline
+          ? new Date(restData.deliveryDeadline)
           : undefined,
       },
       include: {
@@ -263,6 +264,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
 
     // 检查订单是否存在

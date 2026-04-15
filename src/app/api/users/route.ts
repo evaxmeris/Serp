@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // GET /api/users - 获取用户列表
 export async function GET(request: NextRequest) {
@@ -58,14 +60,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, name, password, role } = body;
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.object({ email: z.string().email(), name: z.string(), password: z.string().min(6), role: z.enum(['ADMIN', 'SALES', 'PURCHASING', 'WAREHOUSE', 'VIEWER']).optional() }), body);
+    if (!v.success) return v.response;
+    const { email, name, password, role } = v.data;
 
     // 检查用户是否已存在
     const existingUser = await prisma.user.findUnique({

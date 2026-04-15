@@ -7,6 +7,8 @@ import {
   notFoundResponse,
   conflictResponse,
 } from '@/lib/api-response';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // POST /api/v1/inbound-orders/[id]/cancel - 取消入库
 export async function POST(
@@ -22,6 +24,8 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
+    const v = validateOrReturn(z.object({ reason: z.string().optional() }), body);
+    if (!v.success) return v.response;
 
     const order = await prisma.inboundOrder.findUnique({
       where: { id },

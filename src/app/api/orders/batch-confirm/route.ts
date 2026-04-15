@@ -5,6 +5,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-simple';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/orders/batch-confirm
@@ -23,22 +25,9 @@ export async function POST(request: Request) {
 
     // 解析请求数据
     const body = await request.json();
-    const { ids } = body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: '订单 ID 不能为空' },
-        { status: 400 }
-      );
-    }
-
-    // 限制批量大小
-    if (ids.length > 100) {
-      return NextResponse.json(
-        { error: '单次最多确认 100 条订单' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.object({ ids: z.array(z.string()) }), body);
+    if (!v.success) return v.response;
+    const { ids } = v.data;
 
     // 查询订单
     const orders = await prisma.order.findMany({
@@ -61,26 +50,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // 批量更新订单状态
-    const result = await prisma.order.updateMany({
-      where: { id: { in: ids } },
-      data: {
-        status: 'CONFIRMED',
-        confirmedAt: new Date(),
-      },
-    });
+    // 使用事务包装所有数据库操作
+    const result = await prisma.$transaction(async (tx) => {
+      // 批量更新订单状态
+      const orderResult = await tx.order.updateMany({
+        where: { id: { in: ids } },
+        data: {
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+        },
+      });
 
-    // 记录操作日志
-    await prisma.approvalHistory.createMany({
-      data: ids.map((id: string) => ({
-        recordId: id,
-        orderId: id,
-        step: 1,
-        approverId: user.id,
-        action: 'APPROVE',
-        status: 'APPROVED',
-        comments: `批量确认订单，共 ${ids.length} 条`,
-      })),
+      // 记录操作日志
+      await tx.approvalHistory.createMany({
+        data: ids.map((id: string) => ({
+          recordId: id,
+          orderId: id,
+          step: 1,
+          approverId: user.id,
+          action: 'APPROVE',
+          status: 'APPROVED',
+          comments: `批量确认订单，共 ${ids.length} 条`,
+        })),
+      });
+
+      return orderResult;
     });
 
     return NextResponse.json({

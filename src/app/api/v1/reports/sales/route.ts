@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { SalesReportSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/v1/reports/sales
@@ -78,7 +80,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+const body = await request.json();
+
+    // Zod 验证
+    const v = validateOrReturn(SalesReportSchema, body);
+    if (!v.success) return v.response;
     const { period, startDate, endDate, groupBy, reportName } = body;
 
     // 验证必要参数

@@ -26,7 +26,7 @@ export default function CustomReportPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     // TODO: 调用 API 创建/更新报表
-    console.log('提交表单:', formData);
+
     setMode('list');
     setFormData({ name: '', code: '', description: '', type: 'CUSTOM' });
   }

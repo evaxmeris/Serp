@@ -1,25 +1,30 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { AssignPermissionsSchema } from '@/lib/api-schemas';
 
 /**
  * POST /api/roles/[id]/permissions - 分配角色权限
  * 替换现有权限分配
  */
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     const body = await request.json();
-    const { permissionIds } = body;
-
-    if (!permissionIds || !Array.isArray(permissionIds)) {
-      return NextResponse.json(
-        { error: 'permissionIds array is required' },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(AssignPermissionsSchema, body);
+    if (!v.success) return v.response;
+    const { permissionIds } = v.data;
 
     // 检查角色是否存在
     const role = await prisma.role.findUnique({
@@ -76,10 +81,15 @@ export async function POST(
  * GET /api/roles/[id]/permissions - 获取角色权限列表
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     // 检查角色是否存在
     const role = await prisma.role.findUnique({

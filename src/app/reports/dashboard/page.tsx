@@ -63,6 +63,20 @@ export default function DashboardPage() {
     return <span className="text-gray-600">→</span>;
   }
 
+  if (!data) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">数据仪表盘</h1>
+          <p className="mt-2 text-gray-600">企业经营数据概览</p>
+        </div>
+        <div className="text-center py-12 text-gray-500">
+          <p>请选择统计周期并点击「加载报表」查看数据</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* 页面标题 */}

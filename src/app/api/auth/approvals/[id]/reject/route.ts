@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth-simple';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/auth/approvals/[id]/reject - 拒绝注册申请
@@ -22,7 +24,9 @@ export async function POST(
 
     const { id: registrationId } = await params;
     const body = await request.json();
-    const { rejectReason } = body;
+    const v = validateOrReturn(z.object({ reason: z.string().optional() }), body);
+    if (!v.success) return v.response;
+    const { reason } = v.data;
 
     // 查询注册申请
     const registration = await prisma.userRegistration.findUnique({
@@ -50,7 +54,7 @@ export async function POST(
         status: 'REJECTED',
         approvedById: currentUser.id,
         approvedAt: new Date(),
-        rejectReason: rejectReason || '未提供原因',
+        rejectReason: reason || '未提供原因',
       },
     });
 

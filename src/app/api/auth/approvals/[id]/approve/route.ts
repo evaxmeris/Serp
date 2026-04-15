@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth-simple';
 import bcrypt from 'bcryptjs';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * POST /api/auth/approvals/[id]/approve - 批准注册申请
@@ -22,6 +24,10 @@ export async function POST(
     }
 
     const { id: registrationId } = await params;
+
+    const body = await request.json();
+    const v = validateOrReturn(z.object({ reason: z.string().optional() }), body);
+    if (!v.success) return v.response;
 
     // 查询注册申请
     const registration = await prisma.userRegistration.findUnique({

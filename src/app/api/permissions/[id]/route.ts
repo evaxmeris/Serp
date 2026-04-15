@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdatePermissionSchema } from '@/lib/api-schemas';
 
 /**
  * GET /api/permissions/:id - 获取权限详情
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -39,13 +44,15 @@ export async function GET(
  * PUT /api/permissions/:id - 更新权限
  */
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, code, displayName, module, description, isActive } = body;
+    const v = validateOrReturn(UpdatePermissionSchema, body);
+    if (!v.success) return v.response;
+    const { name, code, displayName, module, description, isActive } = v.data;
 
     const permission = await prisma.permission.update({
       where: { id },
@@ -73,10 +80,15 @@ export async function PUT(
  * DELETE /api/permissions/:id - 删除权限
  */
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
     // 检查是否有角色关联
     const permission = await prisma.permission.findUnique({

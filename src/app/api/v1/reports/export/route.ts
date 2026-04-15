@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 /**
  * GET /api/v1/reports/export
@@ -59,7 +61,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { reportId, format = 'excel', filters } = body;
+    const v = validateOrReturn(z.object({ reportId: z.string(), format: z.enum(['pdf','excel','csv']).optional(), filters: z.record(z.string(), z.any()).optional() }), body);
+    if (!v.success) return v.response;
+    const { reportId, format = 'excel', filters } = v.data;
 
     if (!reportId) {
       return NextResponse.json(

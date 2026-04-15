@@ -198,17 +198,17 @@ export default function SuppliersPage() {
   };
 
   const handleCreate = async () => {
-    console.log('[SuppliersPage] handleCreate called');
+
     // 表单验证
     if (!validateForm()) {
-      console.log('[SuppliersPage] Validation failed');
+
       toast.error('请修正表单错误');
       return;
     }
 
     setCreating(true);
     try {
-      console.log('[SuppliersPage] Sending request to /api/v1/suppliers');
+
       const res = await fetch('/api/v1/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,12 +216,12 @@ export default function SuppliersPage() {
       });
 
       const result = await res.json();
-      console.log('[SuppliersPage] API response:', result);
+
 
       if (result.success) {
-        console.log('[SuppliersPage] Calling toast.success');
+
         toast.success('供应商创建成功');
-        console.log('[SuppliersPage] toast.success called, closing dialog');
+
         setIsCreateDialogOpen(false);
         setErrors({});
         setNewSupplier({
@@ -241,7 +241,7 @@ export default function SuppliersPage() {
         });
         fetchSuppliers();
       } else {
-        console.log('[SuppliersPage] API returned error:', result.message);
+
         toast.error(`创建失败：${result.message}`);
       }
     } catch (error) {

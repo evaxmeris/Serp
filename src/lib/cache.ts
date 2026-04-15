@@ -53,6 +53,6 @@ export function invalidateCache(pattern: string | RegExp) {
   
   if (keysToDelete.length > 0) {
     cache.del(keysToDelete);
-    console.log(`Invalidated ${keysToDelete.length} cache entries for pattern: ${pattern}`);
+
   }
 }

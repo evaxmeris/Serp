@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateProductSchema } from '@/lib/api-schemas';
 
 // GET /api/products - 获取产品列表
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -58,14 +68,21 @@ export async function GET(request: Request) {
 }
 
 // POST /api/products - 创建产品
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
+    const v = validateOrReturn(CreateProductSchema, body);
+    if (!v.success) return v.response;
     const {
       sku,
       name,
       nameEn,
-      category,
+      categoryId,
       specification,
       unit,
       costPrice,
@@ -78,30 +95,24 @@ export async function POST(request: Request) {
       moq,
       leadTime,
       images,
-    } = body;
-
-    if (!sku || !name) {
-      return NextResponse.json(
-        { error: 'SKU and name are required' },
-        { status: 400 }
-      );
-    }
+      attributes: _attributes,
+    } = v.data;
 
     const product = await prisma.product.create({
       data: {
         sku,
         name,
         nameEn,
-        category,
+        categoryId: categoryId || undefined,
         specification,
         unit: unit || 'PCS',
-        costPrice: parseFloat(costPrice) || 0,
-        salePrice: parseFloat(salePrice) || 0,
+        costPrice: costPrice || 0,
+        salePrice: salePrice || 0,
         currency: currency || 'USD',
         description,
         descriptionEn,
-        weight: weight ? parseFloat(weight) : null,
-        volume: volume ? parseFloat(volume) : null,
+        weight: weight || null,
+        volume: volume || null,
         moq,
         leadTime,
         images: images || [],

@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { UpdateProductSchema } from '@/lib/api-schemas';
 
 // GET /api/products/[id] - 获取产品详情
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -31,13 +36,23 @@ export async function GET(
 
 // PUT /api/products/[id] - 更新产品
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { attributes, ...productData } = body;
+    const v = validateOrReturn(UpdateProductSchema, body);
+    if (!v.success) return v.response;
+    const { attributes, ...rawProductData } = v.data;
+
+    // 清理空字符串为 undefined（Prisma 不接受空字符串作为 UUID）
+    const productData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(rawProductData)) {
+      if (value !== '' && value !== undefined) {
+        productData[key] = value;
+      }
+    }
 
     // 更新产品基本信息
     const product = await prisma.product.update({
@@ -92,10 +107,15 @@ export async function PUT(
 
 // DELETE /api/products/[id] - 删除产品
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
     await prisma.product.delete({
       where: { id },

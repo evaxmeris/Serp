@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -6,10 +9,15 @@ import { prisma } from '@/lib/prisma';
  * 通过用户角色关联 -> 角色权限关联 获取所有权限
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     // 检查用户是否存在
     const user = await prisma.user.findUnique({

@@ -8,14 +8,19 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchProductSchema } from '@/lib/api-schemas';
 
 // ============================================
 // GET /api/product-research/products/[id]
 // 获取产品调研详情
 // ============================================
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -103,12 +108,15 @@ export async function GET(
 // 更新产品调研信息
 // ============================================
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
+    const v = validateOrReturn(CreateResearchProductSchema.partial(), body);
+    if (!v.success) return v.response;
+    const validatedBody = v.data;
 
     // 检查产品是否存在
     const existingProduct = await prisma.productResearch.findUnique({
@@ -126,9 +134,9 @@ export async function PUT(
     }
 
     // 如果修改了品类，验证新品类是否存在
-    if (body.categoryId && body.categoryId !== existingProduct.categoryId) {
+    if (validatedBody.categoryId && validatedBody.categoryId !== existingProduct.categoryId) {
       const category = await prisma.productCategory.findUnique({
-        where: { id: body.categoryId },
+        where: { id: validatedBody.categoryId },
       });
 
       if (!category) {
@@ -143,23 +151,23 @@ export async function PUT(
     }
 
     // 准备更新数据
-    const updateData: any = { ...body };
+    const updateData: any = { ...validatedBody };
 
     // 转换数值类型字段
-    if (body.costPrice !== undefined) {
-      updateData.costPrice = body.costPrice ? parseFloat(body.costPrice) : null;
+    if (validatedBody.costPrice !== undefined) {
+      updateData.costPrice = validatedBody.costPrice ? parseFloat(validatedBody.costPrice as any) : null;
     }
-    if (body.salePrice !== undefined) {
-      updateData.salePrice = body.salePrice ? parseFloat(body.salePrice) : null;
+    if (validatedBody.salePrice !== undefined) {
+      updateData.salePrice = validatedBody.salePrice ? parseFloat(validatedBody.salePrice as any) : null;
     }
-    if (body.weight !== undefined) {
-      updateData.weight = body.weight ? parseFloat(body.weight) : null;
+    if (validatedBody.weight !== undefined) {
+      updateData.weight = validatedBody.weight ? parseFloat(validatedBody.weight as any) : null;
     }
-    if (body.volume !== undefined) {
-      updateData.volume = body.volume ? parseFloat(body.volume) : null;
+    if (validatedBody.volume !== undefined) {
+      updateData.volume = validatedBody.volume ? parseFloat(validatedBody.volume as any) : null;
     }
-    if (body.rating !== undefined) {
-      updateData.rating = body.rating ? parseFloat(body.rating) : null;
+    if (validatedBody.rating !== undefined) {
+      updateData.rating = validatedBody.rating ? parseFloat(validatedBody.rating as any) : null;
     }
 
     // 更新产品调研
@@ -200,10 +208,15 @@ export async function PUT(
 // 删除产品调研
 // ============================================
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
 
     // 检查产品是否存在

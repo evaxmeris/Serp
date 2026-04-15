@@ -498,7 +498,7 @@ export default function InquiriesPage() {
                         {inquiry.targetPrice && typeof inquiry.targetPrice === 'number'
                           ? `${inquiry.currency} ${inquiry.targetPrice.toFixed(2)}`
                           : inquiry.targetPrice
-                          ? `${inquiry.currency} ${Number(inquiry.targetPrice).toFixed(2)}`
+                          ? `${inquiry.currency} ${(Number(inquiry.targetPrice) || 0).toFixed(2)}`
                           : '-'}
                       </TableCell>
                       <TableCell>

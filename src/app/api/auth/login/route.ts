@@ -10,6 +10,8 @@ import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { LoginSchema, validateBody } from '@/lib/api-schemas';
+import { validationErrorResponse } from '@/lib/api-response';
 
 // 失败登录计数 Map（只记录失败登录）
 const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
@@ -20,14 +22,13 @@ const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password } = body;
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: '邮箱和密码不能为空' },
-        { status: 400 }
-      );
+    // Zod 验证
+    const validation = validateBody(LoginSchema, body);
+    if (!validation.success) {
+      return validationErrorResponse(validation.errors);
     }
+    const { email, password } = validation.data;
 
     // 查找用户并验证密码
     const user = await prisma.user.findUnique({ where: { email } });

@@ -11,79 +11,35 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // ============================================
 // POST /api/product-research/products/batch
 // 批量导入产品数据
 // ============================================
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
-    const { products } = body;
-
-    // 验证输入
-    if (!Array.isArray(products)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'products 必须是数组'
-        },
-        { status: 400 }
-      );
-    }
-
-    if (products.length === 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '产品列表不能为空'
-        },
-        { status: 400 }
-      );
-    }
-
-    if (products.length > 100) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '每批最多导入 100 个产品'
-        },
-        { status: 400 }
-      );
-    }
-
-    // 验证必填字段
-    const errors: string[] = [];
-    products.forEach((product: any, index: number) => {
-      if (!product.name) {
-        errors.push(`第${index + 1}个产品：缺少产品名称`);
-      }
-      if (!product.brand) {
-        errors.push(`第${index + 1}个产品：缺少品牌`);
-      }
-      if (!product.categoryId) {
-        errors.push(`第${index + 1}个产品：缺少品类 ID`);
-      }
-      if (!product.costPrice && product.costPrice !== 0) {
-        errors.push(`第${index + 1}个产品：缺少成本价`);
-      }
-      if (!product.salePrice && product.salePrice !== 0) {
-        errors.push(`第${index + 1}个产品：缺少销售价`);
-      }
-    });
-
-    if (errors.length > 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '数据验证失败',
-          details: errors.slice(0, 10) // 只显示前 10 个错误
-        },
-        { status: 400 }
-      );
-    }
+    const v = validateOrReturn(z.object({ products: z.array(z.object({
+      name: z.string(),
+      brand: z.string(),
+      categoryId: z.string(),
+      costPrice: z.coerce.number(),
+      salePrice: z.coerce.number(),
+    })).min(1).max(100) }), body);
+    if (!v.success) return v.response;
+    const { products } = v.data;
 
     // 使用事务批量创建产品
     const createdProducts = await prisma.$transaction(

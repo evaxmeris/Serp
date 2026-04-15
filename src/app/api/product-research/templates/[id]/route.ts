@@ -8,14 +8,19 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { CreateResearchTemplateSchema } from '@/lib/api-schemas';
 
 // ============================================
 // GET /api/product-research/templates/[id]
 // 获取属性模板详情
 // ============================================
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -75,12 +80,14 @@ export async function GET(
 // 更新属性模板
 // ============================================
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
+    const v = validateOrReturn(CreateResearchTemplateSchema.partial(), body);
+    if (!v.success) return v.response;
 
     // 检查模板是否存在
     const existingTemplate = await prisma.attributeTemplate.findUnique({
@@ -132,7 +139,7 @@ export async function PUT(
     // 更新属性模板
     const template = await prisma.attributeTemplate.update({
       where: { id },
-      data: body,
+      data: v.data,
       include: {
         category: {
           select: {
@@ -167,10 +174,15 @@ export async function PUT(
 // 删除属性模板
 // ============================================
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const session = await getUserFromRequest(request);
+      if (!session) {
+        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+      }
+
     const { id } = await params;
 
     // 检查模板是否存在

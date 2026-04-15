@@ -8,14 +8,24 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth-api';
+import { errorResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateOrReturn } from '@/lib/api-validation';
+import { z } from 'zod';
 
 // ============================================
 // GET /api/product-research/comparisons
 // 获取对比列表或对比详情（含差异分析）
 // ============================================
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id'); // 对比 ID（如果提供，返回详情）
     const productId = searchParams.get('productId'); // 产品 ID（查找包含该产品的对比）
@@ -337,9 +347,32 @@ function getAttributeValue(attrValue: any): string | number | boolean | null {
 // POST /api/product-research/comparisons
 // 创建产品对比
 // ============================================
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const body = await request.json();
+    const v = validateOrReturn(z.object({
+      name: z.string().min(1, '对比名称不能为空'),
+      description: z.string().optional(),
+      categoryId: z.string().uuid().optional(),
+      comparedBy: z.string().optional(),
+      attributes: z.array(z.string()).optional(),
+      highlightDiff: z.boolean().optional(),
+      products: z.array(z.object({
+        productId: z.string(),
+        sortOrder: z.number().optional(),
+        isRecommended: z.boolean().optional(),
+        score: z.number().optional(),
+        pros: z.array(z.string()).optional(),
+        cons: z.array(z.string()).optional(),
+        notes: z.string().optional(),
+      })).min(2, '至少需要两个产品'),
+    }), body);
+    if (!v.success) return v.response;
     const {
       name,
       description,
@@ -347,8 +380,8 @@ export async function POST(request: Request) {
       comparedBy,
       attributes,
       highlightDiff,
-      products, // [{ productId, sortOrder, isRecommended, score, pros, cons, notes }]
-    } = body;
+      products,
+    } = v.data;
 
     // 验证必填字段
     if (!name || !products || !Array.isArray(products) || products.length === 0) {
@@ -505,8 +538,13 @@ export async function POST(request: Request) {
 // DELETE /api/product-research/comparisons
 // 删除产品对比
 // ============================================
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
