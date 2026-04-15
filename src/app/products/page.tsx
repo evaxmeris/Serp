@@ -176,7 +176,7 @@ export default function ProductsPage() {
       const res = await fetch('/api/product-research/categories?isActive=true');
       const data = await res.json();
       if (data.success) {
-        setProductCategories(data.data || []);
+        setProductCategories(data.data?.items ?? data.data ?? []);
       }
     } catch (error) {
       console.error('加载品类失败:', error);
@@ -193,7 +193,7 @@ export default function ProductsPage() {
       const res = await fetch(`/api/product-research/templates?categoryId=${categoryId}&isActive=true`);
       const data = await res.json();
       if (data.success) {
-        setAttributeTemplates(data.data || []);
+        setAttributeTemplates(data.data?.items ?? data.data ?? []);
         // 设置默认值
         const defaults: AttributeValueState = {};
         data.data?.forEach((t: AttributeTemplate) => {
@@ -247,7 +247,7 @@ export default function ProductsPage() {
     try {
       const res = await fetch(`/api/products?search=${search}`);
       const data = await res.json();
-      setProducts(data.data || []);
+      setProducts(data.data?.items ?? data.data ?? []);
       setTotalFiltered(data.pagination?.total || data.data?.length || 0);
     } catch (error) {
       console.error('Failed to fetch products:', error);

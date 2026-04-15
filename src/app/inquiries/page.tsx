@@ -199,7 +199,7 @@ export default function InquiriesPage() {
     try {
       const res = await fetch('/api/customers');
       const data = await res.json();
-      setCustomers(data.data || []);
+      setCustomers(data.data?.items ?? data.data ?? []);
     } catch (error) {
       console.error('Failed to fetch customers:', error);
     }

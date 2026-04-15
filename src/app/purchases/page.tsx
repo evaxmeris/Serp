@@ -133,9 +133,9 @@ export default function PurchasesPage() {
       
       const res = await fetch(`/api/purchases?${params.toString()}`);
       const data = await res.json();
-      setPurchases(data.data || []);
-      setTotalPages(data.pagination?.totalPages || 1);
-      setTotal(data.pagination?.total || 0);
+      setPurchases(data.data?.items ?? data.data ?? []);
+      setTotalPages(data.data?.pagination?.totalPages || data.pagination?.totalPages || 1);
+      setTotal(data.data?.pagination?.total || data.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to fetch purchases:', error);
     } finally {

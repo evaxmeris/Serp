@@ -119,8 +119,11 @@ export default function CustomersPage() {
     try {
       const res = await fetch(`/api/customers?search=${search}&page=${page}&limit=20`);
       const data = await res.json();
-      setCustomers(data.data || []);
-      if (data.pagination) {
+      const customerData = data.data?.items ?? data.data ?? [];
+      setCustomers(customerData);
+      if (data.data?.pagination) {
+        setPagination(data.data.pagination);
+      } else if (data.pagination) {
         setPagination(data.pagination);
       }
     } catch (error) {

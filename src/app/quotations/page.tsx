@@ -74,8 +74,8 @@ export default function QuotationsPage() {
 
       const res = await fetch(`/api/quotations?${params}`);
       const data = await res.json();
-      setQuotations(data.data || []);
-      setPagination(data.pagination || pagination);
+      setQuotations(data.data?.items ?? data.data ?? []);
+      setPagination(data.data?.pagination || data.pagination || pagination);
     } catch (error) {
       console.error('Failed to fetch quotations:', error);
     } finally {

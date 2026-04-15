@@ -287,7 +287,7 @@ export default function ProductNewPage() {
       const res = await fetch('/api/product-research/categories?isActive=true');
       const data = await res.json();
       if (data.success) {
-        setCategories(data.data || []);
+        setCategories(data.data?.items ?? data.data ?? []);
       }
     } catch (error) {
       console.error('加载品类失败:', error);
@@ -317,7 +317,7 @@ export default function ProductNewPage() {
       const res = await fetch(`/api/product-research/templates?categoryId=${categoryId}&isActive=true`);
       const data = await res.json();
       if (data.success) {
-        setAttributeTemplates(data.data || []);
+        setAttributeTemplates(data.data?.items ?? data.data ?? []);
       }
     } catch (error) {
       console.error('加载属性模板失败:', error);

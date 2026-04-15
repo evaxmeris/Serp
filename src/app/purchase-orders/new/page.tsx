@@ -154,7 +154,7 @@ export default function CreatePurchaseOrderPage() {
     try {
       const res = await fetch('/api/products?limit=100');
       const data = await res.json();
-      setProducts(data.data || []);
+      setProducts(data.data?.items ?? data.data ?? []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     }
