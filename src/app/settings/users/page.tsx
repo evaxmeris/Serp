@@ -94,7 +94,7 @@ export default function UserRolesPage() {
     try {
       const res = await fetch('/api/users-with-roles');
       const data = await res.json();
-      setUsers(data);
+      setUsers(data.data?.items ?? data.data ?? []);
     } catch (error) {
       console.error('加载用户失败:', error);
     } finally {
@@ -108,7 +108,7 @@ export default function UserRolesPage() {
       const res = await fetch('/api/roles');
       const data = await res.json();
       // 只显示启用的角色
-      setRoles(data.filter((r: Role) => r.isActive));
+      setRoles((data.data?.items ?? data.data ?? []).filter((r: Role) => r.isActive));
     } catch (error) {
       console.error('加载角色失败:', error);
     }

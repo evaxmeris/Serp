@@ -48,7 +48,7 @@ export default function PurchaseOrderDetailPage() {
         return res.json();
       })
       .then((data) => {
-        setOrder(data.data);
+        setOrder(data.data?.items ?? data.data ?? null);
         setLoading(false);
       })
       .catch((err) => {

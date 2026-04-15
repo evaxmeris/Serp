@@ -105,7 +105,7 @@ export default function RolesPage() {
     try {
       const res = await fetch('/api/roles');
       const data = await res.json();
-      setRoles(data.data || data || []);
+      setRoles(data.data?.items ?? data.data ?? []);
     } catch (error) {
       console.error('加载角色失败:', error);
     } finally {
@@ -118,7 +118,7 @@ export default function RolesPage() {
     try {
       const res = await fetch('/api/permissions');
       const data = await res.json();
-      setPermissions(data.data || data || []);
+      setPermissions(data.data?.items ?? data.data ?? []);
     } catch (error) {
       console.error('加载权限失败:', error);
     }
@@ -160,7 +160,7 @@ export default function RolesPage() {
       const res = await fetch(`/api/roles/${role.id}/permissions`);
       const data = await res.json();
       // API 返回格式：{ data: [{id, name, displayName, ...}], ... }
-      const permissions = data.data || data || [];
+      const permissions = data.data?.items ?? data.data ?? [];
       setSelectedPermissionIds(permissions.map((p: any) => p.id));
       setOpenPermissionDialog(true);
     } catch (error) {

@@ -205,7 +205,7 @@ export default function UsersPage() {
     try {
       const res = await fetch('/api/roles');
       const data = await res.json();
-      const rolesData = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+      const rolesData = data.data?.items ?? (Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : []);
       setRoles(rolesData);
     } catch (error) {
       console.error('加载角色失败:', error);
@@ -219,7 +219,7 @@ export default function UsersPage() {
     try {
       const res = await fetch('/api/permissions');
       const data = await res.json();
-      const permsData = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+      const permsData = data.data?.items ?? (Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : []);
       setPermissions(permsData);
     } catch (error) {
       console.error('加载权限失败:', error);
@@ -307,7 +307,7 @@ export default function UsersPage() {
     fetch(`/api/users/${user.id}/roles`)
       .then(res => res.json())
       .then(data => {
-        const roleIds = (data.data || data || []).map((r: any) => r.id);
+        const roleIds = (data.data?.items ?? data.data ?? []).map((r: any) => r.id);
         setUserFormData(prev => ({ ...prev, roleIds }));
       })
       .catch(() => setUserFormData(prev => ({ ...prev, roleIds: [] })));
@@ -404,7 +404,7 @@ export default function UsersPage() {
     try {
       const res = await fetch(`/api/roles/${role.id}/permissions`);
       const data = await res.json();
-      const permissions = data.data || data || [];
+      const permissions = data.data?.items ?? data.data ?? [];
       setSelectedPermissionIds(permissions.map((p: any) => p.id));
       setOpenPermissionDialog(true);
     } catch (error) {

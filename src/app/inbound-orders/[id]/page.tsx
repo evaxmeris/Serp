@@ -94,7 +94,7 @@ export default function InboundOrderDetailPage() {
       const data = await res.json();
 
       if (data.success) {
-        setOrder(data.data);
+        setOrder(data.data?.items ?? data.data ?? null);
       }
     } catch (error) {
       console.error('Failed to fetch order:', error);

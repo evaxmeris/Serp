@@ -120,7 +120,7 @@ export default function SupplierDetailPage() {
       const res = await fetch(`/api/v1/suppliers/${id}`);
       const data = await res.json();
       if (data.data) {
-        setSupplier(data.data);
+        setSupplier(data.data?.items ?? data.data ?? null);
       }
     } catch (error) {
       console.error('Failed to fetch supplier detail:', error);
