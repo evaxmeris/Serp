@@ -30,6 +30,7 @@ import {
   Scale,
   Upload,
   ShieldCheck,
+  Cloud,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -191,6 +192,13 @@ const menuConfig: MenuGroup[] = [
         label: '用户及权限',
         icon: User,
         href: '/users',
+        roles: ['ADMIN'],
+      },
+      {
+        key: 'sync',
+        label: '多平台同步',
+        icon: Cloud,
+        href: '/sync',
         roles: ['ADMIN'],
       },
       {
