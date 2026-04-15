@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight, CheckCheck, Truck, CheckSquare, Square } from 'lucide-react';
+import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight, CheckCheck, Truck, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/types/order';
 import { OrderBatchConfirmDialog } from '@/components/batch-operations/OrderBatchConfirmDialog';
 import { OrderBatchShipDialog } from '@/components/batch-operations/OrderBatchShipDialog';
@@ -72,6 +72,33 @@ export default function OrdersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchConfirmDialogOpen, setBatchConfirmDialogOpen] = useState(false);
   const [batchShipDialogOpen, setBatchShipDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // 同步平台订单
+  const handleSyncOrders = async () => {
+    try {
+      setSyncing(true);
+      setSyncMessage(null);
+      const response = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platformCode: undefined }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        const totalSynced = data.data.results.reduce((sum: number, r: any) => sum + r.ordersSynced, 0);
+        setSyncMessage(`✅ 同步完成：成功同步 ${totalSynced} 个订单`);
+      } else {
+        setSyncMessage(`❌ 同步失败：${data.error}`);
+      }
+    } catch {
+      setSyncMessage('❌ 同步请求失败，请检查网络连接');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
 
   const { data, isLoading, error } = useOrders({ 
     page, 
@@ -167,12 +194,32 @@ export default function OrdersPage() {
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">订单管理</CardTitle>
-            <Button onClick={() => router.push('/orders/new')}>
-              <Plus className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">新增订单</span>
-              <span className="sm:hidden">新增</span>
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={handleSyncOrders}
+                disabled={syncing}
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                同步平台订单
+              </Button>
+              <Button onClick={() => router.push('/orders/new')}>
+                <Plus className="w-4 h-4 mr-2" />
+                <span className="hidden sm:inline">新增订单</span>
+                <span className="sm:hidden">新增</span>
+              </Button>
+            </div>
           </div>
+          {syncMessage && (
+            <div className={`text-sm px-3 py-2 rounded-lg ${
+              syncMessage.startsWith('✅')
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {syncMessage}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {/* 筛选区 */}

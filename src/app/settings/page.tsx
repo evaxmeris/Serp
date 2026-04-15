@@ -9,7 +9,7 @@
  * @更新日期 2026-04-10
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,10 +34,21 @@ import {
   CreditCard,
   DollarSign,
   Users,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  Play,
+  RefreshCw,
+  Trash2,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Tab 定义
-type TabKey = 'business' | 'system' | 'security' | 'notification' | 'data' | 'appearance';
+type TabKey = 'business' | 'system' | 'security' | 'notification' | 'data' | 'appearance' | 'sync';
 
 interface TabDef {
   key: TabKey;
@@ -53,6 +64,7 @@ const tabs: TabDef[] = [
   { key: 'notification', label: '通知设置', icon: <Bell className="h-4 w-4" />, desc: '邮件通知、消息推送' },
   { key: 'data', label: '数据管理', icon: <Database className="h-4 w-4" />, desc: '备份、导出' },
   { key: 'appearance', label: '外观设置', icon: <Palette className="h-4 w-4" />, desc: '主题、语言' },
+  { key: 'sync', label: '平台同步', icon: <Cloud className="h-4 w-4" />, desc: 'API凭据、同步间隔' },
 ];
 
 // 模拟配置数据
@@ -71,6 +83,94 @@ const mockConfig = {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('business');
   const [saved, setSaved] = useState(false);
+  const [syncPlatforms, setSyncPlatforms] = useState<any[]>([]);
+  const [syncLoading, setSyncLoading] = useState(true);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<any>(null);
+  const [showSecrets, setShowSecrets] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    enabled: false,
+    syncIntervalMin: 120,
+    credentials: {} as Record<string, string>,
+  });
+
+  const loadSyncStatus = async () => {
+    try {
+      setSyncLoading(true);
+      const response = await fetch('/api/sync/status');
+      const data = await response.json();
+      if (data.success) {
+        setSyncPlatforms(data.data.platforms);
+      }
+    } catch (error) {
+      console.error('Failed to load sync status:', error);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const openConfigDialog = async (platform: any) => {
+    setSelectedPlatform(platform);
+    try {
+      const response = await fetch(`/api/sync/config?platformCode=${platform.code}`);
+      const data = await response.json();
+      if (data.success && data.data.config) {
+        setConfigForm({
+          enabled: data.data.config.enabled,
+          syncIntervalMin: data.data.config.syncIntervalMin,
+          credentials: data.data.config.credentials || {},
+        });
+      } else {
+        setConfigForm({
+          enabled: platform.enabled,
+          syncIntervalMin: platform.syncIntervalMin,
+          credentials: {},
+        });
+      }
+      setConfigDialogOpen(true);
+    } catch {
+      setConfigDialogOpen(true);
+    }
+  };
+
+  const saveConfig = async () => {
+    if (!selectedPlatform) return;
+    try {
+      const response = await fetch('/api/sync/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platformCode: selectedPlatform.code, ...configForm }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`${selectedPlatform.name} 配置已更新`);
+        setConfigDialogOpen(false);
+        loadSyncStatus();
+      } else {
+        alert(`保存失败：${data.error}`);
+      }
+    } catch {
+      alert('请求失败');
+    }
+  };
+
+  const formatTime = (dateStr?: string) => {
+    if (!dateStr) return '从未';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
+    if (diffMin < 1) return '刚刚';
+    if (diffMin < 60) return `${diffMin} 分钟前`;
+    if (diffMin < 1440) return `${Math.floor(diffMin / 60)} 小时前`;
+    return date.toLocaleString('zh-CN');
+  };
+
+  // Load sync status when sync tab is active
+  useEffect(() => {
+    if (activeTab === 'sync') {
+      loadSyncStatus();
+    }
+  }, [activeTab]);
 
   const handleSave = () => {
     setSaved(true);
@@ -132,6 +232,169 @@ export default function SettingsPage() {
       {activeTab === 'notification' && <NotificationSettings />}
       {activeTab === 'data' && <DataSettings />}
       {activeTab === 'appearance' && <AppearanceSettings />}
+      {activeTab === 'sync' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                  <Cloud className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <CardTitle>平台同步配置</CardTitle>
+                  <CardDescription>管理各电商平台 API 凭据和同步参数</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {syncLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">加载中...</div>
+                ) : syncPlatforms.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">暂无平台配置</div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {syncPlatforms.map((platform: any) => (
+                      <div
+                        key={platform.code}
+                        className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{platform.name}</span>
+                            {platform.enabled ? (
+                              <Badge className="bg-green-100 text-green-700 text-xs">已启用</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">已禁用</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-500 mt-1">
+                            {platform.configured ? '已配置凭据' : '⚠️ 未配置凭据'}
+                            {platform.lastSyncAt && ` · 最后同步: ${formatTime(platform.lastSyncAt)}`}
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => openConfigDialog(platform)}>
+                          <Settings className="h-4 w-4 mr-1" />
+                          配置
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 配置对话框 */}
+          <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>{selectedPlatform?.name} - 配置</DialogTitle>
+                <DialogDescription>配置平台 API 凭据和同步参数</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="sync-enabled">启用同步</Label>
+                  <Switch
+                    id="sync-enabled"
+                    checked={configForm.enabled}
+                    onCheckedChange={(checked) => setConfigForm({ ...configForm, enabled: checked })}
+                  />
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label htmlFor="sync-interval">同步间隔（分钟）</Label>
+                  <Input
+                    id="sync-interval"
+                    type="number"
+                    min={5}
+                    max={1440}
+                    value={configForm.syncIntervalMin}
+                    onChange={(e) => setConfigForm({ ...configForm, syncIntervalMin: parseInt(e.target.value) || 120 })}
+                  />
+                  <p className="text-xs text-muted-foreground">建议：120 分钟（2 小时），最小 5 分钟</p>
+                </div>
+                <Separator />
+                {selectedPlatform?.code === 'alibaba' && (
+                  <div className="space-y-4">
+                    <h4 className="font-medium">阿里国际站 API 凭据</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="appKey">App Key</Label>
+                      <Input
+                        id="appKey"
+                        value={configForm.credentials.appKey || ''}
+                        onChange={(e) => setConfigForm({
+                          ...configForm,
+                          credentials: { ...configForm.credentials, appKey: e.target.value },
+                        })}
+                        placeholder="例如：504486"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="appSecret">App Secret</Label>
+                      <div className="relative">
+                        <Input
+                          id="appSecret"
+                          type={showSecrets ? 'text' : 'password'}
+                          value={configForm.credentials.appSecret || ''}
+                          onChange={(e) => setConfigForm({
+                            ...configForm,
+                            credentials: { ...configForm.credentials, appSecret: e.target.value },
+                          })}
+                          placeholder="输入 App Secret"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowSecrets(!showSecrets)}
+                        >
+                          {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="accessToken">Access Token</Label>
+                      <div className="relative">
+                        <Input
+                          id="accessToken"
+                          type={showSecrets ? 'text' : 'password'}
+                          value={configForm.credentials.accessToken || ''}
+                          onChange={(e) => setConfigForm({
+                            ...configForm,
+                            credentials: { ...configForm.credentials, accessToken: e.target.value },
+                          })}
+                          placeholder="输入 Access Token"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowSecrets(!showSecrets)}
+                        >
+                          {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {['tiktok', 'amazon', 'shopify'].includes(selectedPlatform?.code) && (
+                  <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
+                    <AlertTriangle className="h-4 w-4 inline mr-2" />
+                    {selectedPlatform.name} 适配器尚未实现，敬请期待
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfigDialogOpen(false)}>取消</Button>
+                <Button onClick={saveConfig}><Save className="h-4 w-4 mr-1" />保存</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
     </div>
   );
 }
