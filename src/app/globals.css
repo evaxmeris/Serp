@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* @import "shadcn/tailwind.css"; - File does not exist, causing CSS compilation to hang */
 
 @custom-variant dark (&:is(.dark *));
 

@@ -23,7 +23,19 @@ export async function POST(
     }
 
     const { id: registrationId } = await params;
-    const body = await request.json();
+
+    // 安全解析 JSON body，允许空 body
+    let body: any = {};
+    try {
+      const contentType = request.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const text = await request.text();
+        body = text ? JSON.parse(text) : {};
+      }
+    } catch {
+      body = {};
+    }
+
     const v = validateOrReturn(z.object({ reason: z.string().optional() }), body);
     if (!v.success) return v.response;
     const { reason } = v.data;

@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Turbopack 根目录配置 - Docker 中不需要设置
+  ...(process.env.NODE_ENV !== 'production' ? {
+    turbopack: {
+      root: process.env.TURBOPACK_ROOT || '.',
+    },
+  } : {}),
 };
 
 export default nextConfig;

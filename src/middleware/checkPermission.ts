@@ -14,9 +14,8 @@
 // This file is kept for backward compatibility for existing Pages Router APIs
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient, Permission } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Permission } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
 /**
  * 缓存条目结构

@@ -6,11 +6,10 @@
  * @module services/base/BaseService
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import type { AuthSession } from '@/middleware/auth';
 import { hasPermission, getRowLevelFilter } from '@/middleware/auth';
-
-const prisma = new PrismaClient();
+import type { PrismaClient } from '@prisma/client';
 
 /**
  * 基础服务类

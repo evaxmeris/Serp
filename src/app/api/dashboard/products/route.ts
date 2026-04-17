@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // ============================================
 // 类型定义

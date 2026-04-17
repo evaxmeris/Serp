@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Cookies from 'js-cookie';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -445,26 +444,18 @@ export default function Sidebar({
   );
 }
 
-// 获取当前用户角色从 cookie
+// 获取当前用户角色 - 直接从 localStorage 读取（登录时已保存）
+// 不再发起 API 请求，避免每次页面加载都阻塞
 export const getCurrentUserRole = async (): Promise<UserRole> => {
   if (typeof window === 'undefined') return 'ADMIN';
   try {
-    const userId = Cookies.get('user_id');
-    const token = Cookies.get('auth_token');
-    
-    if (!userId || !token) return 'ADMIN';
-    
-    const res = await fetch('/api/auth/me', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    
-    if (!res.ok) return 'ADMIN';
-    
-    const user = await res.json();
-    return (user.role as UserRole) || 'ADMIN';
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user?.role) return user.role as UserRole;
+    }
   } catch {
-    return 'ADMIN';
+    // 忽略解析错误
   }
+  return 'ADMIN';
 };

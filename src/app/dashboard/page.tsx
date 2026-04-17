@@ -158,107 +158,52 @@ export default function DashboardPage() {
     };
     loadRole();
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 只在挂载时执行一次
+
+  useEffect(() => {
+    if (period) {
+      fetchDashboardData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
+  // 模拟数据 - 当 API 不可用时使用
+  const getMockData = (): DashboardData => ({
+    overview: { pendingOrders: 18, lowStockAlerts: 5, pendingApprovals: 3, pendingPayments: 24500, todaySales: 12800, monthlyGrossMargin: 43.25 },
+    salesTrend: [{ date: '周一', amount: 3200 }, { date: '周二', amount: 4500 }, { date: '周三', amount: 3800 }, { date: '周四', amount: 5200 }, { date: '周五', amount: 6100 }, { date: '周六', amount: 4800 }, { date: '周日', amount: 5900 }],
+    channelDistribution: [{ name: 'Alibaba', value: 45 }, { name: 'Amazon', value: 30 }, { name: 'TikTok', value: 15 }, { name: '其他', value: 10 }],
+    recentTodos: [{ id: '1', title: '#1001', description: '张三 - 万圣节夜光笔 100pcs', status: 'pending' }, { id: '2', title: '#1002', description: '李四 - 圣诞帽 50pcs', status: 'processing' }, { id: '3', title: '#1003', description: '王五 - 发光手环 200pcs', status: 'pending' }],
+    recentApprovals: [{ id: '1', title: '李四处', description: '差旅费报销 800元', status: 'pending' }, { id: '2', title: '王五', description: '采购申请 1200元', status: 'pending' }, { id: '3', title: '赵六', description: '绩效提成 3588元', status: 'pending' }],
+  });
+
   const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const response = await fetch(`/api/dashboard/overview?days=${period}`);
       const result = await response.json();
       if (result.success) {
-        // 适配 API 返回的数据结构（alerts.pendingOrders → overview.pendingOrders）
         const apiData = result.data;
         const adaptedData: DashboardData = {
           overview: {
             pendingOrders: apiData.alerts?.pendingOrders ?? 0,
             lowStockAlerts: apiData.alerts?.lowStockItems ?? 0,
-            pendingApprovals: 0, // API 暂未提供
-            pendingPayments: 0, // API 暂未提供
+            pendingApprovals: 0,
+            pendingPayments: 0,
             todaySales: apiData.sales?.totalRevenue ?? 0,
             monthlyGrossMargin: apiData.sales?.growth ?? 0,
           },
-          salesTrend: [], // API 暂未提供趋势数据
-          channelDistribution: [], // API 暂未提供渠道分布
-          recentTodos: [], // API 暂未提供待办事项
-          recentApprovals: [], // API 暂未提供审批事项
+          salesTrend: [],
+          channelDistribution: [],
+          recentTodos: [],
+          recentApprovals: [],
         };
         setData(adaptedData);
       } else {
-        // 如果API失败，使用模拟数据
-        setData({
-          overview: {
-            pendingOrders: 18,
-            lowStockAlerts: 5,
-            pendingApprovals: 3,
-            pendingPayments: 24500,
-            todaySales: 12800,
-            monthlyGrossMargin: 43.25,
-          },
-          salesTrend: [
-            { date: '周一', amount: 3200 },
-            { date: '周二', amount: 4500 },
-            { date: '周三', amount: 3800 },
-            { date: '周四', amount: 5200 },
-            { date: '周五', amount: 6100 },
-            { date: '周六', amount: 4800 },
-            { date: '周日', amount: 5900 },
-          ],
-          channelDistribution: [
-            { name: 'Alibaba', value: 45 },
-            { name: 'Amazon', value: 30 },
-            { name: 'TikTok', value: 15 },
-            { name: '其他', value: 10 },
-          ],
-          recentTodos: [
-            { id: '1', title: '#1001', description: '张三 - 万圣节夜光笔 100pcs', status: 'pending' },
-            { id: '2', title: '#1002', description: '李四 - 圣诞帽 50pcs', status: 'processing' },
-            { id: '3', title: '#1003', description: '王五 - 发光手环 200pcs', status: 'pending' },
-          ],
-          recentApprovals: [
-            { id: '1', title: '李四处', description: '差旅费报销 800元', status: 'pending' },
-            { id: '2', title: '王五', description: '采购申请 1200元', status: 'pending' },
-            { id: '3', title: '赵六', description: '绩效提成 3588元', status: 'pending' },
-          ],
-        });
+        setData(getMockData());
       }
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-      // 使用模拟数据
-      setData({
-        overview: {
-          pendingOrders: 18,
-          lowStockAlerts: 5,
-          pendingApprovals: 3,
-          pendingPayments: 24500,
-          todaySales: 12800,
-          monthlyGrossMargin: 43.25,
-        },
-        salesTrend: [
-          { date: '周一', amount: 3200 },
-          { date: '周二', amount: 4500 },
-          { date: '周三', amount: 3800 },
-          { date: '周四', amount: 5200 },
-          { date: '周五', amount: 6100 },
-          { date: '周六', amount: 4800 },
-          { date: '周日', amount: 5900 },
-        ],
-        channelDistribution: [
-          { name: 'Alibaba', value: 45 },
-          { name: 'Amazon', value: 30 },
-          { name: 'TikTok', value: 15 },
-          { name: '其他', value: 10 },
-        ],
-        recentTodos: [
-          { id: '1', title: '#1001', description: '张三 - 万圣节夜光笔 100pcs', status: 'pending' },
-          { id: '2', title: '#1002', description: '李四 - 圣诞帽 50pcs', status: 'processing' },
-          { id: '3', title: '#1003', description: '王五 - 发光手环 200pcs', status: 'pending' },
-        ],
-        recentApprovals: [
-          { id: '1', title: '李四处', description: '差旅费报销 800元', status: 'pending' },
-          { id: '2', title: '王五', description: '采购申请 1200元', status: 'pending' },
-          { id: '3', title: '赵六', description: '绩效提成 3588元', status: 'pending' },
-        ],
-      });
+    } catch {
+      setData(getMockData());
     } finally {
       setLoading(false);
     }

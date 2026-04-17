@@ -53,7 +53,7 @@ export default function RootLayoutContent({ children }: RootLayoutContentProps) 
     }
     
     setMounted(true);
-  }, []);
+  }, []); // 空依赖，只在挂载时执行一次
 
   // 监听路由变化（移动端自动关闭 Sidebar）
   useEffect(() => {
