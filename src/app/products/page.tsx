@@ -275,27 +275,45 @@ export default function ProductsPage() {
     });
   };
 
-  // 打开编辑对话框
-  const openEditDialog = async (product: Product) => {
-    setEditingProduct(product);
-    setEditFormData({
-      sku: product.sku,
-      name: product.name,
-      nameEn: product.nameEn || '',
-      category: product.category || '',
-      categoryName: product.categoryName || '',
-      categoryId: product.categoryId || '',
-      costPrice: product.costPrice?.toString() || '',
-      salePrice: product.salePrice?.toString() || '',
-      status: product.status,
-    });
-    setSelectedCategoryId(product.categoryId || '');
-    setAttributeValues({});
-    setAttributeTemplates([]);
-    
-    if (product.categoryId) {
-      await loadAttributeTemplates(product.categoryId);
-      await loadProductAttributeValues(product.id);
+  // 打开编辑对话框（product 为 null 时表示新建产品）
+  const openEditDialog = async (product: Product | null) => {
+    if (product) {
+      setEditingProduct(product);
+      setEditFormData({
+        sku: product.sku,
+        name: product.name,
+        nameEn: product.nameEn || '',
+        category: product.category || '',
+        categoryName: product.categoryName || '',
+        categoryId: product.categoryId || '',
+        costPrice: product.costPrice?.toString() || '',
+        salePrice: product.salePrice?.toString() || '',
+        status: product.status,
+      });
+      setSelectedCategoryId(product.categoryId || '');
+      setAttributeValues({});
+      setAttributeTemplates([]);
+      
+      if (product.categoryId) {
+        await loadAttributeTemplates(product.categoryId);
+        await loadProductAttributeValues(product.id);
+      }
+    } else {
+      setEditingProduct(null);
+      setEditFormData({
+        sku: '',
+        name: '',
+        nameEn: '',
+        category: '',
+        categoryName: '',
+        categoryId: '',
+        costPrice: '',
+        salePrice: '',
+        status: 'active',
+      });
+      setSelectedCategoryId('');
+      setAttributeValues({});
+      setAttributeTemplates([]);
     }
     
     setEditDialogOpen(true);
@@ -431,10 +449,8 @@ export default function ProductsPage() {
     }
   };
 
-  // 保存产品编辑
+  // 保存产品（新建或编辑）
   const handleSaveEdit = async () => {
-    if (!editingProduct) return;
-
     // 验证必填属性
     const requiredTemplates = attributeTemplates.filter(t => t.isRequired);
     for (const template of requiredTemplates) {
@@ -485,8 +501,12 @@ export default function ProductsPage() {
         return result;
       }).filter(Boolean);
 
-      const response = await fetch(`/api/products/${editingProduct.id}`, {
-        method: 'PUT',
+      const isNew = !editingProduct;
+      const url = isNew ? '/api/products' : `/api/products/${editingProduct.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sku: editFormData.sku,
@@ -504,15 +524,15 @@ export default function ProductsPage() {
 
       const result = await response.json();
       if (result.success) {
-        alert('产品更新成功');
+        alert(isNew ? '产品创建成功' : '产品更新成功');
         setEditDialogOpen(false);
         fetchProducts();
       } else {
-        alert(result.error || '更新失败');
+        alert(result.error || (isNew ? '创建失败' : '更新失败'));
       }
     } catch (error) {
-      console.error('Failed to update product:', error);
-      alert('更新失败');
+      console.error('Failed to save product:', error);
+      alert('保存失败');
     }
   };
 
@@ -628,13 +648,13 @@ export default function ProductsPage() {
                 <span className="hidden sm:inline">批量删除</span>
                 <span className="sm:hidden">删除</span>
               </Button>
-              <Link href="/products/new">
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">新建产品</span>
-                  <span className="sm:hidden">新建</span>
-                </Button>
-              </Link>
+              <Button
+                onClick={() => openEditDialog(null)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">新建产品</span>
+                <span className="sm:hidden">新建</span>
+              </Button>
             </div>
           </div>
         </CardHeader>
