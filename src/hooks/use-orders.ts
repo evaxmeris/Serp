@@ -170,7 +170,11 @@ export function useDeleteOrder() {
 export function useCustomers() {
   return useQuery<Array<{ id: string; companyName: string; contactName: string | null }>>({
     queryKey: ['customers'],
-    queryFn: () => fetcher('/api/customers'),
+    queryFn: async () => {
+      const result = await fetcher<any>('/api/customers');
+      // listResponse 返回 { items: [...], pagination: {...} }，需提取 items
+      return result.items || result;
+    },
   });
 }
 
@@ -185,6 +189,11 @@ export function useProducts() {
     currency: string;
   }>>({
     queryKey: ['products'],
-    queryFn: () => fetcher('/api/products'),
+    queryFn: async () => {
+      const result = await fetcher<any>('/api/products');
+      // 兼容两种返回格式：直接数组 或 { items: [...] }
+      if (Array.isArray(result)) return result;
+      return result.items || result;
+    },
   });
 }

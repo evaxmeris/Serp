@@ -35,6 +35,12 @@ interface Supplier {
   companyName: string;
 }
 
+interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface OrderItem {
   productId: string;
   expectedQuantity: number;
@@ -47,11 +53,12 @@ export default function NewInboundOrderPage() {
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   
   const [formData, setFormData] = useState({
     type: 'PURCHASE_IN',
     supplierId: '',
-    warehouseId: 'default',
+    warehouseId: '',
     expectedDate: '',
     note: '',
   });
@@ -63,6 +70,7 @@ export default function NewInboundOrderPage() {
   useEffect(() => {
     fetchProducts();
     fetchSuppliers();
+    fetchWarehouses();
   }, []);
 
   const fetchProducts = async () => {
@@ -86,6 +94,23 @@ export default function NewInboundOrderPage() {
       }
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
+    }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const res = await fetch('/api/v1/warehouses?status=ACTIVE&limit=100');
+      const data = await res.json();
+      if (data.success) {
+        const items = data.data.items || [];
+        setWarehouses(items);
+        // 如果有仓库且当前未选择，默认选中第一个
+        if (items.length > 0 && !formData.warehouseId) {
+          setFormData(prev => ({ ...prev, warehouseId: items[0].code }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouses:', error);
     }
   };
 
@@ -192,6 +217,25 @@ export default function NewInboundOrderPage() {
                     {suppliers.map((supplier) => (
                       <SelectItem key={supplier.id} value={supplier.id}>
                         {supplier.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>入库仓库 *</Label>
+                <Select
+                  value={formData.warehouseId}
+                  onValueChange={(value) => setFormData({ ...formData, warehouseId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择仓库" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.code}>
+                        {warehouse.name} ({warehouse.code})
                       </SelectItem>
                     ))}
                   </SelectContent>

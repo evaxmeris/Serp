@@ -20,7 +20,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Search, Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 interface Inventory {
@@ -58,6 +66,18 @@ interface InventoryResponse {
   };
 }
 
+interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+}
+
 export default function InventoryPage() {
   const [inventories, setInventories] = useState<Inventory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,13 +87,20 @@ export default function InventoryPage() {
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
+  // 仓库和产品列表
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+
   const [adjustForm, setAdjustForm] = useState({
     productId: '',
-    warehouseId: 'default',
+    warehouseId: '',
     quantity: 0,
-    type: 'IN',
+    type: 'IN' as string,
     note: '',
   });
+
+  // 仓库筛选
+  const [warehouseFilter, setWarehouseFilter] = useState('ALL');
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -83,6 +110,10 @@ export default function InventoryPage() {
         limit: '50',
         ...(search && { search }),
       });
+      // 添加仓库筛选
+      if (warehouseFilter !== 'ALL') {
+        params.set('warehouseId', warehouseFilter);
+      }
 
       const res = await fetch(`/api/v1/inventory?${params}`);
       const data: InventoryResponse = await res.json();
@@ -98,9 +129,39 @@ export default function InventoryPage() {
     }
   };
 
+  // 加载仓库和产品列表
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        const res = await fetch('/api/v1/warehouses?status=ACTIVE&limit=100');
+        const data = await res.json();
+        if (data.success) {
+          setWarehouses(data.data.items || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch warehouses:', error);
+      }
+    };
+
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch('/api/v1/products?limit=500');
+        const data = await res.json();
+        if (data.success) {
+          setProducts(data.data.items || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      }
+    };
+
+    fetchWarehouses();
+    fetchProducts();
+  }, []);
+
   useEffect(() => {
     fetchInventory();
-  }, [page, search]);
+  }, [page, search, warehouseFilter]);
 
   const handleAdjust = async () => {
     try {
@@ -118,7 +179,7 @@ export default function InventoryPage() {
         fetchInventory();
         setAdjustForm({
           productId: '',
-          warehouseId: 'default',
+          warehouseId: warehouses.length > 0 ? warehouses[0].code : '',
           quantity: 0,
           type: 'IN',
           note: '',
@@ -132,6 +193,18 @@ export default function InventoryPage() {
     }
   };
 
+  // 打开调整对话框时设置默认值
+  const openAdjustDialog = () => {
+    setAdjustForm({
+      productId: '',
+      warehouseId: warehouses.length > 0 ? warehouses[0].code : '',
+      quantity: 0,
+      type: 'IN',
+      note: '',
+    });
+    setAdjustDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto py-6 px-4">
       <Card>
@@ -140,7 +213,7 @@ export default function InventoryPage() {
             <CardTitle className="text-2xl">库存管理</CardTitle>
             <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button onClick={openAdjustDialog}>
                   <Plus className="mr-2 h-4 w-4" />
                   库存调整
                 </Button>
@@ -165,12 +238,40 @@ export default function InventoryPage() {
                     </select>
                   </div>
                   <div>
-                    <Label>产品 ID</Label>
-                    <Input
+                    <Label>仓库 *</Label>
+                    <Select
+                      value={adjustForm.warehouseId}
+                      onValueChange={(value) => setAdjustForm({ ...adjustForm, warehouseId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择仓库" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((wh) => (
+                          <SelectItem key={wh.id} value={wh.code}>
+                            {wh.name} ({wh.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>产品 *</Label>
+                    <Select
                       value={adjustForm.productId}
-                      onChange={(e) => setAdjustForm({ ...adjustForm, productId: e.target.value })}
-                      placeholder="产品 ID"
-                    />
+                      onValueChange={(value) => setAdjustForm({ ...adjustForm, productId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择产品" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name} ({product.sku})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>调整数量</Label>
@@ -189,7 +290,12 @@ export default function InventoryPage() {
                       placeholder="调整原因"
                     />
                   </div>
-                  <Button onClick={handleAdjust}>确认调整</Button>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setAdjustDialogOpen(false)}>
+                      取消
+                    </Button>
+                    <Button onClick={handleAdjust}>确认调整</Button>
+                  </DialogFooter>
                 </div>
               </DialogContent>
             </Dialog>
@@ -211,6 +317,19 @@ export default function InventoryPage() {
                 }}
               />
             </div>
+            <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="全部仓库" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部仓库</SelectItem>
+                {warehouses.map((wh) => (
+                  <SelectItem key={wh.id} value={wh.code}>
+                    {wh.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button onClick={() => { setPage(1); fetchInventory(); }}>
               <Search className="mr-2 h-4 w-4" />
               搜索

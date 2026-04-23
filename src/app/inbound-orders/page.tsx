@@ -88,9 +88,13 @@ export default function InboundOrdersPage() {
   const [search, setSearch] = useState('');
   const [type, setType] = useState<string>('all');
   const [status, setStatus] = useState<string>('all');
+  const [warehouseId, setWarehouseId] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  
+  // 仓库列表（用于筛选和显示）
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; name: string; code: string }>>([]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -101,6 +105,7 @@ export default function InboundOrdersPage() {
         ...(search && { search }),
         ...(type !== 'all' && { type }),
         ...(status !== 'all' && { status }),
+        ...(warehouseId !== 'all' && { warehouseId }),
       });
 
       const res = await fetch(`/api/v1/inbound-orders?${params}`);
@@ -118,9 +123,25 @@ export default function InboundOrdersPage() {
     }
   };
 
+  // 加载仓库列表
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        const res = await fetch('/api/v1/warehouses?status=ACTIVE&limit=100');
+        const data = await res.json();
+        if (data.success) {
+          setWarehouses(data.data.items || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch warehouses:', error);
+      }
+    };
+    fetchWarehouses();
+  }, []);
+
   useEffect(() => {
     fetchOrders();
-  }, [page, type, status]);
+  }, [page, type, status, warehouseId]);
 
   const handleSearch = () => {
     setPage(1);
@@ -223,6 +244,19 @@ export default function InboundOrdersPage() {
                 <SelectItem value="CANCELLED">已取消</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={warehouseId} onValueChange={setWarehouseId}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="全部仓库" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部仓库</SelectItem>
+                {warehouses.map((wh) => (
+                  <SelectItem key={wh.id} value={wh.code}>
+                    {wh.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button onClick={handleSearch}>
               <Search className="mr-2 h-4 w-4" />
               搜索
@@ -240,6 +274,7 @@ export default function InboundOrdersPage() {
                     <TableHead>入库单号</TableHead>
                     <TableHead>类型</TableHead>
                     <TableHead>供应商</TableHead>
+                    <TableHead>仓库</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead>金额</TableHead>
                     <TableHead>预计日期</TableHead>
@@ -249,11 +284,11 @@ export default function InboundOrdersPage() {
                 </TableHeader>
                 <TableBody>
                   {orders.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        暂无数据
-                      </TableCell>
-                    </TableRow>
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-8">
+                          暂无数据
+                        </TableCell>
+                      </TableRow>
                   ) : (
                     orders.map((order) => (
                       <TableRow key={order.id}>
@@ -265,6 +300,15 @@ export default function InboundOrdersPage() {
                         </TableCell>
                         <TableCell>
                           {order.supplier?.companyName || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            // 先尝试从 warehouse 对象获取名称
+                            if (order.warehouse?.name) return order.warehouse.name;
+                            // 否则通过 warehouseId (code) 映射
+                            const wh = warehouses.find(w => w.code === (order as any).warehouseId);
+                            return wh?.name || '-';
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge className={STATUS_COLORS[order.status] || 'bg-gray-100'}>

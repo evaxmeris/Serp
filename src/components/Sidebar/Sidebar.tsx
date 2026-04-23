@@ -193,6 +193,13 @@ const menuConfig: MenuGroup[] = [
         roles: ['ADMIN'],
       },
       {
+        key: 'warehouses',
+        label: '仓库管理',
+        icon: Package,
+        href: '/settings/warehouses',
+        roles: ['ADMIN'],
+      },
+      {
         key: 'settings',
         label: '系统设置',
         icon: Settings,
