@@ -64,8 +64,9 @@ export default function SubscribeDialog({ isOpen, onClose, reportId, reportName 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 1000 }}>
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative mx-4">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl">&times;</button>
         <h2 className="text-xl font-bold mb-4">📧 设置订阅</h2>
         
         {reportName && (
