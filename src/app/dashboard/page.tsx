@@ -188,7 +188,7 @@ export default function DashboardPage() {
           overview: {
             pendingOrders: apiData.alerts?.pendingOrders ?? 0,
             lowStockAlerts: apiData.alerts?.lowStockItems ?? 0,
-            pendingApprovals: 0,
+            pendingApprovals: apiData.alerts?.pendingApprovals ?? 0,
             pendingPayments: 0,
             todaySales: apiData.sales?.totalRevenue ?? 0,
             monthlyGrossMargin: apiData.sales?.growth ?? 0,

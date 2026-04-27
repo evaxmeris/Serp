@@ -108,10 +108,13 @@ export default function PurchaseOrderDetailPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <Button variant="ghost" onClick={() => router.push('/purchase-orders')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回列表
+        </Button>
+        <Button variant="outline" onClick={() => router.push(`/purchase-orders/${order!.id}/receipts`)}>
+          📦 收货记录
         </Button>
       </div>
 

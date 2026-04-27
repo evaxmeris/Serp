@@ -100,6 +100,7 @@ export async function GET(request: NextRequest) {
       conversionMetrics,
       inventoryAlert,
       pendingOrders,
+      pendingApprovalsRaw,
       prevSales
     ] = await Promise.all([
       // 1. 销售核心指标（排除软删除订单）
@@ -182,7 +183,14 @@ export async function GET(request: NextRequest) {
           AND "deletedAt" IS NULL
       `,
       
-      // 7. 上一周期销售额（用于计算环比增长，排除软删除）
+      // 8. 待审批数量
+      prisma.$queryRaw<Array<{ pendingcount: string }>>`
+        SELECT COUNT(*) as pendingCount
+        FROM "approval_instances"
+        WHERE status = 'IN_PROGRESS'
+      `,
+
+      // 9. 上一周期销售额（用于计算环比增长，排除软删除）
       prisma.$queryRaw<Array<{
         prevrevenue: string;
       }>>`
@@ -242,6 +250,7 @@ export async function GET(request: NextRequest) {
       alerts: {
         lowStockItems: inventoryAlert[0] ? parseInt(inventoryAlert[0].alertcount) : 0,
         pendingOrders: pendingOrders[0] ? parseInt(pendingOrders[0].pendingcount) : 0,
+        pendingApprovals: pendingApprovalsRaw[0] ? parseInt(pendingApprovalsRaw[0].pendingcount) : 0,
       },
       period: {
         days,

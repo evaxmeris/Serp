@@ -160,10 +160,15 @@ export default function SupplierDetailPage() {
           <h1 className="text-2xl font-bold">{supplier.companyName}</h1>
           <p className="text-gray-500">{supplier.supplierNo}</p>
         </div>
-        <Button variant="outline" onClick={() => router.push(`/suppliers/${supplier.id}/edit`)}>
-          <Edit className="h-4 w-4 mr-2" />
-          编辑
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push(`/suppliers/${supplier.id}/evaluations`)}>
+            📊 评估记录
+          </Button>
+          <Button variant="outline" onClick={() => router.push(`/suppliers/${supplier.id}/edit`)}>
+            <Edit className="h-4 w-4 mr-2" />
+            编辑
+          </Button>
+        </div>
       </div>
 
       {/* Status Badge */}
