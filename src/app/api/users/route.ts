@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/users - 创建用户
+// POST /api/users - 创建用户（密码使用 bcrypt 加密存储）
 export async function POST(request: NextRequest) {
   try {
     // 获取当前登录用户
@@ -76,12 +77,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 这里应该加密密码，简单起见先直接存储
-    // 实际生产环境请使用 bcrypt
+    // 使用 bcrypt 加密密码后存储（盐轮数 10）
+    const passwordHash = await bcrypt.hash(password, 10);
+
     const user = await prisma.user.create({
       data: {
         email,
         name,
+        passwordHash,
         role: role || 'SALES',
       },
       select: {

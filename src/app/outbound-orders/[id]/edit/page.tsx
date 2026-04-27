@@ -96,8 +96,8 @@ export default function EditOutboundOrderPage() {
           setOrder(result.data);
           
           // 验证状态
-          if (result.data.status !== 'DRAFT') {
-            alert('只有草稿状态的出库单可以编辑');
+          if (result.data.status !== 'PENDING') {
+            alert('只有待处理状态的出库单可以编辑');
             router.push(`/outbound-orders/${params.id}`);
             return;
           }
@@ -251,7 +251,7 @@ export default function EditOutboundOrderPage() {
     );
   }
 
-  if (!order || order.status !== 'DRAFT') {
+  if (!order || order.status !== 'PENDING') {
     return null;
   }
 
@@ -275,9 +275,9 @@ export default function EditOutboundOrderPage() {
               <div className="text-sm text-yellow-800">
                 <p className="font-semibold mb-1">编辑提示</p>
                 <ul className="list-disc list-inside space-y-1 text-yellow-700">
-                  <li>只有草稿状态的出库单可以编辑</li>
+                  <li>只有待处理状态的出库单可以编辑</li>
                   <li>修改后需要重新提交保存</li>
-                  <li>保存后出库单仍保持草稿状态</li>
+                  <li>保存后出库单仍保持待处理状态</li>
                 </ul>
               </div>
             </div>
@@ -301,7 +301,7 @@ export default function EditOutboundOrderPage() {
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">状态</div>
-                <div className="font-medium">草稿</div>
+                <div className="font-medium">待处理</div>
               </div>
             </div>
           </CardContent>

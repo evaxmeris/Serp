@@ -213,6 +213,7 @@ export function withPermission(
 /**
  * 模块化权限检查（使用缓存优化）
  * 检查用户对某个模块的访问权限
+ * PERM-004: 统一使用冒号分隔格式 module:action
  * 格式：module:* 表示拥有该模块的所有权限
  * 例如：customer:* 表示客户管理所有权限
  * 
@@ -235,10 +236,10 @@ export async function checkModulePermission(
       };
     }
 
-    // 检查是否有该模块的任意具体权限
+    // PERM-004: 统一使用冒号分隔格式，检查是否有该模块的任意具体权限
     const userPermissions = await getUserPermissions(userId);
     const hasAnyModulePermission = userPermissions.some(
-      perm => perm.startsWith(`${moduleName}.`) || perm.startsWith(`${moduleName}:`)
+      perm => perm.startsWith(`${moduleName}:`)
     );
 
     // 管理员始终拥有所有权限

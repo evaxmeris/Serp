@@ -76,20 +76,20 @@ interface OutboundOrdersResponse {
 }
 
 const OUTBOUND_STATUS: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING: '待发货',
-  PROCESSING: '处理中',
-  PICKED: '已拣货',
+  PENDING: '待处理',
+  PICKING: '拣货中',
+  PACKING: '打包中',
   SHIPPED: '已发货',
+  DELIVERED: '已送达',
   CANCELLED: '已取消',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-gray-100 text-gray-800',
-  PENDING: 'bg-yellow-100 text-yellow-800',
-  PROCESSING: 'bg-blue-100 text-blue-800',
-  PICKED: 'bg-purple-100 text-purple-800',
+  PENDING: 'bg-gray-100 text-gray-800',
+  PICKING: 'bg-blue-100 text-blue-800',
+  PACKING: 'bg-purple-100 text-purple-800',
   SHIPPED: 'bg-green-100 text-green-800',
+  DELIVERED: 'bg-teal-100 text-teal-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
@@ -425,9 +425,11 @@ export default function OutboundOrdersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="DRAFT">草稿</SelectItem>
-                <SelectItem value="PENDING">待发货</SelectItem>
+                <SelectItem value="PENDING">待处理</SelectItem>
+                <SelectItem value="PICKING">拣货中</SelectItem>
+                <SelectItem value="PACKING">打包中</SelectItem>
                 <SelectItem value="SHIPPED">已发货</SelectItem>
+                <SelectItem value="DELIVERED">已送达</SelectItem>
                 <SelectItem value="CANCELLED">已取消</SelectItem>
               </SelectContent>
             </Select>
@@ -536,7 +538,7 @@ export default function OutboundOrdersPage() {
                               </Button>
                             </>
                           )}
-                          {order.status === 'DRAFT' && (
+                          {order.status === 'PENDING' && (
                             <Button
                               variant="ghost"
                               size="sm"

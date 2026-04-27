@@ -66,16 +66,20 @@ interface OutboundOrderResponse {
 }
 
 const OUTBOUND_STATUS: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING: '待发货',
+  PENDING: '待处理',
+  PICKING: '拣货中',
+  PACKING: '打包中',
   SHIPPED: '已发货',
+  DELIVERED: '已送达',
   CANCELLED: '已取消',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-gray-100 text-gray-800',
-  PENDING: 'bg-yellow-100 text-yellow-800',
+  PENDING: 'bg-gray-100 text-gray-800',
+  PICKING: 'bg-blue-100 text-blue-800',
+  PACKING: 'bg-purple-100 text-purple-800',
   SHIPPED: 'bg-green-100 text-green-800',
+  DELIVERED: 'bg-teal-100 text-teal-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
@@ -295,7 +299,7 @@ export default function OutboundOrderDetailPage() {
                   </Button>
                 </>
               )}
-              {order.status === 'DRAFT' && (
+              {order.status === 'PENDING' && (
                 <Button onClick={() => router.push(`/outbound-orders/${order.id}/edit`)}>
                   <Edit className="h-4 w-4 mr-2" />
                   编辑出库单

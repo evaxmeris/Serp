@@ -40,57 +40,77 @@ export async function POST(
     const v = validateOrReturn(z.object({ reason: z.string().optional() }), body);
     if (!v.success) return v.response;
 
-    // 查询注册申请
-    const registration = await prisma.userRegistration.findUnique({
-      where: { id: registrationId },
-    });
+    // 使用事务确保原子性：检查 PENDING 状态 + 创建用户 + 更新状态
+    // 防止并发请求同时通过状态检查导致的重复创建用户
+    let user;
+    try {
+      user = await prisma.$transaction(async (tx) => {
+        // 在事务内重新查询，获取最新状态（避免 TOCTOU 竞态条件）
+        const reg = await tx.userRegistration.findUnique({
+          where: { id: registrationId },
+        });
 
-    if (!registration) {
-      return NextResponse.json(
-        { error: '注册申请不存在' },
-        { status: 404 }
-      );
+        if (!reg) {
+          throw new Error('NOT_FOUND');
+        }
+
+        if (reg.status !== 'PENDING') {
+          throw new Error('ALREADY_PROCESSED');
+        }
+
+        // 检查邮箱是否已被注册（事务内确保一致性）
+        const existingUser = await tx.user.findUnique({
+          where: { email: reg.email },
+        });
+
+        if (existingUser) {
+          throw new Error('EMAIL_EXISTS');
+        }
+
+        // 创建正式用户，密码使用注册申请中的密码Hash
+        const createdUser = await tx.user.create({
+          data: {
+            email: reg.email,
+            name: reg.name || reg.username,
+            passwordHash: reg.passwordHash,
+            role: 'VIEWER', // 默认访客角色，可后续修改
+            isApproved: true, // 已批准
+          },
+        });
+
+        // 更新注册申请状态为已批准
+        await tx.userRegistration.update({
+          where: { id: registrationId },
+          data: {
+            status: 'APPROVED',
+            approvedById: currentUser.id,
+            approvedAt: new Date(),
+          },
+        });
+
+        return createdUser;
+      });
+    } catch (error: any) {
+      if (error.message === 'NOT_FOUND') {
+        return NextResponse.json(
+          { error: '注册申请不存在' },
+          { status: 404 }
+        );
+      }
+      if (error.message === 'ALREADY_PROCESSED') {
+        return NextResponse.json(
+          { error: '该申请已处理，不能重复操作' },
+          { status: 400 }
+        );
+      }
+      if (error.message === 'EMAIL_EXISTS') {
+        return NextResponse.json(
+          { error: '该邮箱已被注册' },
+          { status: 400 }
+        );
+      }
+      throw error; // 其他异常抛给外层 catch 处理
     }
-
-    if (registration.status !== 'PENDING') {
-      return NextResponse.json(
-        { error: '该申请已处理，不能重复操作' },
-        { status: 400 }
-      );
-    }
-
-    // 检查邮箱是否已被注册
-    const existingUser = await prisma.user.findUnique({
-      where: { email: registration.email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: '该邮箱已被注册' },
-        { status: 400 }
-      );
-    }
-
-    // 创建正式用户，密码使用注册申请中的密码Hash
-    const user = await prisma.user.create({
-      data: {
-        email: registration.email,
-        name: registration.name || registration.username,
-        passwordHash: registration.passwordHash,
-        role: 'VIEWER', // 默认访客角色，可后续修改
-        isApproved: true, // 已批准
-      },
-    });
-
-    // 更新注册申请状态
-    await prisma.userRegistration.update({
-      where: { id: registrationId },
-      data: {
-        status: 'APPROVED',
-        approvedById: currentUser.id,
-        approvedAt: new Date(),
-      },
-    });
 
     return NextResponse.json({
       success: true,

@@ -136,7 +136,7 @@ export const CreateProductSchema = z.object({
   name: z.string().min(1, '产品名称不能为空').max(200, '产品名称过长'),
   sku: z.string().min(1, 'SKU 不能为空').max(100, 'SKU 过长'),
   nameEn: z.string().max(200).optional(),
-  categoryId: z.string().uuid().optional().or(z.literal('')),
+  categoryId: z.string().min(1).optional().or(z.literal('')),
   specification: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
   descriptionEn: z.string().max(2000).optional(),
@@ -194,7 +194,7 @@ export const CreatePurchaseOrderSchema = z.object({
   totalAmount: z.number().min(0).optional(),
   deliveryDate: z.string().datetime().optional(),
   paymentTerms: z.string().optional(),
-  purchaserId: z.string().uuid().optional(),
+  purchaserId: z.string().min(1).optional(),
   status: z.string().optional(),
 });
 
@@ -221,7 +221,7 @@ export const CreateResearchProductSchema = z.object({
   images: z.array(z.string()).optional(),
   status: z.enum(['DRAFT', 'RESEARCHING', 'COMPLETED', 'ARCHIVED']).optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
-  assignedTo: z.string().uuid().optional(),
+  assignedTo: z.string().min(1).optional(),
   tags: z.array(z.string()).optional(),
   notes: z.string().max(2000).optional(),
   price: z.number().min(0).optional(),
@@ -252,7 +252,7 @@ export const CreateResearchProductSchema = z.object({
 
 /** 创建询盘 */
 export const CreateInquirySchema = z.object({
-  customerId: z.string().uuid('客户 ID 格式不正确'),
+  customerId: z.string().min(1, '客户 ID 不能为空'),
   subject: z.string().min(1, '主题不能为空').max(200, '主题过长'),
   content: z.string().min(1, '内容不能为空').max(5000, '内容过长'),
   status: z.enum(['NEW', 'CONTACTED', 'QUOTED', 'NEGOTIATING', 'WON', 'LOST']).optional(),
@@ -264,7 +264,7 @@ export const CreateInquirySchema = z.object({
   targetPrice: z.coerce.number().min(0).optional(),
   currency: z.string().max(10).optional(),
   requirements: z.string().max(2000).optional(),
-  assignedTo: z.string().uuid().optional(),
+  assignedTo: z.string().min(1).optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -275,8 +275,8 @@ export const UpdateInquirySchema = CreateInquirySchema.partial();
 
 /** 创建报价 */
 export const CreateQuotationSchema = z.object({
-  customerId: z.string().uuid('客户 ID 格式不正确'),
-  inquiryId: z.string().uuid().optional(),
+  customerId: z.string().min(1, '客户 ID 不能为空'),
+  inquiryId: z.string().min(1).optional(),
   status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'REVISED']).optional(),
   currency: z.string().max(10).optional(),
   paymentTerms: z.string().optional(),
@@ -302,9 +302,9 @@ export const UpdateQuotationSchema = CreateQuotationSchema.partial();
 
 /** 创建订单 */
 export const CreateOrderSchema = z.object({
-  customerId: z.string().uuid('客户 ID 格式不正确'),
-  sourceInquiryId: z.string().uuid().optional(),
-  sourceQuotationId: z.string().uuid().optional(),
+  customerId: z.string().min(1, '客户 ID 不能为空'),
+  sourceInquiryId: z.string().min(1).optional(),
+  sourceQuotationId: z.string().min(1).optional(),
   currency: z.string().max(10).optional(),
   exchangeRate: z.number().min(0).optional(),
   orderDate: z.string().datetime().optional(),
@@ -316,7 +316,7 @@ export const CreateOrderSchema = z.object({
   shippingAddress: z.string().optional(),
   shippingContact: z.string().optional(),
   shippingPhone: z.string().optional(),
-  salesRepId: z.string().uuid().optional(),
+  salesRepId: z.string().min(1).optional(),
   internalNotes: z.string().optional(),
   attachments: z.array(z.string()).optional(),
   items: z.array(z.object({
@@ -333,8 +333,25 @@ export const CreateOrderSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-/** 更新订单 */
-export const UpdateOrderSchema = CreateOrderSchema.partial();
+/** 更新订单 — 支持状态变更（状态流转验证在路由层由 order-status-machine 执行） */
+export const UpdateOrderSchema = CreateOrderSchema.partial().extend({
+  status: z.enum([
+    'PENDING',
+    'CONFIRMED',
+    'IN_PRODUCTION',
+    'READY',
+    'SHIPPED',
+    'DELIVERED',
+    'COMPLETED',
+    'CANCELLED',
+  ]).optional(),
+  approvalStatus: z.enum([
+    'NOT_REQUIRED',
+    'PENDING',
+    'APPROVED',
+    'REJECTED',
+  ]).optional(),
+});
 
 // ==================== 角色/权限管理 ====================
 
@@ -376,7 +393,7 @@ export const CreateResearchCategorySchema = z.object({
   name: z.string().min(1, '品类名称不能为空').max(100),
   nameEn: z.string().max(100).optional(),
   code: z.string().min(1, '品类编码不能为空').max(50),
-  parentId: z.string().uuid().optional().or(z.literal('')),
+  parentId: z.string().min(1).optional().or(z.literal('')),
   level: z.number().int().min(1).optional(),
   description: z.string().max(500).optional(),
   icon: z.string().max(200).optional(),
@@ -428,14 +445,14 @@ export const ReportDateRangeSchema = z.object({
 /** 销售报表 */
 export const SalesReportSchema = ReportDateRangeSchema.extend({
   groupBy: z.enum(['day', 'week', 'month', 'customer', 'product']).optional(),
-  customerId: z.string().uuid().optional(),
-  productId: z.string().uuid().optional(),
+  customerId: z.string().min(1).optional(),
+  productId: z.string().min(1).optional(),
   reportName: z.string().max(100).optional(),
 });
 
 /** 采购报表 */
 export const PurchaseReportSchema = ReportDateRangeSchema.extend({
-  supplierId: z.string().uuid().optional(),
+  supplierId: z.string().min(1).optional(),
   reportName: z.string().max(100).optional(),
 });
 
@@ -451,9 +468,9 @@ export const CashflowReportSchema = ReportDateRangeSchema.extend({
 
 /** 库存报表 */
 export const InventoryReportSchema = z.object({
-  warehouseId: z.string().uuid().optional(),
-  productId: z.string().uuid().optional(),
-  categoryId: z.string().uuid().optional(),
+  warehouseId: z.string().min(1).optional(),
+  productId: z.string().min(1).optional(),
+  categoryId: z.string().min(1).optional(),
   lowStock: z.boolean().optional(),
   includeZero: z.boolean().optional(),
   includeHistory: z.boolean().optional(),
@@ -468,6 +485,138 @@ export const CreateSubscriptionSchema = z.object({
   frequency: z.enum(['daily', 'weekly', 'monthly']),
   email: z.string().email('请输入有效的邮箱地址'),
   format: z.enum(['pdf', 'excel', 'csv']).optional(),
+});
+
+// ==================== 物流管理 ====================
+
+/** 物流订单状态 */
+export const LogisticsOrderStatus = z.enum([
+  'DRAFT',
+  'PENDING_REVIEW',     // 校对中（四级审批第一步）
+  'PENDING_APPROVAL',   // 审批中（四级审批第二步）
+  'PENDING_FINANCE',    // 财务确认中（四级审批第三步）
+  'APPROVED',
+  'REJECTED',           // 审批拒绝
+  'BOOKED',
+  'IN_TRANSIT',
+  'ARRIVED',
+  'DELIVERED',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+/** 运输方式 */
+export const TransportMethod = z.enum(['SEA_FREIGHT', 'AIR_FREIGHT', 'RAIL', 'EXPRESS', 'TRUCK']);
+
+/** 审批步骤（四级审批流程） */
+export const APPROVAL_STEP = z.enum([
+  'DRAFT',             // 草稿（未提交）
+  'PENDING_REVIEW',    // 校对中
+  'PENDING_APPROVAL',  // 审批中
+  'PENDING_FINANCE',   // 财务确认中
+  'APPROVED',          // 已通过
+  'REJECTED',          // 已拒绝
+]);
+
+/** 创建物流服务商 */
+export const CreateLogisticsProviderSchema = z.object({
+  companyName: z.string().min(1, '公司名称不能为空').max(200, '公司名称过长'),
+  taxId: z.string().max(50).optional(),
+  companyAddress: z.string().max(500).optional(),
+  businessLicense: z.string().max(200).optional(),
+  legalRepName: z.string().max(100).optional(),
+  legalRepIdFront: z.string().max(200).optional(),
+  legalRepIdBack: z.string().max(200).optional(),
+  contactName: z.string().min(1, '联系人姓名不能为空').max(100, '联系人姓名过长'),
+  contactPhone: z.string().min(1, '联系人电话不能为空').max(20, '联系人电话过长'),
+  contactIdFront: z.string().max(200).optional(),
+  contactIdBack: z.string().max(200).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+/** 更新物流服务商 */
+export const UpdateLogisticsProviderSchema = CreateLogisticsProviderSchema.partial();
+
+/** 创建物流报价 */
+export const CreateLogisticsQuotationSchema = z.object({
+  region: z.string().min(1, '专线区域不能为空').max(100, '专线区域过长'),
+  transportMethod: TransportMethod,
+  transitDays: z.number().int().min(1, '运输时效必须大于 0'),
+  pricePerKg: z.number().min(0, '每公斤价格不能为负'),
+  pricePerCbm: z.number().min(0).optional(),
+  minimumCharge: z.number().min(0).default(0),
+  validFrom: z.string().datetime().optional(),
+  validUntil: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+/** 更新物流报价 */
+export const UpdateLogisticsQuotationSchema = CreateLogisticsQuotationSchema.partial();
+
+/** 物流订单费用明细项 */
+const AmountBreakdownItem = z.object({
+  feeType: z.string().min(1, '费用类型不能为空'),
+  description: z.string().optional(),
+  amount: z.number().min(0, '金额不能为负'),
+});
+
+/** 物流订单货物项 */
+const LogisticsOrderItem = z.object({
+  productName: z.string().min(1, '货品名称不能为空').max(200),
+  quantity: z.number().int().min(1, '数量必须大于 0'),
+  netWeight: z.number().min(0).optional(),
+  dimensions: z.string().max(100).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+/** 创建物流订单 */
+export const CreateLogisticsOrderSchema = z.object({
+  providerId: z.string().min(1, '物流服务商 ID 不能为空'),
+  salesOrderId: z.string().optional(),
+  items: z.array(LogisticsOrderItem).optional().default([]),
+  totalQuantity: z.number().int().min(0).default(0),
+  totalNetWeight: z.number().min(0).default(0),
+  totalGrossWeight: z.number().min(0).optional(),
+  totalVolume: z.number().min(0).optional(),
+  origin: z.string().max(200).optional(),
+  destination: z.string().min(1, '目的地不能为空').max(200, '目的地过长'),
+  transportMethod: TransportMethod,
+  transitDays: z.number().int().min(0).optional(),
+  currency: z.string().max(10).default('CNY'),
+  totalAmount: z.number().min(0).default(0),
+  amountBreakdown: z.array(AmountBreakdownItem).optional(),
+  insurance: z.boolean().default(false),
+  insuranceAmount: z.number().min(0).optional(),
+  customsBroker: z.boolean().default(false),
+  trackingNo: z.string().max(100).optional(),
+  estimatedDeparture: z.string().datetime().optional(),
+  estimatedArrival: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+  documents: z.array(z.object({
+    type: z.string(),
+    name: z.string(),
+    url: z.string(),
+  })).optional(),
+  // 四级审批指定人员（创建时可预设，提交时最终确定）
+  submitterId: z.string().min(1).optional(),
+  reviewerId: z.string().min(1).optional(),
+  approverId: z.string().min(1).optional(),
+  financeId: z.string().min(1).optional(),
+});
+
+/** 更新物流订单 */
+export const UpdateLogisticsOrderSchema = CreateLogisticsOrderSchema.partial().extend({
+  status: LogisticsOrderStatus.optional(),
+  approvalStep: APPROVAL_STEP.optional(),
+  approvedById: z.string().optional(),
+  approvedAt: z.string().datetime().optional(),
+  actualDeparture: z.string().datetime().optional(),
+  actualArrival: z.string().datetime().optional(),
+  // 四级审批人员字段
+  reviewerId: z.string().min(1).optional(),
+  approverId: z.string().min(1).optional(),
+  financeId: z.string().min(1).optional(),
 });
 
 // ==================== ID 验证 ====================

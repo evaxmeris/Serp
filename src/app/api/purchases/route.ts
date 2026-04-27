@@ -1,8 +1,12 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreatePurchaseOrderSchema } from '@/lib/api-schemas';
+import { generatePurchaseNo } from '@/lib/id-generator';
+import { errorResponse } from '@/lib/api-response';
+import { getPendingQty } from '@/lib/purchase-utils';
 
 // GET /api/purchases - 获取采购单列表（行级隔离）
 // 普通用户只能看到自己负责的采购单，管理员可以看到所有
@@ -11,18 +15,26 @@ export async function GET(request: NextRequest) {
     // 获取当前用户会话
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
     const currentUser = session;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const supplierId = searchParams.get('supplierId') || '';
 
-    const where: any = {};
+    // 排序白名单验证，防止注入
+    const ALLOWED_SORT_FIELDS = ['createdAt', 'updatedAt', 'status', 'totalAmount', 'poNo'];
+    const sortBy = ALLOWED_SORT_FIELDS.includes(searchParams.get('sortBy') || '') 
+      ? searchParams.get('sortBy')! 
+      : 'createdAt';
+    const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc';
+
+    // PERM-005: 统一应用行级过滤
+    const where = applyRowLevelFilter(currentUser, 'purchase', {});
 
     if (search) {
       where.OR = [
@@ -38,11 +50,6 @@ export async function GET(request: NextRequest) {
 
     if (supplierId) {
       where.supplierId = supplierId;
-    }
-
-    // BUG-PERM-007: 行级隔离 - 普通用户只能看到自己负责的采购单
-    if (currentUser.role !== 'ADMIN') {
-      where.purchaserId = currentUser.id;
     }
 
     const [purchases, total] = await Promise.all([
@@ -77,8 +84,17 @@ export async function GET(request: NextRequest) {
       prisma.purchaseOrder.count({ where }),
     ]);
 
+    // 动态计算 pendingQty，替代数据库字段读值
+    const transformedPurchases = purchases.map(purchase => ({
+      ...purchase,
+      items: purchase.items.map(item => ({
+        ...item,
+        pendingQty: getPendingQty(item),
+      })),
+    }));
+
     return NextResponse.json({
-      data: purchases,
+      data: transformedPurchases,
       pagination: {
         page,
         limit,

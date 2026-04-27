@@ -14,6 +14,16 @@ import { prisma } from '@/lib/prisma';
 import { GET, POST } from '@/app/api/customers/route';
 import { GET as GET_BY_ID, PUT, DELETE as DELETE_BY_ID } from '@/app/api/customers/[id]/route';
 
+// Mock 认证 - 路由处理器现在需要 getUserFromRequest 返回有效 session
+jest.mock('@/lib/auth-api', () => ({
+  getUserFromRequest: jest.fn().mockResolvedValue({
+    id: 'test-id',
+    email: 'test@test.com',
+    name: 'Test',
+    role: 'ADMIN',
+  }),
+}));
+
 // Mock NextRequest
 function createMockRequest(
   url: string,

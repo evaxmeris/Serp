@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { errorResponse } from '@/lib/api-response';
-import type { NextRequest } from 'next/server';
+import { getPendingQty } from '@/lib/purchase-utils';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdatePurchaseOrderSchema } from '@/lib/api-schemas';
@@ -48,7 +49,16 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(purchase);
+    // 动态计算 pendingQty，替代数据库字段读值
+    const transformed = {
+      ...purchase,
+      items: purchase.items.map(item => ({
+        ...item,
+        pendingQty: getPendingQty(item),
+      })),
+    };
+
+    return NextResponse.json(transformed);
   } catch (error) {
     console.error('Error fetching purchase order:', error);
     return NextResponse.json(

@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 // 更新出库单 Schema（部分字段可更新）
 const UpdateOutboundOrderSchema = z.object({
-  status: z.enum(['DRAFT', 'PENDING', 'SHIPPED', 'CANCELLED']).optional(),
+  status: z.enum(['PENDING', 'PICKING', 'PACKING', 'SHIPPED', 'DELIVERED', 'CANCELLED']).optional(),
   items: z.array(z.object({
     id: z.string().optional(), // 如果有 ID 则是更新，没有则是新增
     productId: z.string().optional(),
@@ -120,9 +120,9 @@ export async function PUT(
       return notFoundResponse('出库单');
     }
 
-    // 只有草稿状态的出库单可以修改
-    if (existingOrder.status !== 'DRAFT') {
-      return conflictResponse('只有草稿状态的出库单可以修改');
+    // 只有待处理状态的出库单可以修改
+    if (existingOrder.status !== 'PENDING') {
+      return conflictResponse('只有待处理状态的出库单可以修改');
     }
 
     // 更新出库单
@@ -209,9 +209,9 @@ export async function DELETE(
       return notFoundResponse('出库单');
     }
 
-    // 只有草稿或已取消的出库单可以删除
-    if (!['DRAFT', 'CANCELLED'].includes(existingOrder.status)) {
-      return conflictResponse('只有草稿或已取消状态的出库单可以删除');
+    // 只有待处理或已取消的出库单可以删除
+    if (!['PENDING', 'CANCELLED'].includes(existingOrder.status)) {
+      return conflictResponse('只有待处理或已取消状态的出库单可以删除');
     }
 
     // 删除出库单（级联删除项目）

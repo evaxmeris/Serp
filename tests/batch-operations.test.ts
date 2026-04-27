@@ -235,7 +235,7 @@ describe('批量操作 API', () => {
               outboundNo: uniqueId('OB-DRAFT'),
               orderId: testOrder.id,
               warehouseId: testWarehouse.id,
-              status: 'DRAFT',
+              status: 'PENDING',
               items: {
                 create: {
                   productId: testProduct.id,

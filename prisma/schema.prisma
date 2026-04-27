@@ -35,6 +35,14 @@ model User {
   createdTransactions          Transaction[]
   userRegistrations            UserRegistration[]
   userRoles                    UserRole[]
+  // 物流审批相关
+  logisticsSubmitted           LogisticsOrder[]    @relation("LogisticsOrderSubmitter")
+  logisticsReviewed            LogisticsOrder[]    @relation("LogisticsOrderReviewer")
+  logisticsApproved            LogisticsOrder[]    @relation("LogisticsOrderApprover")
+  logisticsFinanceConfirmed    LogisticsOrder[]    @relation("LogisticsOrderFinance")
+  logisticsReviewActions       LogisticsOrder[]    @relation("LogisticsOrderReviewedBy")
+  logisticsApproveActions      LogisticsOrder[]    @relation("LogisticsOrderApprovedBy")
+  logisticsFinanceActions      LogisticsOrder[]    @relation("LogisticsOrderFinanceConfirmedBy")
 
   @@map("users")
 }
@@ -62,6 +70,7 @@ model Customer {
   orders      Order[]
   quotations  Quotation[]
 
+  @@index([email])
   @@index([status, createdAt])
   @@index([ownerId])
   @@map("customers")
@@ -90,7 +99,7 @@ model Product {
   nameEn             String?
   specification      String?
   unit               String                  @default("PCS")
-  costPrice          Decimal                 @db.Decimal(10, 2)
+  costPrice          Decimal                 @default(0) @db.Decimal(10, 2)
   salePrice          Decimal                 @db.Decimal(10, 2)
   currency           String                  @default("USD")
   images             String[]
@@ -143,6 +152,7 @@ model Inquiry {
   customer     Customer      @relation(fields: [customerId], references: [id])
 
   @@index([assignedTo, status])
+  @@index([createdAt])
   @@map("inquiries")
 }
 
@@ -247,8 +257,11 @@ model Order {
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
   @@index([status, deliveryDate])
+  @@index([status, createdAt])
   @@index([createdAt])
   @@index([orderNo])
+  @@index([deletedAt, createdAt, status])   // PERF-003: Dashboard overview 查询优化
+  @@index([deletedAt, status])              // PERF-003: Dashboard 状态筛选优化
   @@map("orders")
 }
 
@@ -473,7 +486,7 @@ model SupplierEvaluation {
   deliveryScore   Decimal       @db.Decimal(2, 1)
   priceScore      Decimal       @db.Decimal(2, 1)
   serviceScore    Decimal       @db.Decimal(2, 1)
-  totalScore      Decimal       @db.Decimal(3, 2)
+  totalScore      Decimal       @db.Decimal(5, 2)
   level           SupplierLevel
   comments        String?
   improvementPlan String?
@@ -638,6 +651,7 @@ model InventoryItem {
   lastCountedAt    DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+  version          Int            @default(0)  // 乐观锁版本号，防止并发超卖
   product          Product        @relation(fields: [productId], references: [id])
   logs             InventoryLog[]
 
@@ -1069,10 +1083,10 @@ model ResearchAttachment {
 
 model OutboundOrder {
   id            String              @id @default(cuid())
-  outboundNo    String              @unique @default(cuid())
+  outboundNo    String              @unique
   orderId       String
   warehouseId   String
-  status        String
+  status        OutboundOrderStatus  @default(PENDING)
   totalAmount   Decimal?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -1137,7 +1151,7 @@ model ReportData {
   metrics     Json             @default("{}")
   generatedAt DateTime         @default(now())
   createdAt   DateTime         @default(now())
-  report      ReportDefinition @relation(fields: [reportId], references: [id])
+  report      ReportDefinition @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@index([period])
@@ -1797,6 +1811,238 @@ model Commission {
   @@map("commissions")
 }
 
+// ============================================
+// 物流管理模块
+// ============================================
+
+/// 物流服务商 — 经检验合作的物流公司信息
+model LogisticsProvider {
+  id                String              @id @default(cuid())
+  companyName       String              // 公司名称
+  taxId             String?             // 税号
+  companyAddress    String?             // 公司地址
+  businessLicense   String?             // 营业执照扫描件路径
+  legalRepName      String?             // 法人姓名
+  legalRepIdFront   String?             // 法人身份证正面
+  legalRepIdBack    String?             // 法人身份证反面
+  contactName       String              // 联系人姓名
+  contactPhone      String              // 联系人电话
+  contactIdFront    String?             // 联系人身份证正面
+  contactIdBack     String?             // 联系人身份证反面
+  status            String              @default("ACTIVE") // ACTIVE | INACTIVE
+  notes             String?             // 备注
+
+  quotations        LogisticsQuotation[]
+  orders            LogisticsOrder[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([status])
+  @@index([companyName])
+  @@map("logistics_providers")
+}
+
+/// 物流报价 — 按区域+运输方式的报价单
+model LogisticsQuotation {
+  id                String              @id @default(cuid())
+  providerId        String              // 关联物流服务商
+  region            String              // 专线区域 (如: 北美, 欧洲, 东南亚)
+  transportMethod   String              // 运输方式 (SEA_FREIGHT | AIR_FREIGHT | RAIL | EXPRESS | TRUCK)
+  transitDays       Int                 // 运输时效(天)
+  pricePerKg        Decimal             @db.Decimal(10, 2) // 每公斤价格
+  pricePerCbm       Decimal?            @db.Decimal(10, 2) // 每立方米价格
+  minimumCharge     Decimal             @default(0) @db.Decimal(10, 2) // 最低收费
+  validFrom         DateTime?           // 有效期起
+  validUntil        DateTime?           // 有效期止
+  notes             String?             // 备注
+
+  provider          LogisticsProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([providerId, region, transportMethod])
+  @@index([providerId])
+  @@index([region])
+  @@map("logistics_quotations")
+}
+
+/// 物流服务订单 — 物流采购及审批
+model LogisticsOrder {
+  id                String              @id @default(cuid())
+  orderNo           String              @unique // LO-YYYYMMDD-XXXX
+  providerId        String              // 物流服务商
+  salesOrderId      String?             // 关联销售订单
+  items             Json                @default("[]") // [{productName, quantity, netWeight, dimensions}]
+  totalQuantity     Int                 @default(0)  // 总件数
+  totalNetWeight    Decimal             @default(0) @db.Decimal(10, 2) // 总净重(kg)
+  totalGrossWeight  Decimal?            @db.Decimal(10, 2) // 总毛重(kg)
+  totalVolume       Decimal?            @db.Decimal(10, 2) // 总体积(cbm)
+  origin            String?             // 起运地
+  destination       String              // 目的地
+  transportMethod   String              // 运输方式
+  transitDays       Int?                // 预计时效(天)
+  currency          String              @default("CNY") // 币种
+  totalAmount       Decimal             @default(0) @db.Decimal(12, 2) // 总金额
+  amountBreakdown   Json?               // 费用明细 [{feeType, description, amount}]
+  insurance         Boolean             @default(false) // 是否投保
+  insuranceAmount   Decimal?            @db.Decimal(10, 2) // 保险金额
+  customsBroker     Boolean             @default(false) // 是否含报关
+  trackingNo        String?             // 追踪号
+  estimatedDeparture DateTime?          // 预计发运日
+  estimatedArrival  DateTime?           // 预计到达日
+  actualDeparture   DateTime?           // 实际发运日
+  actualArrival     DateTime?           // 实际到达日
+  status            String              @default("DRAFT") 
+  // DRAFT → PENDING_APPROVAL → APPROVED → BOOKED → IN_TRANSIT → ARRIVED → DELIVERED → COMPLETED
+  // 任意状态可 → CANCELLED
+  notes             String?
+  documents         Json?               // 关联单据 [{type, name, url}]
+  
+  // 审批相关 — 四级审批流程
+  // 流程: 提交人→校对人→审批人→财务签收支付
+  approvalStep      String              @default("DRAFT")
+  // DRAFT → PENDING_REVIEW → PENDING_APPROVAL → PENDING_FINANCE → APPROVED
+  // 任意步骤可 → REJECTED（回到 DRAFT）
+  submitterId       String?             // 提交人（谁提交的）
+  reviewerId        String?             // 校对人（指定谁来校对）
+  approverId        String?             // 审批人（指定谁来审批）
+  financeId         String?             // 财务人员（指定谁来签收支付）
+  submittedAt       DateTime?           // 提交时间
+  reviewedAt        DateTime?           // 校对时间
+  reviewedById      String?             // 实际校对人
+  approvedAt        DateTime?           // 审批时间
+  approvedById      String?             // 实际审批人
+  financeConfirmedAt DateTime?          // 财务确认时间
+  financeConfirmedById String?          // 实际财务确认人
+  rejectReason      String?             // 拒绝原因
+  rejectAt          DateTime?           // 拒绝时间
+
+  provider          LogisticsProvider   @relation(fields: [providerId], references: [id])
+  submitter         User?               @relation("LogisticsOrderSubmitter", fields: [submitterId], references: [id])
+  reviewer          User?               @relation("LogisticsOrderReviewer", fields: [reviewerId], references: [id])
+  approver          User?               @relation("LogisticsOrderApprover", fields: [approverId], references: [id])
+  finance           User?               @relation("LogisticsOrderFinance", fields: [financeId], references: [id])
+  reviewedBy        User?               @relation("LogisticsOrderReviewedBy", fields: [reviewedById], references: [id])
+  approvedBy        User?               @relation("LogisticsOrderApprovedBy", fields: [approvedById], references: [id])
+  financeConfirmedBy User?              @relation("LogisticsOrderFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([status])
+  @@index([providerId])
+  @@index([salesOrderId])
+  @@index([approvalStep])
+  @@index([reviewerId])
+  @@index([approverId])
+  @@index([financeId])
+  @@index([createdAt])
+  @@map("logistics_orders")
+}
+
+// ============================================
+// 审批流程配置引擎
+// ============================================
+
+/// 审批流程定义 — 可配置产品采购、物流采购等不同类型
+model ApprovalWorkflow {
+  id            String              @id @default(cuid())
+  name          String              // 流程名称，如 "物流服务采购审批"
+  code          String              @unique // 流程编码，如 "LOGISTICS_PURCHASE"
+  description   String?             // 流程说明
+  applicableTo  String[]            // 适用模块 ["LOGISTICS", "PURCHASE", "PRODUCT"]
+  isActive      Boolean             @default(true)
+  steps         ApprovalWorkflowStep[]
+  instances     ApprovalInstance[]
+
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@map("approval_workflows")
+}
+
+/// 审批流程步骤 — 每个步骤的排序和名称
+model ApprovalWorkflowStep {
+  id            String              @id @default(cuid())
+  workflowId    String              // 所属流程
+  order         Int                 // 步骤序号 1,2,3,4...
+  name          String              // 步骤名称 "提交" "校对" "审批" "财务确认"
+  description   String?             // 步骤说明
+  assignees     ApprovalAssignee[]  // 该步骤的审批人员
+
+  workflow      ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
+  @@map("approval_workflow_steps")
+}
+
+/// 审批人员分配 — 指定某步骤由谁审批（具体人员或角色）
+model ApprovalAssignee {
+  id            String              @id @default(cuid())
+  stepId        String              // 所属步骤
+  userId        String?             // 指定人员（具体用户）
+  role          String?             // 或指定角色 ADMIN/PURCHASING 等
+  isRequired    Boolean             @default(true) // 是否必须此人员审批
+
+  step          ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime            @default(now())
+
+  @@index([stepId])
+  @@index([userId])
+  @@map("approval_assignees")
+}
+
+/// 审批流程实例 — 每次提交审批时创建，跟踪实际审批进度
+model ApprovalInstance {
+  id            String              @id @default(cuid())
+  workflowId    String              // 使用的审批流程
+  targetType    String              // 审批对象类型 "LOGISTICS_ORDER" | "PURCHASE_ORDER" 等
+  targetId      String              // 审批对象 ID
+  currentStep   Int                 @default(1) // 当前在第几步
+  status        String              @default("IN_PROGRESS") // IN_PROGRESS | APPROVED | REJECTED
+  rejectReason  String?
+  rejectAt      DateTime?
+  completedAt   DateTime?
+
+  workflow      ApprovalWorkflow    @relation(fields: [workflowId], references: [id])
+  actions       ApprovalActionRecord[]
+
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([targetType, targetId])
+  @@index([workflowId])
+  @@index([status])
+  @@map("approval_instances")
+}
+
+/// 审批历史记录 — 每一步的审批动作
+model ApprovalActionRecord {
+  id            String              @id @default(cuid())
+  instanceId    String              // 所属审批实例
+  stepOrder     Int                 // 第几步
+  stepName      String              // 步骤名称
+  action        String              // APPROVED | REJECTED
+  userId        String              // 操作人
+  comment       String?
+  actedAt       DateTime            @default(now())
+
+  instance      ApprovalInstance    @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([userId])
+  @@map("approval_action_records")
+}
+
 enum RoleEnum {
   ADMIN
   SALES
@@ -1904,6 +2150,15 @@ enum ShipmentStatus {
   IN_TRANSIT
   SHIPPED
   DELIVERED
+}
+
+enum OutboundOrderStatus {
+  PENDING
+  PICKING
+  PACKING
+  SHIPPED
+  DELIVERED
+  CANCELLED
 }
 
 enum SupplierStatus {
@@ -2206,6 +2461,7 @@ model PlatformSyncConfig {
   syncIntervalMin Int      @default(120)  // 默认 2 小时
   lastSyncAt      DateTime?
   lastSyncStatus  String?  // success, failed, partial, not_configured
+  isSyncing       Boolean  @default(false) // 互斥锁：是否正在同步中
   credentials     Json     // 平台凭据（加密存储）
   settings        Json?    // 平台特定设置
   createdAt       DateTime @default(now())
@@ -2223,6 +2479,7 @@ model PlatformSyncLog {
   ordersFound Int      @default(0)
   ordersSynced Int     @default(0)
   ordersFailed Int     @default(0)
+  retryCount  Int      @default(0) // 重试次数（指数退避）
   errorMessage String?
   startedAt   DateTime @default(now())
   completedAt DateTime?

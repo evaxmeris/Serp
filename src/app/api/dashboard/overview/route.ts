@@ -69,6 +69,7 @@ interface OverviewDashboardData {
  * GET /api/dashboard/overview
  * 
  * 返回所有核心指标的汇总数据
+ * ⚠️ 所有统计均排除软删除数据（deletedAt IS NULL）
  */
 export async function GET(request: NextRequest) {
   try {
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
       pendingOrders,
       prevSales
     ] = await Promise.all([
-      // 1. 销售核心指标
+      // 1. 销售核心指标（排除软删除订单）
       prisma.$queryRaw<Array<{
         totalorders: string;
         totalrevenue: string;
@@ -115,9 +116,10 @@ export async function GET(request: NextRequest) {
           COUNT(DISTINCT "customerId") as activeCustomers
         FROM "orders"
         WHERE "createdAt" >= ${startDate}
+          AND "deletedAt" IS NULL
       `,
       
-      // 2. 客户核心指标
+      // 2. 客户核心指标（排除软删除客户）
       prisma.$queryRaw<Array<{
         totalcustomers: string;
         newcustomers: string;
@@ -128,9 +130,10 @@ export async function GET(request: NextRequest) {
           COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newCustomers,
           COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeCustomers
         FROM "customers"
+        WHERE "deletedAt" IS NULL
       `,
       
-      // 3. 产品核心指标
+      // 3. 产品核心指标（排除软删除产品）
       prisma.$queryRaw<Array<{
         totalproducts: string;
         activeproducts: string;
@@ -141,21 +144,24 @@ export async function GET(request: NextRequest) {
           COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeProducts,
           COUNT(CASE WHEN "createdAt" >= ${startDate} THEN 1 END) as newProducts
         FROM "products"
+        WHERE "deletedAt" IS NULL
       `,
       
-      // 4. 询盘/报价转化指标
+      // 4. 询盘/报价转化指标（均排除软删除）
+      // 注意：totalQuotations 统计的是从询盘关联创建的报价（inquiryId IS NOT NULL），
+      // 而非全部报价，以确保 inquiryToQuotationRate 能准确反映"询盘→报价"转化率。
       prisma.$queryRaw<Array<{
         totalinquiries: string;
         totalquotations: string;
         totalorders: string;
       }>>`
         SELECT 
-          (SELECT COUNT(*) FROM "inquiries" WHERE "createdAt" >= ${startDate}) as totalInquiries,
-          (SELECT COUNT(*) FROM "quotations" WHERE "createdAt" >= ${startDate}) as totalQuotations,
-          (SELECT COUNT(*) FROM "orders" WHERE "createdAt" >= ${startDate}) as totalOrders
+          (SELECT COUNT(*) FROM "inquiries" WHERE "createdAt" >= ${startDate} AND "deletedAt" IS NULL) as totalInquiries,
+          (SELECT COUNT(*) FROM "quotations" WHERE "createdAt" >= ${startDate} AND "deletedAt" IS NULL AND "inquiryId" IS NOT NULL) as totalQuotations,
+          (SELECT COUNT(*) FROM "orders" WHERE "createdAt" >= ${startDate} AND "deletedAt" IS NULL) as totalOrders
       `,
       
-      // 5. 库存预警数量
+      // 5. 库存预警数量（排除软删除产品）
       prisma.$queryRaw<Array<{
         alertcount: string;
       }>>`
@@ -163,24 +169,27 @@ export async function GET(request: NextRequest) {
         FROM "inventory_items" i
         JOIN "products" p ON i."productId" = p.id
         WHERE i.quantity < COALESCE(p.moq, 0)
+          AND p."deletedAt" IS NULL
       `,
       
-      // 6. 待处理订单数量
+      // 6. 待处理订单数量（排除软删除订单）
       prisma.$queryRaw<Array<{
         pendingcount: string;
       }>>`
         SELECT COUNT(*) as pendingCount
         FROM "orders"
         WHERE status IN ('PENDING', 'CONFIRMED')
+          AND "deletedAt" IS NULL
       `,
       
-      // 7. 上一周期销售额（用于计算环比增长）
+      // 7. 上一周期销售额（用于计算环比增长，排除软删除）
       prisma.$queryRaw<Array<{
         prevrevenue: string;
       }>>`
         SELECT SUM("totalAmount") as prevRevenue
         FROM "orders"
         WHERE "createdAt" >= ${prevStartDate} AND "createdAt" < ${startDate}
+          AND "deletedAt" IS NULL
       `
     ]);
 
@@ -198,8 +207,6 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // 计算环比增长（与上一个周期对比）
-    // prevStartDate 已在前面声明，避免作用域问题
-
     const currentRevenue = salesMetrics[0] ? parseFloat(salesMetrics[0].totalrevenue) : 0;
     const prevRevenue = prevSales[0] ? parseFloat(prevSales[0].prevrevenue) : 0;
     const revenueGrowth = prevRevenue > 0 

@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { decryptCredentials } from '@/lib/crypto-utils';
 import { executePlatformSync, platformRegistry } from './index';
 
 // 存储定时器 ID
@@ -32,7 +33,7 @@ export async function initSyncScheduler(): Promise<void> {
     }
     
     // 检查凭据是否配置
-    const credentials = config.credentials as Record<string, any>;
+    const credentials = decryptCredentials(config.credentials);
     if (!credentials || Object.keys(credentials).length === 0) {
       console.warn(`[Sync Scheduler] 平台 ${config.platformCode} 未配置凭据，跳过`);
       continue;

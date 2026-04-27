@@ -3,10 +3,20 @@ import { prisma } from '@/lib/prisma';
 import { quotationListQuerySchema } from '@/lib/validators/quotation';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateQuotationSchema } from '@/lib/api-schemas';
+import { getUserFromRequest } from '@/lib/auth-api';
 
-// GET /api/quotations - 获取报价列表（支持分页、筛选、搜索）
+// GET /api/quotations - 获取报价列表（支持分页、筛选、搜索）- 需要认证
 export async function GET(request: Request) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     
     // 验证查询参数
@@ -84,7 +94,7 @@ export async function GET(request: Request) {
     console.error('Error fetching quotations:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Invalid query parameters', details: error },
+        { error: 'Invalid query parameters' },
         { status: 400 }
       );
     }
@@ -95,9 +105,18 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/quotations - 创建报价
+// POST /api/quotations - 创建报价 - 需要认证
 export async function POST(request: Request) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     
     // 验证输入
@@ -154,7 +173,7 @@ export async function POST(request: Request) {
     console.error('Error creating quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Validation failed', details: error },
+        { error: 'Validation failed' },
         { status: 400 }
       );
     }

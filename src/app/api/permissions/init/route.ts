@@ -189,34 +189,24 @@ export async function POST(request: NextRequest) {
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
-    let createdPermissions = 0;
-    let createdRoles = 0;
-
-    // 创建权限
-    for (const perm of defaultPermissions) {
-      const existing = await prisma.permission.findUnique({
-        where: { name: perm.name },
-      });
-      if (!existing) {
-        await prisma.permission.create({
-          data: perm,
-        });
-        createdPermissions++;
-      }
+    // SEC-006: 仅允许管理员初始化权限系统
+    if (session.role !== 'ADMIN') {
+      return errorResponse('需要管理员权限', 'FORBIDDEN', 403);
     }
 
-    // 创建角色
-    for (const role of defaultRoles) {
-      const existing = await prisma.role.findUnique({
-        where: { name: role.name },
-      });
-      if (!existing) {
-        await prisma.role.create({
-          data: role,
-        });
-        createdRoles++;
-      }
-    }
+    // PERF-002: 批量创建权限，使用 createMany + skipDuplicates 替代逐条 create
+    const permResult = await prisma.permission.createMany({
+      data: defaultPermissions,
+      skipDuplicates: true,
+    });
+    const createdPermissions = permResult.count;
+
+    // PERF-002: 批量创建角色
+    const roleResult = await prisma.role.createMany({
+      data: defaultRoles,
+      skipDuplicates: true,
+    });
+    const createdRoles = roleResult.count;
 
     // 为超级管理员角色分配所有权限
     const superAdmin = await prisma.role.findUnique({

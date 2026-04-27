@@ -17,6 +17,13 @@ import { prisma } from '@/lib/prisma';
 import { GET, POST } from '@/app/api/orders/route';
 import { GET as GET_BY_ID, PUT, DELETE as DELETE_BY_ID, POST as POST_ACTION } from '@/app/api/orders/[id]/route';
 
+// Mock 认证模块 — orders 路由需要认证（GET list、POST create、DELETE）
+jest.mock('@/lib/auth-api', () => ({
+  getUserFromRequest: jest.fn(() =>
+    Promise.resolve({ id: 't', email: 't@t.com', name: 'T', role: 'ADMIN' })
+  ),
+}));
+
 // Mock NextRequest
 function createMockRequest(
   url: string,
@@ -135,7 +142,7 @@ describe('Orders API', () => {
       expect(result.success).toBe(true);
       expect(result.data).toHaveProperty('id');
       expect(result.data).toHaveProperty('orderNo');
-      expect(result.data.orderNo).toMatch(/^SO-\d{8}-\d{3}$/);
+      expect(result.data.orderNo).toMatch(/^SO-\d{8}-\d{6}[a-z0-9]{4}$/);
       expect(result.data.status).toBe('PENDING');
       expect(result.data.totalAmount).toBe(16750); // 100*100 + 50*150*0.9
       expect(result.data.itemCount).toBe(2);
@@ -537,11 +544,11 @@ describe('Orders API', () => {
       expect(result.data.confirmedAt).toBeTruthy();
     });
 
-    it('应该返回冲突当订单不是 PENDING 状态', async () => {
-      // 先确认订单
+    it('应该返回冲突当订单已取消时不能确认', async () => {
+      // 先取消订单，CANCELLED 是终态，不可再确认
       await prisma.order.update({
         where: { id: pendingOrderId },
-        data: { status: 'CONFIRMED', confirmedAt: new Date() },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: '测试' },
       });
 
       const url = `http://localhost:3000/api/orders/${pendingOrderId}/confirm`;

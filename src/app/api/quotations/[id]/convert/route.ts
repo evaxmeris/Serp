@@ -139,7 +139,7 @@ export async function POST(
     console.error('Error converting quotation to order:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Validation failed', details: error },
+        { error: '请求参数验证失败' },
         { status: 400 }
       );
     }

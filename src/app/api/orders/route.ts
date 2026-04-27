@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
 import {
   successResponse,
   listResponse,
@@ -14,6 +15,7 @@ import {
 import { orderListQuerySchema } from '@/lib/validators/order';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateOrderSchema } from '@/lib/api-schemas';
+import { generateOrderNo } from '@/lib/id-generator';
 
 /**
  * GET /api/orders - 获取订单列表（行级隔离）
@@ -50,8 +52,9 @@ export async function GET(request: NextRequest) {
       sortOrder,
     } = queryResult.data;
 
-    // 构建查询条件
-    const where: any = {};
+    // PERM-005: 统一应用行级过滤
+    // 管理员可以看到所有订单，普通用户只能看到自己负责的订单
+    const where = applyRowLevelFilter(currentUser, 'order', {});
 
     // 状态筛选
     if (status) {
@@ -86,12 +89,6 @@ export async function GET(request: NextRequest) {
         { customer: { companyName: { contains: search, mode: 'insensitive' } } },
         { shippingAddress: { contains: search, mode: 'insensitive' } },
       ];
-    }
-
-    // BUG-PERM-007: 添加行级隔离
-    // 管理员/经理可以看到所有订单，普通用户只能看到自己负责的订单
-    if (currentUser.role !== 'ADMIN') {
-      where.salesRepId = currentUser.id;
     }
 
     // 执行查询
@@ -234,26 +231,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 计算总金额
-    const totalAmount = items.reduce((sum, item) => {
-      const discount = item.discountRate || 0;
-      const itemAmount = item.quantity * item.unitPrice * (1 - discount / 100);
-      return sum + itemAmount;
-    }, 0);
+    // 计算总金额（使用 Decimal 精度：分步计算后四舍五入到两位小数）
+    const totalAmount = Math.round(
+      items.reduce((sum, item) => {
+        const discount = item.discountRate || 0;
+        const itemAmount = item.quantity * item.unitPrice * (1 - discount / 100);
+        return sum + itemAmount;
+      }, 0) * 100
+    ) / 100;
 
-    // 生成订单号：SO-YYYYMMDD-XXX
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const count = await prisma.order.count({
-      where: {
-        createdAt: {
-          gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-        },
-      },
-    });
-    const orderNo = `SO-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+    // 生成订单号：SO-YYYYMMDD-<时间戳尾数><随机后缀>（并发安全，无竞态条件）
+    const orderNo = generateOrderNo();
 
     // 创建订单
     const order = await prisma.order.create({
@@ -291,7 +279,7 @@ export async function POST(request: NextRequest) {
             unit: item.unit || 'PCS',
             unitPrice: item.unitPrice,
             discountRate: item.discountRate || 0,
-            amount: item.quantity * item.unitPrice * (1 - (item.discountRate || 0) / 100),
+            amount: Math.round(item.quantity * item.unitPrice * (1 - (item.discountRate || 0) / 100) * 100) / 100,
             productionStatus: 'NOT_STARTED',
             shippedQty: 0,
             deliveredQty: 0,

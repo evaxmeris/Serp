@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { errorResponse, successResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -94,7 +94,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/suppliers/[id] - 删除供应商
+// DELETE /api/suppliers/[id] - 删除供应商（需检查关联采购订单）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -106,11 +106,35 @@ export async function DELETE(
       }
 
     const { id } = await params;
+
+    // 检查供应商是否存在
+    const supplier = await prisma.supplier.findUnique({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!supplier) {
+      return notFoundResponse('供应商');
+    }
+
+    // 检查关联采购订单
+    const relatedPurchaseOrders = await prisma.purchaseOrder.findMany({
+      where: { supplierId: id },
+      select: { id: true, poNo: true },
+      take: 10,
+    });
+
+    // 如果有关联采购订单，返回 409 禁止删除
+    if (relatedPurchaseOrders.length > 0) {
+      return conflictResponse(
+        `无法删除供应商：存在关联采购订单(${relatedPurchaseOrders.map(po => po.poNo).join(', ')})`
+      );
+    }
+
     await prisma.supplier.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse(null, '供应商删除成功');
   } catch (error) {
     console.error('Error deleting supplier:', error);
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { computeAvailableQty } from '@/lib/inventory-utils';
 import {
   successResponse,
   errorResponse,
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     
     const page = Number(searchParams.get('page')) || 1;
-    const limit = Number(searchParams.get('limit')) || 20;
+    const limit = Math.min(Number(searchParams.get('limit')) || 20, 100);
     const productId = searchParams.get('productId');
     const warehouseId = searchParams.get('warehouseId');
     const search = searchParams.get('search');
@@ -76,8 +77,14 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // 动态计算 availableQty，而非依赖可能不一致的手动维护字段
+    const items = inventories.map(item => ({
+      ...item,
+      availableQty: computeAvailableQty(item.quantity, item.reservedQty),
+    }));
+
     return successResponse({
-      items: inventories,
+      items,
       pagination: {
         page,
         limit,
@@ -126,7 +133,6 @@ export async function POST(request: NextRequest) {
           productId: data.productId,
           warehouse: data.warehouseId,
           quantity: 0,
-          availableQty: 0,
           reservedQty: 0,
         },
       });
@@ -146,10 +152,8 @@ export async function POST(request: NextRequest) {
     };
 
     if (data.quantity > 0) {
-      updateData.availableQty = { increment: data.quantity };
       updateData.lastInboundDate = new Date();
     } else {
-      updateData.availableQty = { decrement: Math.abs(data.quantity) };
       updateData.lastOutboundDate = new Date();
     }
 

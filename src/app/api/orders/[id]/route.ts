@@ -12,6 +12,8 @@ import {
 import { orderConfirmSchema, orderCancelSchema } from '@/lib/validators/order';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateOrderSchema } from '@/lib/api-schemas';
+import { validateTransition, canCancel } from '@/lib/order-status-machine';
+import type { OrderStatus } from '@/types/order';
 
 /**
  * GET /api/orders/[id] - 获取订单详情
@@ -218,6 +220,27 @@ export async function PUT(
       }
     }
 
+    // === 状态流转验证 (审计 2.5) ===
+    // 如果请求中包含 status 字段且与当前状态不同，验证状态跳转是否合法
+    if (restData.status && restData.status !== existingOrder.status) {
+      // 获取当前用户角色用于 ADMIN 权限判断
+      const session = await getUserFromRequest(request);
+      const isAdmin = session?.role === 'ADMIN';
+
+      const result = validateTransition(
+        existingOrder.status as OrderStatus,
+        restData.status as OrderStatus,
+        { isAdmin },
+      );
+
+      if (!result.valid) {
+        return conflictResponse(
+          result.message,
+          'ORDER_INVALID_STATUS_TRANSITION',
+        );
+      }
+    }
+
     // 更新订单
     const order = await prisma.order.update({
       where: { id },
@@ -355,11 +378,15 @@ async function handleConfirm(id: string, request: NextRequest) {
       return notFoundResponse('订单');
     }
 
-    // 只有 PENDING 状态的订单可以确认
-    if (order.status !== 'PENDING') {
+    // 验证状态流转：只有 PENDING → CONFIRMED 允许
+    const transitionResult = validateTransition(
+      order.status as OrderStatus,
+      'CONFIRMED',
+    );
+    if (!transitionResult.valid) {
       return conflictResponse(
-        `只有待确认状态的订单可以确认，当前状态：${order.status}`,
-        'ORDER_INVALID_STATUS'
+        transitionResult.message,
+        'ORDER_INVALID_STATUS',
       );
     }
 
@@ -417,12 +444,11 @@ async function handleCancel(id: string, request: NextRequest) {
       return notFoundResponse('订单');
     }
 
-    // SHIPPED 及之后状态的订单不可取消
-    const nonCancellableStatuses = ['SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED'];
-    if (nonCancellableStatuses.includes(order.status)) {
+    // 验证状态流转：仅 PENDING / CONFIRMED / IN_PRODUCTION / READY 可取消
+    if (!canCancel(order.status as OrderStatus)) {
       return conflictResponse(
         `当前状态（${order.status}）的订单不可取消`,
-        'ORDER_INVALID_STATUS'
+        'ORDER_INVALID_STATUS',
       );
     }
 

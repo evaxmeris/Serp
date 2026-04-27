@@ -18,6 +18,13 @@ import { GET as GET_BY_ID, PUT, DELETE as DELETE_BY_ID } from '@/app/api/quotati
 import { POST as SEND } from '@/app/api/quotations/[id]/send/route';
 import { POST as CONVERT } from '@/app/api/quotations/[id]/convert/route';
 
+// Mock 认证模块 — 所有 quotation 路由都需要认证
+jest.mock('@/lib/auth-api', () => ({
+  getUserFromRequest: jest.fn(() =>
+    Promise.resolve({ id: 't', email: 't@t.com', name: 'T', role: 'ADMIN' })
+  ),
+}));
+
 // Mock NextRequest
 function createMockRequest(
   url: string,

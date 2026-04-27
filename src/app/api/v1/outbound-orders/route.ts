@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
+import { getAvailableQty } from '@/lib/inventory-utils';
 import {
   successResponse,
   paginatedResponse,
@@ -35,7 +36,7 @@ const CreateOutboundOrderSchema = z.object({
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
-  status: z.enum(['DRAFT', 'PENDING', 'SHIPPED', 'CANCELLED']).optional(),
+  status: z.enum(['PENDING', 'PICKING', 'PACKING', 'SHIPPED', 'DELIVERED', 'CANCELLED']).optional(),
   orderId: z.string().optional(),
   search: z.string().optional(),
   sortBy: z.string().default('createdAt'),
@@ -168,19 +169,12 @@ export async function POST(request: NextRequest) {
         return notFoundResponse(`产品 (ID: ${item.productId})`);
       }
 
-      // 检查库存
-      const inventoryItem = await prisma.inventoryItem.findUnique({
-        where: {
-          productId_warehouse: {
-            productId: item.productId,
-            warehouse: data.warehouseId,
-          },
-        },
-      });
+      // 检查库存：使用动态计算的可用库存（quantity - reservedQty），而非手动维护的 availableQty 字段
+      const availableQty = await getAvailableQty(item.productId, data.warehouseId);
 
-      if (!inventoryItem || inventoryItem.availableQty < item.quantity) {
+      if (availableQty < item.quantity) {
         return conflictResponse(
-          `产品 ${product.name} 库存不足（可用：${inventoryItem?.availableQty || 0}，需要：${item.quantity}）`
+          `产品 ${product.name} 库存不足（可用：${availableQty}，需要：${item.quantity}）`
         );
       }
     }
@@ -192,16 +186,10 @@ export async function POST(request: NextRequest) {
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const day = String(now.getDate()).padStart(2, '0');
-      
-      const count = await tx.outboundOrder.count({
-        where: {
-          createdAt: {
-            gte: new Date(year, now.getMonth(), now.getDate()),
-          },
-        },
-      });
-      
-      const outboundNo = `OB-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+      // 生成语义化出库单号: OUT-YYYYMMDD-<timestamp36><random>
+      const timestamp = Date.now().toString(36).slice(-6);
+      const random = Math.random().toString(36).slice(2, 6);
+      const outboundNo = `OUT-${year}${month}${day}-${timestamp}${random}`;
 
       // 创建出库单
       const order = await tx.outboundOrder.create({
@@ -227,7 +215,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 扣减库存
+      // 扣减库存（不再手动维护 availableQty，由 getAvailableQty 动态计算）
       const warehouseCode = data.warehouseId; // 从出库单获取仓库 ID
       for (const item of data.items) {
         await tx.inventoryItem.update({
@@ -239,7 +227,6 @@ export async function POST(request: NextRequest) {
           },
           data: {
             quantity: { decrement: item.quantity },
-            availableQty: { decrement: item.quantity },
             lastOutboundDate: now,
           },
         });

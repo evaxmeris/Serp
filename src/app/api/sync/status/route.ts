@@ -9,6 +9,7 @@ import { getUserFromRequest } from '@/lib/auth-api';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { platformRegistry } from '@/lib/sync';
+import { decryptCredentials } from '@/lib/crypto-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
         code,
         name: adapter?.platformName || code,
         enabled: config?.enabled || false,
-        configured: !!config && Object.keys(config.credentials || {}).length > 0,
+        configured: !!config && Object.keys(decryptCredentials(config.credentials)).length > 0,
         lastSyncAt: config?.lastSyncAt,
         lastSyncStatus: config?.lastSyncStatus,
         syncIntervalMin: config?.syncIntervalMin || 120,

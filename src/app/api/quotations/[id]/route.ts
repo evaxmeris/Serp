@@ -2,13 +2,23 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateQuotationSchema } from '@/lib/api-schemas';
+import { getUserFromRequest } from '@/lib/auth-api';
 
-// GET /api/quotations/[id] - 获取报价单详情
+// GET /api/quotations/[id] - 获取报价单详情 - 需要认证
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const quotation = await prisma.quotation.findUnique({
       where: { id },
@@ -53,12 +63,21 @@ export async function GET(
   }
 }
 
-// PUT /api/quotations/[id] - 更新报价单
+// PUT /api/quotations/[id] - 更新报价单 - 需要认证
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -125,7 +144,7 @@ export async function PUT(
     console.error('Error updating quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Validation failed', details: error },
+        { error: 'Validation failed' },
         { status: 400 }
       );
     }
@@ -136,12 +155,21 @@ export async function PUT(
   }
 }
 
-// DELETE /api/quotations/[id] - 删除报价单
+// DELETE /api/quotations/[id] - 删除报价单 - 需要认证
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
     // 检查报价单是否存在

@@ -24,6 +24,13 @@ export async function GET(request: Request) {
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const ids = searchParams.get('ids');
+    const limitParam = searchParams.get('limit');
+    
+    // VAL-002: 导出数量上限保护，默认100，最大1000
+    const limit = Math.min(
+      limitParam ? parseInt(limitParam) : 100,
+      1000
+    );
 
     // 构建查询条件
     const whereClause: any = {};
@@ -31,11 +38,11 @@ export async function GET(request: Request) {
       whereClause.id = { in: ids.split(',') };
     }
 
-    // 查询客户
+    // 查询客户（限制导出数量）
     const customers = await prisma.customer.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      take: 10000,
+      take: limit,
     });
 
     // 生成 CSV

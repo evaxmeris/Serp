@@ -105,6 +105,13 @@ export default function ProfilePage() {
   const [permissions, setPermissions] = useState<any[]>([]);
   const [permissionModules, setPermissionModules] = useState<Record<string, any[]>>({});
 
+  // 受控表单状态
+  const [formName, setFormName] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formDepartment, setFormDepartment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   // 读取用户信息（从 cookie）
   useEffect(() => {
     const loadUser = async () => {
@@ -121,8 +128,11 @@ export default function ProfilePage() {
           });
           
           if (res.ok) {
-            const user = await res.json();
-            setUser(user);
+            const data = await res.json();
+            const userData = data.user || data;
+            setUser(userData);
+            // 初始化受控表单字段
+            setFormName(userData.name || '');
           }
         } catch (error) {
           console.error('加载用户失败:', error);
@@ -161,9 +171,42 @@ export default function ProfilePage() {
     loadPermissions();
   }, [user?.id]);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    setSaveError('');
+    setSaving(true);
+    try {
+      // 调用 /api/profile PUT 接口，更新 name 字段
+      const token = Cookies.get('auth_token');
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formName,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || '保存失败');
+      }
+
+      // 更新本地 user 状态（保持 UI 一致）
+      if (data.user) {
+        setUser((prev: any) => ({ ...prev, ...data.user }));
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      setSaveError(err.message || '保存失败，请稍后重试');
+      console.error('保存用户资料失败:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!user) {
@@ -206,9 +249,15 @@ export default function ProfilePage() {
         {activeTab !== 'permissions' && (
           <Button
             onClick={handleSave}
-            className={`transition-all ${saved ? 'bg-green-600' : ''}`}
+            disabled={saving}
+            className={`transition-all ${saved ? 'bg-green-600' : ''} ${saving ? 'opacity-70' : ''}`}
           >
-            {saved ? (
+            {saving ? (
+              <>
+                <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                保存中...
+              </>
+            ) : saved ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-2" />
                 已保存
@@ -262,20 +311,32 @@ export default function ProfilePage() {
 
               {/* 表单 */}
               <div className="flex-1 w-full space-y-4">
+                {/* 保存错误提示 */}
+                {saveError && (
+                  <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-3 py-2 rounded-md border border-red-200 dark:border-red-800">
+                    {saveError}
+                  </div>
+                )}
                 <div className="grid gap-4 sm:grid-cols-2" role="form" aria-label="基本信息表单">
                   <div>
                     <label htmlFor="profile-name" className="text-sm font-medium mb-1.5 block flex items-center gap-2">
                       <User className="h-4 w-4 text-zinc-400" />
                       姓名
                     </label>
-                    <Input id="profile-name" defaultValue={user.name || ''} placeholder="请输入姓名" aria-label="姓名" />
+                    <Input
+                      id="profile-name"
+                      value={formName}
+                      onChange={(e) => { setFormName(e.target.value); setSaveError(''); }}
+                      placeholder="请输入姓名"
+                      aria-label="姓名"
+                    />
                   </div>
                   <div>
                     <label htmlFor="profile-email" className="text-sm font-medium mb-1.5 block flex items-center gap-2">
                       <Mail className="h-4 w-4 text-zinc-400" />
                       邮箱
                     </label>
-                    <Input id="profile-email" defaultValue={user.email} disabled className="bg-zinc-50 dark:bg-zinc-800/50" aria-label="邮箱" />
+                    <Input id="profile-email" value={user.email || ''} disabled className="bg-zinc-50 dark:bg-zinc-800/50" aria-label="邮箱" readOnly />
                     <p className="text-xs text-zinc-500 mt-1">邮箱不可修改</p>
                   </div>
                   <div>
@@ -283,14 +344,28 @@ export default function ProfilePage() {
                       <Phone className="h-4 w-4 text-zinc-400" />
                       手机号
                     </label>
-                    <Input id="profile-phone" placeholder="请输入手机号" aria-label="手机号" />
+                    <Input
+                      id="profile-phone"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(e.target.value)}
+                      placeholder="请输入手机号"
+                      aria-label="手机号"
+                    />
+                    <p className="text-xs text-zinc-400 mt-1">手机号暂未同步到数据库</p>
                   </div>
                   <div>
                     <label htmlFor="profile-department" className="text-sm font-medium mb-1.5 block flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-zinc-400" />
                       部门
                     </label>
-                    <Input id="profile-department" placeholder="请输入部门" aria-label="部门" />
+                    <Input
+                      id="profile-department"
+                      value={formDepartment}
+                      onChange={(e) => setFormDepartment(e.target.value)}
+                      placeholder="请输入部门"
+                      aria-label="部门"
+                    />
+                    <p className="text-xs text-zinc-400 mt-1">部门暂未同步到数据库</p>
                   </div>
                 </div>
 

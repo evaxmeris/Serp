@@ -40,35 +40,49 @@ export async function POST(
     if (!v.success) return v.response;
     const { reason } = v.data;
 
-    // 查询注册申请
-    const registration = await prisma.userRegistration.findUnique({
-      where: { id: registrationId },
-    });
+    // 使用事务确保原子性：检查 PENDING 状态 + 更新状态不可分割
+    // 防止并发请求同时通过状态检查
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 在事务内重新查询，获取最新状态（避免 TOCTOU 竞态条件）
+        const reg = await tx.userRegistration.findUnique({
+          where: { id: registrationId },
+        });
 
-    if (!registration) {
-      return NextResponse.json(
-        { error: '注册申请不存在' },
-        { status: 404 }
-      );
+        if (!reg) {
+          throw new Error('NOT_FOUND');
+        }
+
+        if (reg.status !== 'PENDING') {
+          throw new Error('ALREADY_PROCESSED');
+        }
+
+        // 更新注册申请状态为拒绝
+        await tx.userRegistration.update({
+          where: { id: registrationId },
+          data: {
+            status: 'REJECTED',
+            approvedById: currentUser.id,
+            approvedAt: new Date(),
+            rejectReason: reason || '未提供原因',
+          },
+        });
+      });
+    } catch (error: any) {
+      if (error.message === 'NOT_FOUND') {
+        return NextResponse.json(
+          { error: '注册申请不存在' },
+          { status: 404 }
+        );
+      }
+      if (error.message === 'ALREADY_PROCESSED') {
+        return NextResponse.json(
+          { error: '该申请已处理，不能重复操作' },
+          { status: 400 }
+        );
+      }
+      throw error; // 其他异常抛给外层 catch 处理
     }
-
-    if (registration.status !== 'PENDING') {
-      return NextResponse.json(
-        { error: '该申请已处理，不能重复操作' },
-        { status: 400 }
-      );
-    }
-
-    // 更新注册申请状态为拒绝
-    await prisma.userRegistration.update({
-      where: { id: registrationId },
-      data: {
-        status: 'REJECTED',
-        approvedById: currentUser.id,
-        approvedAt: new Date(),
-        rejectReason: reason || '未提供原因',
-      },
-    });
 
     return NextResponse.json({
       success: true,

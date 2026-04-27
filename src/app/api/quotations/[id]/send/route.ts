@@ -2,13 +2,23 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';
+import { getUserFromRequest } from '@/lib/auth-api';
 
-// POST /api/quotations/[id]/send - 发送报价单
+// POST /api/quotations/[id]/send - 发送报价单 - 需要认证
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 认证检查
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -84,7 +94,7 @@ export async function POST(
     console.error('Error sending quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Validation failed', details: error },
+        { error: 'Validation failed' },
         { status: 400 }
       );
     }

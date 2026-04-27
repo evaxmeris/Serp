@@ -1,68 +1,47 @@
-# Changelog
+File unchanged since last read. The content from the earlier read_file result in this conversation is still current — refer to that instead of re-reading.
 
-All notable changes to this project will be documented in this file.
+## [v0.10.0] - 2026-04-27
 
----
+### 🔒 安全加固 (12项)
+- 密码 bcrypt 加密存储，消除明文密码漏洞
+- 报价单全端点认证 + 询盘行级权限检查
+- 登录速率限制 (20次/15分钟) + CSRF 保护
+- Debug 端点生产环境硬禁用
+- 批量导出数量上限 (10000→100)
+- 产品详情/更新端点认证
+- 权限初始化 ADMIN 保护
+- Row-level filter 全局统一应用
+- 批准/拒绝事务原子化防竞态
 
-## [v0.9.0] - 2026-04-10
+### 📊 数据准确性 (4项)
+- Dashboard 7个SQL查询排除软删除数据
+- 订单金额 Decimal 精度修正
+- lastSyncAt 仅在成功时更新
+- 库存 availableQty 动态计算
 
-### 🎉 全系统页面完善 Sprint 001
+### 🚚 物流管理模块 (全新)
+- 物流服务商管理：CRUD + 证照上传(≤500KB)
+- 物流订单管理：四级审批(提交→校对→审批→财务)
+- 费用明细(海运费/报关费/港杂等) + 物品明细
 
-#### 角色体系重构
-- **角色精简**：11 角色 → 5 角色（ADMIN/SALES/PURCHASING/WAREHOUSE/VIEWER）
-- 数据库 RoleEnum 迁移，旧角色自动映射到新角色
-- 测试账号密码重置并文档化
+### ⚙️ 审批流程配置引擎 (全新)
+- 可配置审批流程：步骤+审批人(用户/角色)
+- 审批实例跟踪 + 审批历史记录
+- 支持产品采购/物流采购等多种审批类型
 
-#### 📦 产品管理重构
-- **卡片式布局**：响应式网格（1→2→3→4 列）
-- **编辑功能**：点击卡片打开编辑 Dialog
-- **分类筛选**：顶部品类下拉筛选
-- **导航整合**：品类管理、属性模板归入产品管理分组
+### 🏗️ 基础设施 (10+个新模块)
+- auth-unified.ts 统一认证入口
+- order-status-machine.ts 订单状态机
+- status-config.ts 状态颜色统一配置
+- crypto-utils.ts AES-256-GCM 加密
+- id-generator.ts 编号生成器
+- pagination/empty-state/skeleton-table/responsive-table 通用组件
 
-#### 📋 基础资料修复
-- **/customers**：新增操作列（查看/编辑/删除）+ 分页 + 编辑 Dialog
-- **/inquiries**：新增操作列 + 关键词搜索 + 状态筛选 + 分页 + 批量删除
-- **/purchases**：新增操作列 + 分页 + 供应商筛选 + 详情/编辑页
-
-#### 🔄 业务流转优化
-- **订单→采购一键转化**：订单详情页"生成采购订单"按钮，自动带出产品信息
-- **贸易条款标准化**：INCOTERMS 和 PAYMENT_TERMS 下拉选项替代自由输入
-
-#### ⚙️ 系统设置重构
-- **Tab 架构**：6 个 Tab（业务设置/系统配置/安全设置/通知设置/数据管理/外观设置）
-- **个人资料页**：新建 /profile，含基本信息/账号安全/个人偏好
-
-#### 🐛 Bug 修复
-- 修复登录角色默认值问题（USER → ADMIN）
-- 修复 API 路由中的旧角色引用
-- 修复所有 404 页面链接
-
-#### 📊 全链路验证
-- 21 个页面全部通过，0 个 404
-- 7 个 API 端点全部正常
-
----
-
-### 文件变更统计
-- 64 个文件变更
-- +3,310 行新增
-- -895 行删除
-
-### 数据库变更
-- RoleEnum 枚举精简
-- 用户角色自动迁移（MANAGER→ADMIN, SUPER_ADMIN→ADMIN, USER→SALES）
+### 🐛 修复
+- 订单号竞态条件 (count+1 → 时间戳+随机)
+- 批量导入 N+1 查询 → createMany
+- customerId UUID→CUID 兼容
+- 侧边栏多路径同时高亮
+- React hydration warnings
 
 ---
-
-## [v0.8.0] - 2026-04-01
-
-- 权限系统
-- 产品调研模块
-- 报表中心
-
----
-
-## [v0.7.0] - 2026-03-24
-
-- 初始版本
-- 核心业务功能

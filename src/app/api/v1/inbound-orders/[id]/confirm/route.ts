@@ -146,7 +146,6 @@ export async function POST(
               productId: item.productId,
               warehouse: warehouseCode,
               quantity: 0,
-              availableQty: 0,
               reservedQty: 0,
             },
           });
@@ -160,9 +159,6 @@ export async function POST(
           where: { id: inventoryItem.id },
           data: {
             quantity: afterQuantity,
-            availableQty: {
-              increment: actualQty,
-            },
             lastInboundDate: new Date(),
           },
         });

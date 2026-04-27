@@ -182,7 +182,7 @@ async function batchCancel(orders: any[]) {
   for (const order of orders) {
     try {
       // 验证状态
-      if (!['DRAFT', 'PENDING'].includes(order.status)) {
+      if (order.status !== 'PENDING') {
         results.failed.push({
           id: order.id,
           reason: `当前状态为 ${order.status}，无法取消`,
@@ -209,7 +209,6 @@ async function batchCancel(orders: any[]) {
             },
             data: {
               quantity: { increment: item.quantity },
-              availableQty: { increment: item.quantity },
             },
           });
 

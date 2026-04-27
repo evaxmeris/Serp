@@ -4,6 +4,8 @@ import { getUserFromRequest } from '@/lib/auth-api';
 import { listResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateSupplierSchema } from '@/lib/api-schemas';
+import { generateSupplierCode } from '@/lib/id-generator';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
 
 // GET /api/suppliers - 获取供应商列表（行级隔离）
 // 管理员可以看到所有供应商，普通用户只能看到自己的供应商
@@ -18,10 +20,11 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const search = searchParams.get('search') || '';
 
-    const where: any = {};
+    // PERM-005: 统一应用行级过滤
+    const where = applyRowLevelFilter(currentUser, 'supplier', {});
 
     if (search) {
       where.OR = [
@@ -30,11 +33,6 @@ export async function GET(request: NextRequest) {
         { email: { contains: search } },
         { phone: { contains: search } },
       ];
-    }
-
-    // BUG-PERM-007: 行级隔离
-    if (currentUser.role !== 'ADMIN') {
-      where.ownerId = currentUser.id;
     }
 
     const [suppliers, total] = await Promise.all([
@@ -96,20 +94,7 @@ export async function POST(request: NextRequest) {
     } = v.data;
 
     // 生成供应商编号
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    const count = await prisma.supplier.count({
-      where: {
-        createdAt: {
-          gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-        },
-      },
-    });
-    
-    const supplierNo = `SUP-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+    const supplierNo = await generateSupplierCode();
 
     // BUG-PERM-007: 自动设置 ownerId 为当前用户
     const supplier = await prisma.supplier.create({

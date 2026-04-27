@@ -12,6 +12,17 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+
+// Mock 认证模块：返回 ADMIN 会话，通过所有权限检查（包括行级权限 assignedTo）
+jest.mock('@/lib/auth-api', () => ({
+  getUserFromRequest: jest.fn().mockResolvedValue({
+    id: 'test-admin-id',
+    email: 'admin@testerp.com',
+    name: 'Test Admin',
+    role: 'ADMIN',
+  }),
+}));
+
 import { GET, POST } from '@/app/api/inquiries/route';
 import { GET as GET_BY_ID, PUT, DELETE as DELETE_BY_ID } from '@/app/api/inquiries/[id]/route';
 
@@ -69,6 +80,8 @@ describe('Inquiries API', () => {
   beforeEach(() => {
     testInquiryData = {
       customerId: testCustomerId,
+      subject: `测试询盘_${Date.now()}`,
+      content: '需要定制 Logo，包装要求精美，数量 1000 个 LED Pen Light',
       source: 'Website',
       products: 'LED Pen Light',
       quantity: 1000,
@@ -98,15 +111,17 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data).toHaveProperty('id');
-      expect(data).toHaveProperty('inquiryNo');
-      expect(data.customerId).toBe(testCustomerId);
-      expect(data.products).toBe(testInquiryData.products);
-      expect(data.quantity).toBe(testInquiryData.quantity);
-      expect(data.priority).toBe('HIGH');
-      expect(data.status).toBe('NEW');
+      expect(data.success).toBe(true);
+      expect(data.code).toBe('CREATED');
+      expect(data.data).toHaveProperty('id');
+      expect(data.data).toHaveProperty('inquiryNo');
+      expect(data.data.customerId).toBe(testCustomerId);
+      expect(data.data.products).toBe(testInquiryData.products);
+      expect(data.data.quantity).toBe(testInquiryData.quantity);
+      expect(data.data.priority).toBe('HIGH');
+      expect(data.data.status).toBe('NEW');
 
-      createdInquiryId = data.id;
+      createdInquiryId = data.data.id;
     });
 
     it('应该验证必填字段 customerId', async () => {
@@ -115,40 +130,42 @@ describe('Inquiries API', () => {
       const response = await POST(request);
       const data = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(data.error).toContain('required');
+      expect(response.status).toBe(422);
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('VALIDATION_ERROR');
     });
 
     it('应该创建询盘时允许可选字段为空', async () => {
       const minimalData = {
         customerId: testCustomerId,
-        products: 'Test Product',
+        subject: 'Minimal Test Inquiry',
+        content: 'Minimal content for testing',
       };
       const request = createMockRequest('/api/inquiries', 'POST', minimalData);
       const response = await POST(request);
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.products).toBe(minimalData.products);
-      expect(data.status).toBe('NEW');
+      expect(data.data.status).toBe('NEW');
 
       // 清理
-      await prisma.inquiry.delete({ where: { id: data.id } }).catch(() => {});
+      await prisma.inquiry.delete({ where: { id: data.data.id } }).catch(() => {});
     });
 
     it('应该自动生成询盘编号', async () => {
       const request = createMockRequest('/api/inquiries', 'POST', {
         customerId: testCustomerId,
-        products: 'Auto Number Test',
+        subject: 'Auto Number Test',
+        content: 'Testing auto-generated inquiry number',
       });
       const response = await POST(request);
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.inquiryNo).toMatch(/^INQ\d+$/);
+      expect(data.data.inquiryNo).toMatch(/^INQ\d+$/);
 
       // 清理
-      await prisma.inquiry.delete({ where: { id: data.id } }).catch(() => {});
+      await prisma.inquiry.delete({ where: { id: data.data.id } }).catch(() => {});
     });
 
     it('应该支持不同的优先级', async () => {
@@ -157,16 +174,17 @@ describe('Inquiries API', () => {
       for (const priority of priorities) {
         const request = createMockRequest('/api/inquiries', 'POST', {
           customerId: testCustomerId,
-          products: `Priority ${priority} Test`,
+          subject: `Priority ${priority} Test`,
+          content: `Testing priority ${priority}`,
           priority,
         });
         const response = await POST(request);
         const data = await response.json();
 
         expect(response.status).toBe(201);
-        expect(data.priority).toBe(priority);
+        expect(data.data.priority).toBe(priority);
 
-        await prisma.inquiry.delete({ where: { id: data.id } }).catch(() => {});
+        await prisma.inquiry.delete({ where: { id: data.data.id } }).catch(() => {});
       }
     });
   });
@@ -178,12 +196,13 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toHaveProperty('data');
-      expect(data).toHaveProperty('pagination');
-      expect(data.pagination).toHaveProperty('page');
-      expect(data.pagination).toHaveProperty('limit');
-      expect(data.pagination).toHaveProperty('total');
-      expect(data.pagination).toHaveProperty('totalPages');
+      expect(data.success).toBe(true);
+      expect(data.data).toHaveProperty('items');
+      expect(data.data).toHaveProperty('pagination');
+      expect(data.data.pagination).toHaveProperty('page');
+      expect(data.data.pagination).toHaveProperty('limit');
+      expect(data.data.pagination).toHaveProperty('total');
+      expect(data.data.pagination).toHaveProperty('totalPages');
     });
 
     it('应该支持按状态过滤', async () => {
@@ -192,11 +211,11 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data).toBeTruthy();
-      expect(Array.isArray(data.data)).toBe(true);
+      expect(data.data.items).toBeTruthy();
+      expect(Array.isArray(data.data.items)).toBe(true);
       
       // 所有返回的询盘状态都应该是 NEW
-      data.data.forEach((inquiry: any) => {
+      data.data.items.forEach((inquiry: any) => {
         expect(inquiry.status).toBe('NEW');
       });
     });
@@ -207,10 +226,10 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data).toBeTruthy();
+      expect(data.data.items).toBeTruthy();
       
       // 所有返回的询盘优先级都应该是 HIGH
-      data.data.forEach((inquiry: any) => {
+      data.data.items.forEach((inquiry: any) => {
         expect(inquiry.priority).toBe('HIGH');
       });
     });
@@ -221,8 +240,8 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.pagination.limit).toBe(5);
-      expect(data.pagination.page).toBe(1);
+      expect(data.data.pagination.limit).toBe(5);
+      expect(data.data.pagination.page).toBe(1);
     });
 
     it('应该包含客户信息', async () => {
@@ -231,10 +250,10 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      if (data.data.length > 0) {
-        expect(data.data[0]).toHaveProperty('customer');
-        expect(data.data[0].customer).toHaveProperty('companyName');
-        expect(data.data[0].customer).toHaveProperty('contactName');
+      if (data.data.items.length > 0) {
+        expect(data.data.items[0]).toHaveProperty('customer');
+        expect(data.data.items[0].customer).toHaveProperty('companyName');
+        expect(data.data.items[0].customer).toHaveProperty('contactName');
       }
     });
 
@@ -244,9 +263,9 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      if (data.data.length > 0) {
-        expect(data.data[0]).toHaveProperty('followUps');
-        expect(Array.isArray(data.data[0].followUps)).toBe(true);
+      if (data.data.items.length > 0) {
+        expect(data.data.items[0]).toHaveProperty('followUps');
+        expect(Array.isArray(data.data.items[0].followUps)).toBe(true);
       }
     });
   });
@@ -260,20 +279,22 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.id).toBe(createdInquiryId);
-      expect(data).toHaveProperty('customer');
-      expect(data).toHaveProperty('followUps');
-      expect(data.customer).toHaveProperty('companyName');
+      expect(data.success).toBe(true);
+      expect(data.data.id).toBe(createdInquiryId);
+      expect(data.data).toHaveProperty('customer');
+      expect(data.data).toHaveProperty('followUps');
+      expect(data.data.customer).toHaveProperty('companyName');
     });
 
     it('应该返回 404 当询盘不存在', async () => {
-      const fakeId = 'clxxx123456789';
+      const fakeId = 'clxx1234567890abcdefg'; // 有效 cuid 格式
       const request = createMockRequest(`/api/inquiries/${fakeId}`);
       const response = await GET_BY_ID(request, createMockParams(fakeId));
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toContain('not found');
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('NOT_FOUND');
     });
 
     it('应该包含完整的客户联系信息', async () => {
@@ -284,8 +305,8 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.customer).toHaveProperty('email');
-      expect(data.customer).toHaveProperty('phone');
+      expect(data.data.customer).toHaveProperty('email');
+      expect(data.data.customer).toHaveProperty('phone');
     });
   });
 
@@ -309,10 +330,11 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.quantity).toBe(updateData.quantity);
-      expect(String(data.targetPrice)).toBe(updateData.targetPrice);
-      expect(data.requirements).toBe(updateData.requirements);
-      expect(data.priority).toBe(updateData.priority);
+      expect(data.success).toBe(true);
+      expect(data.data.quantity).toBe(updateData.quantity);
+      expect(String(data.data.targetPrice)).toBe(updateData.targetPrice);
+      expect(data.data.requirements).toBe(updateData.requirements);
+      expect(data.data.priority).toBe(updateData.priority);
     });
 
     it('应该更新询盘状态', async () => {
@@ -328,19 +350,20 @@ describe('Inquiries API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('CONTACTED');
+      expect(data.data.status).toBe('CONTACTED');
     });
 
-    it('应该返回 500 当询盘不存在', async () => {
-      const fakeId = 'clxxx123456789';
+    it('应该返回 404 当询盘不存在', async () => {
+      const fakeId = 'clxx1234567890abcdefg'; // 有效 cuid 格式
       const request = createMockRequest(`/api/inquiries/${fakeId}`, 'PUT', {
         quantity: 100,
       });
       const response = await PUT(request, createMockParams(fakeId));
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error).toContain('Failed to update');
+      expect(response.status).toBe(404);
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('NOT_FOUND');
     });
   });
 
@@ -349,11 +372,12 @@ describe('Inquiries API', () => {
       // 创建一个专门用于删除测试的询盘
       const createRequest = createMockRequest('/api/inquiries', 'POST', {
         customerId: testCustomerId,
-        products: 'Delete Test Product',
+        subject: 'Delete Test Inquiry',
+        content: 'Testing delete functionality',
       });
       const createResponse = await POST(createRequest);
       const createData = await createResponse.json();
-      const testId = createData.id;
+      const testId = createData.data.id;
 
       const request = createMockRequest(`/api/inquiries/${testId}`, 'DELETE');
       const response = await DELETE_BY_ID(request, createMockParams(testId));
@@ -369,14 +393,15 @@ describe('Inquiries API', () => {
       expect(deleted).toBeNull();
     });
 
-    it('应该返回 500 当询盘不存在', async () => {
-      const fakeId = 'clxxx123456789';
+    it('应该返回 404 当询盘不存在', async () => {
+      const fakeId = 'clxx1234567890abcdefg'; // 有效 cuid 格式
       const request = createMockRequest(`/api/inquiries/${fakeId}`, 'DELETE');
       const response = await DELETE_BY_ID(request, createMockParams(fakeId));
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error).toContain('Failed to delete');
+      expect(response.status).toBe(404);
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('NOT_FOUND');
     });
   });
 

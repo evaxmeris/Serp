@@ -11,6 +11,17 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+
+// Mock 认证模块：返回 ADMIN 会话，通过所有权限检查
+jest.mock('@/lib/auth-api', () => ({
+  getUserFromRequest: jest.fn().mockResolvedValue({
+    id: 'test-admin-id',
+    email: 'admin@testerp.com',
+    name: 'Test Admin',
+    role: 'ADMIN',
+  }),
+}));
+
 import { GET, POST } from '@/app/api/v1/suppliers/route';
 import { GET as GET_BY_ID, PUT, DELETE as DELETE_BY_ID } from '@/app/api/v1/suppliers/[id]/route';
 
@@ -181,7 +192,8 @@ describe('Suppliers API V1', () => {
     });
 
     it('应该返回 404 当供应商不存在', async () => {
-      const fakeId = 'clxxx123456789';
+      // 使用有效的 cuid 格式但数据库中不存在的 ID
+      const fakeId = 'clxx1234567890abcdefg'; // 有效 cuid 格式
       const request = createMockRequest(`/api/v1/suppliers/${fakeId}`);
       const response = await GET_BY_ID(request, createMockParams(fakeId));
       const data = await response.json();
@@ -190,11 +202,12 @@ describe('Suppliers API V1', () => {
       expect(data.success).toBe(false);
     });
 
-    it('应该验证 ID 格式', async () => {
+    it('应该验证 ID 格式（cuid）', async () => {
       const request = createMockRequest('/api/v1/suppliers/invalid-id');
       const response = await GET_BY_ID(request, createMockParams('invalid-id'));
       const data = await response.json();
 
+      // V1 路由使用 cuid 格式验证，无效格式返回 422
       expect(response.status).toBe(422);
       expect(data.success).toBe(false);
     });
@@ -225,7 +238,7 @@ describe('Suppliers API V1', () => {
     });
 
     it('应该返回 404 当供应商不存在', async () => {
-      const fakeId = 'clxxx123456789';
+      const fakeId = 'clxx1234567890abcdefg'; // 有效 cuid 格式
       const request = createMockRequest(`/api/v1/suppliers/${fakeId}`, 'PUT', {
         contactName: '测试',
       });
@@ -262,9 +275,38 @@ describe('Suppliers API V1', () => {
       expect(deleted).toBeNull();
     });
 
-    it('应该返回 409 当供应商有关联订单', async () => {
-      // 这个测试需要实际创建采购订单，暂时跳过
-      expect(true).toBe(true);
+    it('应该返回 409 当供应商有关联采购订单', async () => {
+      // 创建一个测试供应商
+      const testRequest = createMockRequest('/api/v1/suppliers', 'POST', {
+        companyName: `级联删除测试_${Date.now()}`,
+        email: `cascade_test_${Date.now()}@example.com`,
+      });
+      const testResponse = await POST(testRequest);
+      const testData = await testResponse.json();
+      const testId = testData.data.id;
+
+      // 为该供应商创建一条采购订单
+      await prisma.purchaseOrder.create({
+        data: {
+          poNo: `PO-CASCADE-${Date.now()}`,
+          supplierId: testId,
+          totalAmount: 1000,
+          purchaserId: 'test-admin-id',
+        },
+      });
+
+      // 尝试删除供应商 → 应返回 409 冲突
+      const request = createMockRequest(`/api/v1/suppliers/${testId}`, 'DELETE');
+      const response = await DELETE_BY_ID(request, createMockParams(testId));
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('CONFLICT');
+
+      // 清理：先删除采购订单，再删除供应商
+      await prisma.purchaseOrder.deleteMany({ where: { supplierId: testId } });
+      await prisma.supplier.delete({ where: { id: testId } }).catch(() => {});
     });
   });
 });

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateInquirySchema } from '@/lib/api-schemas';
 
@@ -12,6 +12,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
     const inquiry = await prisma.inquiry.findUnique({
       where: { id },
@@ -35,6 +40,11 @@ export async function GET(
       return notFoundResponse('询盘');
     }
 
+    // 行级权限：非 ADMIN 用户只能查看分配给自己的询盘
+    if (session.role !== 'ADMIN' && inquiry.assignedTo !== session.id) {
+      return errorResponse('无权访问此询盘', 'FORBIDDEN', 403);
+    }
+
     return successResponse(inquiry);
   } catch (error) {
     console.error('Error fetching inquiry:', error);
@@ -48,7 +58,25 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
     const { id } = await params;
+
+    // 行级权限：非 ADMIN 用户只能更新分配给自己的询盘
+    const existingInquiry = await prisma.inquiry.findUnique({
+      where: { id },
+      select: { assignedTo: true },
+    });
+    if (!existingInquiry) {
+      return notFoundResponse('询盘');
+    }
+    if (session.role !== 'ADMIN' && existingInquiry.assignedTo !== session.id) {
+      return errorResponse('无权修改此询盘', 'FORBIDDEN', 403);
+    }
+
     const body = await request.json();
     const v = validateOrReturn(UpdateInquirySchema, body);
     if (!v.success) return v.response;
@@ -91,18 +119,45 @@ export async function PUT(
   }
 }
 
-// DELETE /api/inquiries/[id] - 删除询盘
+// DELETE /api/inquiries/[id] - 删除询盘（需检查关联报价单）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const session = await getUserFromRequest(request);
-      if (!session) {
-        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
-      }
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
 
     const { id } = await params;
+
+    // 行级权限：非 ADMIN 用户只能删除分配给自己的询盘
+    const existingInquiry = await prisma.inquiry.findUnique({
+      where: { id, deletedAt: null },
+      select: { assignedTo: true },
+    });
+    if (!existingInquiry) {
+      return notFoundResponse('询盘');
+    }
+    if (session.role !== 'ADMIN' && existingInquiry.assignedTo !== session.id) {
+      return errorResponse('无权删除此询盘', 'FORBIDDEN', 403);
+    }
+
+    // 检查关联报价单
+    const relatedQuotations = await prisma.quotation.findMany({
+      where: { inquiryId: id, deletedAt: null },
+      select: { id: true, quotationNo: true },
+      take: 10,
+    });
+
+    // 如果有关联报价单，返回 409 禁止删除
+    if (relatedQuotations.length > 0) {
+      return conflictResponse(
+        `无法删除询盘：存在关联报价单(${relatedQuotations.map(q => q.quotationNo).join(', ')})`
+      );
+    }
+
     await prisma.inquiry.delete({
       where: { id },
     });

@@ -40,52 +40,68 @@ export async function POST(
       );
     }
 
-    // 获取注册申请
-    const registration = await prisma.userRegistration.findUnique({
-      where: { id: registrationId },
-    });
+    // 使用事务确保原子性：检查 PENDING 状态 + 创建用户 + 更新状态
+    // 防止并发请求同时通过状态检查导致的竞态条件
+    let user;
+    try {
+      user = await prisma.$transaction(async (tx) => {
+        // 在事务内重新查询，获取最新状态（避免 TOCTOU 竞态条件）
+        const reg = await tx.userRegistration.findUnique({
+          where: { id: registrationId },
+        });
 
-    if (!registration) {
-      return NextResponse.json(
-        { error: 'Registration not found' },
-        { status: 404 }
-      );
-    }
+        if (!reg) {
+          throw new Error('NOT_FOUND');
+        }
 
-    // 检查是否已审批过
-    if (registration.status !== 'PENDING') {
-      return NextResponse.json(
-        { error: 'This registration has already been processed' },
-        { status: 400 }
-      );
-    }
+        if (reg.status !== 'PENDING') {
+          throw new Error('ALREADY_PROCESSED');
+        }
 
-    // 创建正式用户
-    // 只复制 User 模型中存在的字段，UserRegistration 有额外字段但 User 不需要
-    const user = await prisma.user.create({
-      data: {
-        email: registration.email,
-        passwordHash: registration.passwordHash,
-        name: registration.name,
-        role: 'SALES', // 默认角色为业务员
-      },
-    });
+        // 创建正式用户
+        // 只复制 User 模型中存在的字段，UserRegistration 有额外字段但 User 不需要
+        const createdUser = await tx.user.create({
+          data: {
+            email: reg.email,
+            passwordHash: reg.passwordHash,
+            name: reg.name,
+            role: 'SALES', // 默认角色为业务员
+          },
+        });
 
-    // 更新注册申请状态
-    await prisma.userRegistration.update({
-      where: { id: registrationId },
-      data: {
-        status: approved ? 'APPROVED' : 'REJECTED',
-        approvedById: currentSession.user.id,
-        rejectReason,
-      },
-    });
+        // 更新注册申请状态
+        await tx.userRegistration.update({
+          where: { id: registrationId },
+          data: {
+            status: approved ? 'APPROVED' : 'REJECTED',
+            approvedById: currentSession.user.id,
+            rejectReason,
+          },
+        });
 
-    if (!approved) {
-      // 删除已拒绝的申请
-      await prisma.userRegistration.delete({
-        where: { id: registrationId },
+        if (!approved) {
+          // 删除已拒绝的申请
+          await tx.userRegistration.delete({
+            where: { id: registrationId },
+          });
+        }
+
+        return createdUser;
       });
+    } catch (error: any) {
+      if (error.message === 'NOT_FOUND') {
+        return NextResponse.json(
+          { error: 'Registration not found' },
+          { status: 404 }
+        );
+      }
+      if (error.message === 'ALREADY_PROCESSED') {
+        return NextResponse.json(
+          { error: 'This registration has already been processed' },
+          { status: 400 }
+        );
+      }
+      throw error; // 其他异常抛给外层 catch 处理
     }
 
     return NextResponse.json(

@@ -10,6 +10,7 @@ import { getUserFromRequest } from '@/lib/auth-api';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { platformRegistry } from '@/lib/sync';
+import { encryptCredentials, decryptCredentials } from '@/lib/crypto-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +27,12 @@ export async function GET(request: NextRequest) {
     if (!platformCode) {
       // 返回所有平台配置
       const configs = await prisma.platformSyncConfig.findMany();
-      return successResponse({ configs });
+      // 解密 credentials 再返回给前端
+      const safeConfigs = configs.map(config => ({
+        ...config,
+        credentials: decryptCredentials(config.credentials),
+      }));
+      return successResponse({ configs: safeConfigs });
     }
     
     // 返回指定平台配置
@@ -38,7 +44,13 @@ export async function GET(request: NextRequest) {
       return errorResponse('配置不存在', 'CONFIG_NOT_FOUND', 404);
     }
     
-    return successResponse({ config });
+    // 解密 credentials 再返回给前端
+    const safeConfig = {
+      ...config,
+      credentials: decryptCredentials(config.credentials),
+    };
+    
+    return successResponse({ config: safeConfig });
     
   } catch (error) {
     console.error('[Sync Config API] 查询失败:', error);
@@ -77,13 +89,16 @@ export async function PUT(request: NextRequest) {
       return errorResponse(`平台 ${platformCode} 未注册`, 'PLATFORM_NOT_FOUND', 404);
     }
     
+    // 加密 credentials 再存入数据库
+    const encryptedCredentials = encryptCredentials(credentials);
+
     // 创建或更新配置
     const config = await prisma.platformSyncConfig.upsert({
       where: { platformCode },
       update: {
         enabled: enabled !== undefined ? enabled : undefined,
         syncIntervalMin: syncIntervalMin || undefined,
-        credentials: credentials || undefined,
+        credentials: encryptedCredentials as any,
         settings: settings || undefined,
       },
       create: {
@@ -91,7 +106,7 @@ export async function PUT(request: NextRequest) {
         platformName: adapter.platformName,
         enabled: enabled || false,
         syncIntervalMin: syncIntervalMin || 120,
-        credentials: credentials || {},
+        credentials: encryptedCredentials as any,
         settings: settings || null,
       },
     });

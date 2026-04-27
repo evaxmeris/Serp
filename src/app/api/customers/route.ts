@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
 import { listResponse, createdResponse, errorResponse, notFoundResponse, validationErrorResponse } from '@/lib/api-response';
 import { CreateCustomerSchema, PaginationSchema } from '@/lib/api-schemas';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
 
 // GET /api/customers - 获取客户列表（行级隔离：只能看到自己的客户）
 export async function GET(request: NextRequest) {
@@ -16,22 +17,17 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const search = searchParams.get('search') || '';
 
-    // 构建查询条件
-    const where: any = search ? {
+    // PERM-005: 统一应用行级过滤 - 管理员看全部，普通用户只看自己的
+    const where = applyRowLevelFilter(currentUser, 'customer', search ? {
       OR: [
         { companyName: { contains: search } },
         { contactName: { contains: search } },
         { email: { contains: search } },
       ],
-    } : {};
-
-    // BUG-PERM-007: 添加行级隔离 - 管理员可以看到所有客户，普通用户只能看到自己的
-    if (currentUser.role !== 'ADMIN') {
-      where.ownerId = currentUser.id;
-    }
+    } : {});
 
     const [customers, total] = await Promise.all([
       prisma.customer.findMany({

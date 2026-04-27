@@ -7,12 +7,101 @@
  * 3. 创建/更新 ERP 订单及明细
  * 4. 记录同步日志
  * 5. 通知业务员
+ * 6. 互斥锁：防止同一平台并发同步
+ * 7. 重试机制：指数退避，最多 3 次
  */
 
 import { prisma } from '@/lib/prisma';
+import { decryptCredentials } from '@/lib/crypto-utils';
 import { platformRegistry } from './registry';
 import { mapUnifiedOrderToERP, updateOrderStatus } from './mapper';
 import type { UnifiedOrder, SyncResult, PlatformConfig } from './types';
+
+// ============================================
+// 互斥锁：内存 Map，跟踪正在同步的平台
+// ============================================
+const syncingPlatforms = new Set<string>();
+
+// ============================================
+// 重试工具函数
+// ============================================
+
+/** 判断错误是否可重试（网络/临时故障 vs 认证/配置错误） */
+function isRetryableError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  
+  // 不可重试：认证失败、配置错误、权限问题
+  const nonRetryable = [
+    'auth', 'authenticate', 'credential', '401', 'unauthorized',
+    'config', 'not configured', 'not enabled', 'bad request',
+    '400', '404', 'permission', 'forbidden', '403',
+    'invalid api key', 'invalid token', 'token expired',
+  ];
+  if (nonRetryable.some(k => message.includes(k))) {
+    return false;
+  }
+  
+  // 明确可重试：网络超时、503、429、连接错误
+  const retryable = [
+    'timeout', 'timed out', 'econn', 'etimedout', 'econnrefused',
+    'econnreset', 'enotfound', '503', '502', '504',
+    '429', 'rate limit', 'network', 'dns', 'temporary',
+    'fetch failed', 'socket', 'unreachable',
+  ];
+  if (retryable.some(k => message.includes(k))) {
+    return true;
+  }
+  
+  // 默认策略：未知错误归为不可重试（安全第一）
+  return false;
+}
+
+/** 延迟工具函数 */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** 带指数退避重试的 fetchOrders 包装器 */
+async function fetchWithRetry(
+  adapter: { fetchOrders: Function },
+  params: { page?: number; pageSize: number; createdAtStart?: Date },
+  config: PlatformConfig,
+  platformCode: string,
+): Promise<{ orders: UnifiedOrder[]; retryCount: number }> {
+  let lastError: Error | null = null;
+  const maxRetries = 3;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const orders = await adapter.fetchOrders(params, config);
+      return { orders, retryCount: attempt }; // attempt=0 表示首次成功，无需重试
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // 判断是否可重试
+      if (!isRetryableError(lastError)) {
+        console.error(`[Sync ${platformCode}] 不可重试错误（跳过重试）: ${lastError.message}`);
+        throw lastError;
+      }
+      
+      // 已达最大重试次数
+      if (attempt >= maxRetries) {
+        console.error(`[Sync ${platformCode}] 已达最大重试次数 (${maxRetries})，放弃`);
+        throw lastError;
+      }
+      
+      // 指数退避：1s, 2s, 4s
+      const delayMs = Math.pow(2, attempt) * 1000;
+      console.warn(
+        `[Sync ${platformCode}] 第 ${attempt + 1}/${maxRetries} 次重试 ` +
+        `（等待 ${delayMs / 1000}s，错误: ${lastError.message}）`
+      );
+      await sleep(delayMs);
+    }
+  }
+  
+  throw lastError!;
+}
 
 /**
  * 执行指定平台的订单同步
@@ -28,9 +117,32 @@ export async function executePlatformSync(
   const startTime = Date.now();
   const errors: string[] = [];
   
+  // ============================================
+  // 互斥锁检查：防止同一平台并发同步
+  // ============================================
+  if (syncingPlatforms.has(platformCode)) {
+    console.warn(`[Sync ${platformCode}] 平台正在同步中，跳过本次同步（互斥锁保护）`);
+    return {
+      platformCode,
+      status: 'failed',
+      ordersFound: 0,
+      ordersSynced: 0,
+      ordersFailed: 0,
+      errors: [`平台 ${platformCode} 正在同步中，跳过本次同步`],
+      durationMs: Date.now() - startTime,
+    };
+  }
+  
+  // 获取互斥锁
+  syncingPlatforms.add(platformCode);
+  
+  // 累计重试次数（跨所有分页）
+  let totalRetryCount = 0;
+  
   // 1. 获取平台适配器
   const adapter = platformRegistry.get(platformCode);
   if (!adapter) {
+    syncingPlatforms.delete(platformCode); // 释放锁
     return {
       platformCode,
       status: 'failed',
@@ -48,6 +160,7 @@ export async function executePlatformSync(
       platformCode,
       triggerType,
       status: 'processing',
+      retryCount: 0,
     },
   });
   
@@ -85,7 +198,7 @@ export async function executePlatformSync(
       platformCode: platformConfig.platformCode,
       enabled: platformConfig.enabled,
       syncIntervalMin: platformConfig.syncIntervalMin,
-      credentials: platformConfig.credentials as Record<string, string>,
+      credentials: decryptCredentials(platformConfig.credentials) as Record<string, string>,
       settings: (platformConfig.settings as Record<string, any>) || undefined,
     };
     
@@ -103,7 +216,14 @@ export async function executePlatformSync(
     let hasMore = true;
     
     while (hasMore) {
-      const orders = await adapter.fetchOrders(fetchParams, config);
+      // 使用重试机制拉取订单（指数退避，最多 3 次）
+      const { orders, retryCount } = await fetchWithRetry(
+        adapter,
+        fetchParams,
+        config,
+        platformCode,
+      );
+      totalRetryCount += retryCount;
       
       if (orders.length > 0) {
         allOrders = allOrders.concat(orders);
@@ -138,14 +258,27 @@ export async function executePlatformSync(
       }
     }
     
-    // 7. 更新平台配置（记录最后同步时间）
-    await prisma.platformSyncConfig.update({
-      where: { platformCode },
-      data: {
-        lastSyncAt: new Date(),
-        lastSyncStatus: errors.length > 0 && synced > 0 ? 'partial' : errors.length > 0 ? 'failed' : 'success',
-      },
-    });
+    // 7. 更新平台配置（仅在同步成功后更新 lastSyncAt，避免失败时丢失订单）
+    const syncStatus = errors.length > 0 && synced > 0 ? 'partial' : errors.length > 0 ? 'failed' : 'success';
+    
+    // 只在同步成功或部分成功时更新 lastSyncAt
+    if (syncStatus !== 'failed') {
+      await prisma.platformSyncConfig.update({
+        where: { platformCode },
+        data: {
+          lastSyncAt: new Date(),
+          lastSyncStatus: syncStatus,
+        },
+      });
+    } else {
+      // 同步失败时只更新状态，不更新 lastSyncAt（保留上次成功时间以便重试）
+      await prisma.platformSyncConfig.update({
+        where: { platformCode },
+        data: {
+          lastSyncStatus: syncStatus,
+        },
+      });
+    }
     
     // 8. 更新同步日志
     const durationMs = Date.now() - startTime;
@@ -156,6 +289,7 @@ export async function executePlatformSync(
         ordersFound: allOrders.length,
         ordersSynced: synced,
         ordersFailed: failed,
+        retryCount: totalRetryCount,
         errorMessage: errors.length > 0 ? errors.join('\n') : null,
         completedAt: new Date(),
         durationMs,
@@ -184,6 +318,7 @@ export async function executePlatformSync(
       where: { id: syncLog.id },
       data: {
         status: 'failed',
+        retryCount: totalRetryCount,
         errorMessage: error instanceof Error ? error.message : String(error),
         completedAt: new Date(),
         durationMs,
@@ -191,6 +326,9 @@ export async function executePlatformSync(
     });
     
     throw error;
+  } finally {
+    // 释放互斥锁
+    syncingPlatforms.delete(platformCode);
   }
 }
 

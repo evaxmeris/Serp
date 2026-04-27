@@ -25,10 +25,12 @@ import {
   CircleDollarSign,
   Inbox,
   Truck,
+  Ship,
   User,
   Scale,
   Upload,
   ShieldCheck,
+  GitBranch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -123,6 +125,20 @@ const menuConfig: MenuGroup[] = [
         href: '/purchases',
         roles: ['ADMIN', 'PURCHASING'],
       },
+      {
+        key: 'logistics-providers',
+        label: '物流服务商',
+        icon: Truck,
+        href: '/logistics/providers',
+        roles: ['ADMIN', 'PURCHASING'],
+      },
+      {
+        key: 'logistics-orders',
+        label: '物流订单',
+        icon: Ship,
+        href: '/logistics/orders',
+        roles: ['ADMIN', 'PURCHASING'],
+      },
     ],
   },
   {
@@ -197,6 +213,13 @@ const menuConfig: MenuGroup[] = [
         label: '仓库管理',
         icon: Package,
         href: '/settings/warehouses',
+        roles: ['ADMIN'],
+      },
+      {
+        key: 'approval-workflows',
+        label: '审批流程',
+        icon: GitBranch,
+        href: '/settings/approval-workflows',
         roles: ['ADMIN'],
       },
       {
@@ -372,8 +395,17 @@ export default function Sidebar({
                 </div>
               )}
               <ul className="space-y-1">
-                {group.items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                {(() => {
+                  // 找出最佳匹配项（最长 href 匹配），避免父子路径同时高亮
+                  const matchingItems = group.items.filter(
+                    (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+                  );
+                  const bestMatch = matchingItems.length > 0
+                    ? matchingItems.reduce((a, b) => a.href.length > b.href.length ? a : b)
+                    : null;
+
+                  return group.items.map((item) => {
+                  const isActive = bestMatch?.key === item.key;
                   return (
                     <li key={item.key}>
                       <button
@@ -402,7 +434,7 @@ export default function Sidebar({
                       </button>
                     </li>
                   );
-                })}
+                })})()}
               </ul>
             </div>
           ))}

@@ -62,8 +62,8 @@ export async function POST(
       return notFoundResponse('出库单');
     }
 
-    // 只有草稿或待确认状态的出库单可以取消
-    if (!['DRAFT', 'PENDING'].includes(outboundOrder.status)) {
+    // 只有待处理状态的出库单可以取消
+    if (outboundOrder.status !== 'PENDING') {
       return conflictResponse(`当前状态为 ${outboundOrder.status}，无法取消`);
     }
 
@@ -98,7 +98,6 @@ export async function POST(
             },
             data: {
               quantity: { increment: item.quantity },
-              availableQty: { increment: item.quantity },
             },
           });
 

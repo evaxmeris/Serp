@@ -12,15 +12,21 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { LoginSchema, validateBody } from '@/lib/api-schemas';
 import { validationErrorResponse } from '@/lib/api-response';
+import { rateLimit } from '@/lib/rate-limit';
 
 // 失败登录计数 Map（只记录失败登录）
 const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
 
 /**
  * POST /api/auth/login - 用户登录
+ * 速率限制：每 IP 每 15 分钟最多 20 次登录请求
  */
 export async function POST(request: Request) {
   try {
+    // 速率限制：防止暴力破解
+    const rateLimitError = rateLimit(request as any, { limit: 20, windowMs: 15 * 60 * 1000 });
+    if (rateLimitError) return rateLimitError;
+
     const body = await request.json();
 
     // Zod 验证

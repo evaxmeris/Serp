@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateCustomerSchema } from '@/lib/api-schemas';
 
@@ -79,7 +79,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/customers/[id] - 删除客户
+// DELETE /api/customers/[id] - 删除客户（需检查关联数据）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -91,6 +91,52 @@ export async function DELETE(
     }
 
     const { id } = await params;
+
+    // 检查客户是否存在
+    const customer = await prisma.customer.findUnique({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!customer) {
+      return notFoundResponse('客户');
+    }
+
+    // 检查关联订单
+    const relatedOrders = await prisma.order.findMany({
+      where: { customerId: id, deletedAt: null },
+      select: { id: true, orderNo: true },
+      take: 10,
+    });
+
+    // 检查关联询盘
+    const relatedInquiries = await prisma.inquiry.findMany({
+      where: { customerId: id, deletedAt: null },
+      select: { id: true, inquiryNo: true },
+      take: 10,
+    });
+
+    // 检查关联报价单
+    const relatedQuotations = await prisma.quotation.findMany({
+      where: { customerId: id, deletedAt: null },
+      select: { id: true, quotationNo: true },
+      take: 10,
+    });
+
+    // 如果有关联数据，返回 409 禁止删除
+    if (relatedOrders.length > 0 || relatedInquiries.length > 0 || relatedQuotations.length > 0) {
+      const entities: string[] = [];
+      if (relatedOrders.length > 0) {
+        entities.push(`订单(${relatedOrders.map(o => o.orderNo).join(', ')})`);
+      }
+      if (relatedInquiries.length > 0) {
+        entities.push(`询盘(${relatedInquiries.map(i => i.inquiryNo).join(', ')})`);
+      }
+      if (relatedQuotations.length > 0) {
+        entities.push(`报价单(${relatedQuotations.map(q => q.quotationNo).join(', ')})`);
+      }
+      return conflictResponse(`无法删除客户：存在关联${entities.join('、')}`);
+    }
+
     await prisma.customer.delete({
       where: { id },
     });

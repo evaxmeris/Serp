@@ -5,6 +5,7 @@ import { listResponse, createdResponse, errorResponse } from '@/lib/api-response
 import type { InquiryStatus, Priority } from '@prisma/client';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateInquirySchema } from '@/lib/api-schemas';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
 
 // GET /api/inquiries - 获取询盘列表（行级隔离）
 // 普通用户只能看到自己客户的询盘，管理员可以看到所有
@@ -19,15 +20,15 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const status = searchParams.get('status') || '';
     const priority = searchParams.get('priority') || '';
     const customerId = searchParams.get('customerId') || '';
     const search = searchParams.get('search') || '';
 
-    // 构建查询条件
-    const where: any = {};
-    
+    // PERM-005: 统一应用行级过滤
+    const where = applyRowLevelFilter(currentUser, 'inquiry', {});
+
     if (status) {
       where.status = status as InquiryStatus;
     }
@@ -46,13 +47,6 @@ export async function GET(request: NextRequest) {
         { products: { contains: search } },
         { customer: { companyName: { contains: search } } },
       ];
-    }
-
-    // BUG-PERM-007: 行级隔离 - 通过客户 ownerId 过滤
-    if (currentUser.role !== 'ADMIN') {
-      where.customer = {
-        ownerId: currentUser.id,
-      };
     }
 
     const [inquiries, total] = await Promise.all([
