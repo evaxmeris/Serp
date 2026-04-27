@@ -10,6 +10,43 @@ import {
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateLogisticsProviderSchema } from '@/lib/api-schemas';
 
+// GET /api/v1/logistics/providers/[id] — 获取单个物流服务商详情
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
+    const { id } = await params;
+
+    const provider = await prisma.logisticsProvider.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            quotations: true,
+            orders: true,
+          },
+        },
+      },
+    });
+
+    if (!provider) {
+      return notFoundResponse('物流服务商');
+    }
+
+    return successResponse(provider, '获取物流服务商成功');
+  } catch (error) {
+    console.error('获取物流服务商详情失败:', error);
+    return errorResponse('获取物流服务商详情失败', 'INTERNAL_ERROR', 500);
+  }
+}
+
 // PUT /api/v1/logistics/providers/[id] — 更新物流服务商
 export async function PUT(
   request: NextRequest,

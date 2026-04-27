@@ -158,16 +158,12 @@ export default function LogisticsProviderDetailPage() {
   const fetchProvider = async () => {
     setLoadingProvider(true);
     try {
-      // 通过物流订单 API 或列表 API 获取服务商详情
-      const res = await fetch(`/api/v1/logistics/providers?search=${encodeURIComponent(providerId)}&limit=50`);
+      // 直接调用 GET /api/v1/logistics/providers/[id] 获取服务商详情
+      const res = await fetch(`/api/v1/logistics/providers/${providerId}`);
       const result = await res.json();
-      const providers = result.data?.items ?? result.data ?? [];
-      const found = Array.isArray(providers)
-        ? providers.find((p: LogisticsProvider) => p.id === providerId)
-        : null;
 
-      if (found) {
-        setProvider(found);
+      if (result.success && result.data) {
+        setProvider(result.data);
       }
     } catch (error) {
       console.error('获取服务商详情失败:', error);
