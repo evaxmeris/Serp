@@ -97,17 +97,42 @@ function getPermissionType(typeStr: string): PermissionNode['type'] {
 
 function getModuleDisplayName(module: string): string {
   const map: Record<string, string> = {
-    orders: '订单管理',
-    products: '产品管理',
-    customers: '客户管理',
-    suppliers: '供应商管理',
+    // 基础资料
+    customer: '客户管理',
+    supplier: '供应商管理',
+    // 产品管理
+    product: '产品管理',
+    category: '品类管理',
+    attribute_template: '属性模板',
+    // 销售订单
+    order: '订单管理',
+    quotation: '报价管理',
+    // 采购供应链
+    purchase: '采购管理',
+    purchase_receipt: '采购收货',
+    inbound_order: '采购入库',
+    logistics_provider: '物流服务商',
+    logistics_order: '物流订单',
+    // 仓储物流
     inventory: '库存管理',
-    purchasing: '采购管理',
-    quotations: '报价管理',
-    reports: '报表统计',
+    outbound_order: '出库管理',
+    warehouse: '仓库管理',
+    shipment: '发货管理',
+    // 报表分析
+    dashboard: '数据仪表盘',
+    report: '报表分析',
+    // 系统管理
+    user: '用户管理',
+    role: '角色权限',
+    approval: '审批管理',
     settings: '系统设置',
-    users: '用户管理',
-    roles: '角色管理',
+    platform: '平台账号',
+    sync: '数据同步',
+    // 产品开发
+    research: '产品调研',
+    competitor: '竞品分析',
+    comparison: '产品对比',
+    research_import: '数据导入',
   };
   return map[module] || module;
 }

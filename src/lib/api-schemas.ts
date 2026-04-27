@@ -68,7 +68,7 @@ export const UpdateCustomerSchema = CreateCustomerSchema.partial();
 
 /** 批量标签 */
 export const BatchTagSchema = z.object({
-  customerIds: z.array(z.string().uuid()).min(1, '至少选择一个客户'),
+  customerIds: z.array(z.string()).min(1, '至少选择一个客户'),
   tags: z.array(z.string()).min(1, '至少添加一个标签'),
 });
 
@@ -237,7 +237,7 @@ export const CreateResearchProductSchema = z.object({
   rating: z.number().min(0).max(5).optional(),
   category: z.string().max(100).optional(),
   attributes: z.array(z.object({
-    attributeId: z.string().uuid(),
+    attributeId: z.string(),
     valueText: z.string().optional(),
     valueNumber: z.number().optional(),
     valueBoolean: z.boolean().optional(),
@@ -369,7 +369,7 @@ export const UpdateRoleSchema = CreateRoleSchema.partial();
 
 /** 分配权限 */
 export const AssignPermissionsSchema = z.object({
-  permissionIds: z.array(z.string().uuid()).min(1, '至少选择一个权限'),
+  permissionIds: z.array(z.string()).min(1, '至少选择一个权限'),
 });
 
 /** 创建权限 */
@@ -430,7 +430,7 @@ export const CreateResearchTemplateSchema = z.object({
 
 /** 批量删除 */
 export const BatchDeleteSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, '至少选择一项').max(100, '单次最多删除 100 项'),
+  ids: z.array(z.string()).min(1, '至少选择一项').max(100, '单次最多删除 100 项'),
 });
 
 // ==================== 报表查询 ====================
