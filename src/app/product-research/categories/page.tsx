@@ -46,6 +46,25 @@ export default function CategoriesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [selectedParentId, setSelectedParentId] = useState<string>('');
+  const [showIconPicker, setShowIconPicker] = useState(false);
+
+  // 品类图标库
+  const iconOptions = [
+    '📱', '💻', '⌚', '🎧', '📷', '🎮', '🖨️', '🖥️',
+    '👕', '👗', '👟', '👜', '💄', '👒', '🧥', '💍',
+    '🏠', '🪑', '🛏️', '💡', '🛋️', '🪴', '🖼️', '🧹',
+    '🍎', '🥩', '🥤', '🍞', '🧃', '🍪', '☕', '🍷',
+    '🏋️', '⚽', '🏀', '🎾', '🚴', '🏊', '🧘', '⛳',
+    '📚', '✏️', '🎨', '🎵', '🧸', '🧩', '🎲', '🎁',
+    '🚗', '🔧', '⚡', '🔋', '🛠️', '🧰', '📦', '🏷️',
+    '💊', '🧬', '🔬', '🩺', '💉', '🧪', '🩹', '🌡️',
+  ];
+
+  // 选择图标
+  const selectIcon = (icon: string) => {
+    setFormData({ ...formData, icon: formData.icon === icon ? '' : icon });
+    setShowIconPicker(false);
+  };
 
   // 表单数据
   const [formData, setFormData] = useState({
@@ -340,13 +359,49 @@ export default function CategoriesPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">图标</label>
-                <input
-                  type="text"
-                  value={formData.icon}
-                  onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
-                  placeholder="如：📱"
-                />
+                {/* 当前选中的图标 */}
+                <button
+                  type="button"
+                  onClick={() => setShowIconPicker(!showIconPicker)}
+                  className="w-full border rounded px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
+                >
+                  {formData.icon ? (
+                    <span className="text-2xl">{formData.icon}</span>
+                  ) : (
+                    <span className="text-gray-400">点击选择图标...</span>
+                  )}
+                  <span className="ml-auto text-gray-400 text-xs">▼</span>
+                </button>
+                {/* 图标选择面板 */}
+                {showIconPicker && (
+                  <div className="mt-2 border rounded-lg p-3 bg-white shadow-lg max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-8 gap-1">
+                      {iconOptions.map((icon) => (
+                        <button
+                          key={icon}
+                          type="button"
+                          onClick={() => selectIcon(icon)}
+                          className={`text-xl p-2 rounded hover:bg-blue-50 transition-colors ${
+                            formData.icon === icon ? 'bg-blue-100 ring-2 ring-blue-400' : ''
+                          }`}
+                          title={icon}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 pt-2 border-t">
+                      <label className="text-xs text-gray-500">或手动输入 emoji：</label>
+                      <input
+                        type="text"
+                        value={formData.icon}
+                        onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+                        className="w-full border rounded px-2 py-1 mt-1 text-sm"
+                        placeholder="如：📱"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

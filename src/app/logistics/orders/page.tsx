@@ -285,14 +285,19 @@ export default function LogisticsOrdersPage() {
     return (
       <div className="flex gap-1 flex-wrap">
         <Button size="sm" variant="outline" onClick={() => setShowView(order)} title="查看详情"><Eye className="h-3 w-3" /></Button>
+        <Button size="sm" variant="outline" onClick={() => openEdit(order)} title="编辑"><Edit className="h-3 w-3" /></Button>
+        <Button size="sm" variant="outline" className="text-red-400" onClick={() => setShowDelete(order)} title="删除"><Trash2 className="h-3 w-3" /></Button>
 
         {order.status === 'DRAFT' && (
-          <>
-            <Button size="sm" variant="outline" onClick={() => openEdit(order)} title="编辑"><Edit className="h-3 w-3" /></Button>
-            <Button size="sm" variant="outline" className="text-yellow-600 border-yellow-300" onClick={() => { setSubmitForm({ reviewerId: '', approverId: '', financeId: '' }); setShowSubmit(order); }}>
-              <Send className="h-3 w-3 mr-1" />提交审批
-            </Button>
-          </>
+          <Button size="sm" variant="outline" className="text-yellow-600 border-yellow-300" onClick={() => { setSubmitForm({ reviewerId: '', approverId: '', financeId: '' }); setShowSubmit(order); }}>
+            <Send className="h-3 w-3 mr-1" />提交审批
+          </Button>
+        )}
+
+        {order.status === 'REJECTED' && (
+          <Button size="sm" variant="outline" className="text-blue-600 border-blue-300" onClick={() => handleStatusChange(order.id, 'DRAFT')}>
+            <Edit className="h-3 w-3 mr-1" />返回草稿
+          </Button>
         )}
 
         {order.approvalStep === 'PENDING_REVIEW' && isMyReview && (
@@ -330,9 +335,6 @@ export default function LogisticsOrdersPage() {
           <Button size="sm" variant="outline" className="text-red-500" onClick={() => handleStatusChange(order.id, 'CANCELLED')}><X className="h-3 w-3 mr-1" />取消</Button>
         )}
 
-        {['DRAFT', 'CANCELLED'].includes(order.status) && (
-          <Button size="sm" variant="outline" className="text-red-500" onClick={() => setShowDelete(order)}><Trash2 className="h-3 w-3" /></Button>
-        )}
       </div>
     );
   };

@@ -209,12 +209,7 @@ export async function DELETE(
       return notFoundResponse('出库单');
     }
 
-    // 只有待处理或已取消的出库单可以删除
-    if (!['PENDING', 'CANCELLED'].includes(existingOrder.status)) {
-      return conflictResponse('只有待处理或已取消状态的出库单可以删除');
-    }
-
-    // 删除出库单（级联删除项目）
+    // 允许删除任意状态的出库单
     await prisma.outboundOrder.delete({
       where: { id },
     });

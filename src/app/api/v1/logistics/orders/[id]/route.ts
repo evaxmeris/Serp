@@ -182,7 +182,7 @@ export async function PUT(
 }
 
 // DELETE /api/v1/logistics/orders/[id] — 删除物流订单
-// 仅允许删除 DRAFT 或 CANCELLED 状态的订单
+// 允许删除任意状态的订单（用户确认后执行）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -203,13 +203,6 @@ export async function DELETE(
     });
     if (!existing) {
       return notFoundResponse('物流订单');
-    }
-
-    // 仅允许删除 DRAFT 或 CANCELLED 状态的订单
-    if (!['DRAFT', 'CANCELLED'].includes(existing.status)) {
-      return conflictResponse(
-        `只有草稿或已取消状态的物流订单可以删除，当前状态: ${existing.status}`
-      );
     }
 
     await prisma.logisticsOrder.delete({

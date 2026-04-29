@@ -317,7 +317,7 @@ export default function ComparisonsPage() {
 
   if (selectedProducts.length === 0) {
     return (
-      <div className="container mx-auto py-6 px-4 max-w-6xl">
+      <div className="w-full py-6 px-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">产品对比</h1>
           <Button onClick={() => setIsAddDialogOpen(true)}>
@@ -360,7 +360,7 @@ export default function ComparisonsPage() {
   const maxMargin = findMaxMargin();
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-7xl">
+    <div className="w-full py-6 px-4">
       {/* 页面头部 */}
       <div className="flex items-center justify-between mb-6">
         <div>

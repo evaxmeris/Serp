@@ -207,7 +207,7 @@ export const UpdatePurchaseOrderSchema = CreatePurchaseOrderSchema.partial();
 export const CreateResearchProductSchema = z.object({
   name: z.string().min(1, '产品名称不能为空').max(200),
   nameEn: z.string().max(200).optional(),
-  categoryId: z.string().uuid('品类 ID 格式不正确'),
+  categoryId: z.string().cuid('品类 ID 格式不正确'),
   brand: z.string().max(100).optional(),
   brandEn: z.string().max(100).optional(),
   model: z.string().max(100).optional(),
@@ -406,7 +406,7 @@ export const CreateResearchTemplateSchema = z.object({
   name: z.string().min(1, '模板名称不能为空').max(100),
   nameEn: z.string().max(100).optional(),
   code: z.string().min(1, '模板编码不能为空').max(50),
-  categoryId: z.string().uuid('品类 ID 格式不正确'),
+  categoryId: z.string().cuid('品类 ID 格式不正确'),
   type: z.enum(['TEXT', 'NUMBER', 'DATE', 'SELECT', 'MULTI_SELECT', 'BOOLEAN', 'DECIMAL', 'URL']).optional(),
   unit: z.string().max(20).optional(),
   options: z.array(z.string()).optional(),

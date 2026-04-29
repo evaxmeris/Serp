@@ -29,14 +29,16 @@ export async function GET(request: NextRequest) {
         where: { platformCode: code },
       });
       
+      const creds = config ? decryptCredentials(config.credentials) : {};
       platformStatuses.push({
         code,
         name: adapter?.platformName || code,
         enabled: config?.enabled || false,
-        configured: !!config && Object.keys(decryptCredentials(config.credentials)).length > 0,
+        configured: !!config && Object.keys(creds).length > 0,
         lastSyncAt: config?.lastSyncAt,
         lastSyncStatus: config?.lastSyncStatus,
         syncIntervalMin: config?.syncIntervalMin || 120,
+        callbackUrl: creds.callbackUrl || 'https://serp.cpolar.cn/api/auth/alibaba/callback',
       });
     }
     

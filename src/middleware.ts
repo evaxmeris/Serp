@@ -15,16 +15,38 @@ export function middleware(request: NextRequest) {
   }
 
   // CSRF 保护：仅生产环境启用，且排除 /api/auth/
+  // 通过校验 Origin/Referer 与请求 Host 是否一致来防御跨站请求
   if (process.env.NODE_ENV === 'production' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
-    if (origin || referer) {
-      const requestDomain = origin || (referer ? new URL(referer).origin : null);
-      const isLocal = requestDomain?.startsWith('http://localhost:') || requestDomain?.startsWith('http://127.0.0.1:');
-      if (!isLocal) {
+    const host = request.headers.get('host'); // 请求目标主机
+
+    if (origin) {
+      // 检查 Origin 与 Host 是否一致（同源校验）
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          console.warn(`[CSRF] Origin mismatch: origin=${originHost}, host=${host}`);
+          return NextResponse.json({ success: false, error: 'CSRF 验证失败', code: 'CSRF_INVALID' }, { status: 403 });
+        }
+      } catch {
+        // Origin 解析失败（格式非法）
+        return NextResponse.json({ success: false, error: 'CSRF 验证失败', code: 'CSRF_INVALID' }, { status: 403 });
+      }
+    } else if (referer) {
+      // Fallback：部分浏览器不发送 Origin，使用 Referer
+      try {
+        const refererHost = new URL(referer).host;
+        if (refererHost !== host) {
+          console.warn(`[CSRF] Referer mismatch: referer=${refererHost}, host=${host}`);
+          return NextResponse.json({ success: false, error: 'CSRF 验证失败', code: 'CSRF_INVALID' }, { status: 403 });
+        }
+      } catch {
         return NextResponse.json({ success: false, error: 'CSRF 验证失败', code: 'CSRF_INVALID' }, { status: 403 });
       }
     }
+    // 如果既没有 Origin 也没有 Referer，且无 Cookie（未认证），则放行
+    // 有 Cookie 但没有 Origin/Referer 的请求（如原生 app、curl），信任 Cookie 认证
   }
 
   const publicPaths = ['/login', '/register', '/api/auth/', '/api/health'];

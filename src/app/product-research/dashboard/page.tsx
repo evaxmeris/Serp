@@ -219,7 +219,7 @@ export default function DashboardPage() {
 
   if (!stats || stats.total === 0) {
     return (
-      <div className="container mx-auto py-6 px-4 max-w-6xl">
+      <div className="w-full py-6 px-4">
         <div className="flex items-center gap-4 mb-6">
           <Button variant="ghost" onClick={() => router.push('/product-research/products')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -246,7 +246,7 @@ export default function DashboardPage() {
   // ============================================
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-7xl">
+    <div className="w-full py-6 px-4">
       {/* 页面头部 */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push('/product-research/products')}>

@@ -288,13 +288,6 @@ const menuConfig: MenuGroup[] = [
         roles: ['ADMIN'],
       },
       {
-        key: 'settings-roles',
-        label: '角色管理',
-        icon: ShieldCheck,
-        href: '/settings/roles',
-        roles: ['ADMIN'],
-      },
-      {
         key: 'approval-workflows',
         label: '审批流程',
         icon: GitBranch,

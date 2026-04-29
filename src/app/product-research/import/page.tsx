@@ -375,7 +375,7 @@ export default function ImportPage() {
   // ============================================
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-6xl">
+    <div className="w-full py-6 px-4">
       {/* 页面头部 */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push('/product-research/products')}>

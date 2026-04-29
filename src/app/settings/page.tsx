@@ -88,11 +88,33 @@ export default function SettingsPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<any>(null);
   const [showSecrets, setShowSecrets] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [configForm, setConfigForm] = useState({
     enabled: false,
     syncIntervalMin: 120,
     credentials: {} as Record<string, string>,
   });
+
+  // 处理 OAuth 回调参数
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const oauth = params.get('oauth');
+      const msg = params.get('msg');
+      if (oauth === 'success' && msg) {
+        setActiveTab('sync');
+        setTimeout(() => alert(msg), 500);
+      } else if (oauth === 'error' && msg) {
+        setActiveTab('sync');
+        setTimeout(() => alert('授权失败：' + msg), 500);
+      }
+      // 清理 URL 参数
+      if (oauth) {
+        window.history.replaceState({}, '', '/settings?tab=sync');
+      }
+    }
+  }, []);
 
   const loadSyncStatus = async () => {
     try {
@@ -154,6 +176,31 @@ export default function SettingsPage() {
     }
   };
 
+  /** 测试平台连接 */
+  const handleTestConnection = async () => {
+    if (!selectedPlatform) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/sync/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platformCode: selectedPlatform.code }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const result = data.data;
+        setTestResult({ ok: result.connected, msg: result.details || result.message });
+      } else {
+        setTestResult({ ok: false, msg: data.error || data.message || '请求失败' });
+      }
+    } catch {
+      setTestResult({ ok: false, msg: '网络请求失败' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const formatTime = (dateStr?: string) => {
     if (!dateStr) return '从未';
     const date = new Date(dateStr);
@@ -178,7 +225,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6 w-full">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
@@ -273,10 +320,23 @@ export default function SettingsPage() {
                             {platform.lastSyncAt && ` · 最后同步: ${formatTime(platform.lastSyncAt)}`}
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => openConfigDialog(platform)}>
-                          <Settings className="h-4 w-4 mr-1" />
-                          配置
-                        </Button>
+                        <div className="flex gap-1">
+                          {platform.code === 'alibaba' && (
+                            <Button variant="outline" size="sm" className="text-blue-600 border-blue-300" onClick={() => {
+                              const cb = platform.callbackUrl || 'https://serp.cpolar.cn/api/auth/alibaba/callback';
+                              window.open(
+                                `https://open-api.alibaba.com/oauth/authorize?response_type=code&client_id=504486&redirect_uri=${encodeURIComponent(cb)}&state=1212`,
+                                '_blank'
+                              );
+                            }}>
+                              一键授权
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => openConfigDialog(platform)}>
+                            <Settings className="h-4 w-4 mr-1" />
+                            配置
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -317,7 +377,7 @@ export default function SettingsPage() {
                 <Separator />
                 {selectedPlatform?.code === 'alibaba' && (
                   <div className="space-y-4">
-                    <h4 className="font-medium">阿里国际站 API 凭据</h4>
+                  <h4 className="font-medium">阿里国际站 API 凭据</h4>
                     <div className="space-y-2">
                       <Label htmlFor="appKey">App Key</Label>
                       <Input
@@ -365,7 +425,7 @@ export default function SettingsPage() {
                             ...configForm,
                             credentials: { ...configForm.credentials, accessToken: e.target.value },
                           })}
-                          placeholder="输入 Access Token"
+                          placeholder="输入 Access Token（一键授权会自动获取）"
                         />
                         <Button
                           type="button"
@@ -378,6 +438,22 @@ export default function SettingsPage() {
                         </Button>
                       </div>
                     </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      <Label htmlFor="callbackUrl">OAuth 回调地址</Label>
+                      <Input
+                        id="callbackUrl"
+                        value={configForm.credentials.callbackUrl || 'https://serp.cpolar.cn/api/auth/alibaba/callback'}
+                        onChange={(e) => setConfigForm({
+                          ...configForm,
+                          credentials: { ...configForm.credentials, callbackUrl: e.target.value },
+                        })}
+                        placeholder="https://serp.cpolar.cn/api/auth/alibaba/callback"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        需与阿里开放平台应用设置中的回调地址一致，修改后「一键授权」链接自动更新
+                      </p>
+                    </div>
                   </div>
                 )}
                 {['tiktok', 'amazon', 'shopify'].includes(selectedPlatform?.code) && (
@@ -388,7 +464,17 @@ export default function SettingsPage() {
                 )}
               </div>
               <DialogFooter>
+                <div className="flex-1">
+                  {testResult && (
+                    <div className={`text-sm px-3 py-1.5 rounded ${testResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      {testResult.ok ? '✅ ' : '❌ '}{testResult.msg}
+                    </div>
+                  )}
+                </div>
                 <Button variant="outline" onClick={() => setConfigDialogOpen(false)}>取消</Button>
+                <Button variant="outline" onClick={handleTestConnection} disabled={testing}>
+                  <Play className="h-4 w-4 mr-1" />{testing ? '测试中...' : '测试连接'}
+                </Button>
                 <Button onClick={saveConfig}><Save className="h-4 w-4 mr-1" />保存</Button>
               </DialogFooter>
             </DialogContent>

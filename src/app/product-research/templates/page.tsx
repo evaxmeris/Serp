@@ -85,7 +85,7 @@ interface AttributeTemplate {
   nameEn?: string;
   code: string;
   categoryId: string;
-  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'MULTI' | 'BOOLEAN';
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'MULTI_SELECT' | 'BOOLEAN';
   unit?: string;
   options: string[];
   isRequired: boolean;
@@ -116,7 +116,7 @@ const ATTRIBUTE_TYPES = [
   { value: 'NUMBER', label: '数字', color: 'bg-green-100 text-green-800' },
   { value: 'DATE', label: '日期', color: 'bg-purple-100 text-purple-800' },
   { value: 'SELECT', label: '单选', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'MULTI', label: '多选', color: 'bg-orange-100 text-orange-800' },
+  { value: 'MULTI_SELECT', label: '多选', color: 'bg-orange-100 text-orange-800' },
   { value: 'BOOLEAN', label: '布尔', color: 'bg-gray-100 text-gray-800' },
 ];
 
@@ -128,7 +128,7 @@ interface TemplateFormData {
   nameEn: string;
   code: string;
   categoryId: string;
-  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'MULTI' | 'BOOLEAN';
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'MULTI_SELECT' | 'BOOLEAN';
   unit: string;
   options: string[];
   isRequired: boolean;
@@ -300,7 +300,7 @@ export default function TemplatesPage() {
     }
 
     // 验证选择类型必须有选项
-    const selectTypes = ['SELECT', 'MULTI'];
+    const selectTypes = ['SELECT', 'MULTI_SELECT'];
     if (selectTypes.includes(formData.type) && formData.options.length === 0) {
       alert('选择类型属性必须提供选项');
       return;
@@ -328,7 +328,9 @@ export default function TemplatesPage() {
           loadTemplates(selectedCategoryId);
         }
       } else {
-        alert(result.error || '操作失败');
+        // 提取详细错误信息
+        const errMsg = result.errors?.[0]?.message || result.error || result.message || '操作失败';
+        alert(errMsg);
       }
     } catch (error) {
       console.error('保存属性模板失败:', error);
@@ -439,7 +441,9 @@ export default function TemplatesPage() {
 
   // 获取属性类型标签
   const getTypeLabel = (type: string) => {
-    const typeInfo = ATTRIBUTE_TYPES.find(t => t.value === type);
+    // 兼容旧数据中可能存在的 'MULTI' 值
+    const normalizedType = type === 'MULTI' ? 'MULTI_SELECT' : type;
+    const typeInfo = ATTRIBUTE_TYPES.find(t => t.value === normalizedType);
     return typeInfo?.label || type;
   };
 
@@ -694,7 +698,7 @@ export default function TemplatesPage() {
               </div>
 
               {/* 选项设置（仅选择类型显示） */}
-              {(formData.type === 'SELECT' || formData.type === 'MULTI') && (
+              {(formData.type === 'SELECT' || formData.type === 'MULTI_SELECT') && (
                 <div>
                   <Label>选项设置</Label>
                   <div className="flex gap-2 mt-2">

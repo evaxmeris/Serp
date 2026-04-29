@@ -451,7 +451,7 @@ export default function ApprovalWorkflowsPage() {
   // 渲染
   // ============================================================
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6 w-full">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>

@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Square,
   Edit,
+  Eye,
   AlertCircle,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -31,6 +32,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Link from 'next/link';
@@ -256,23 +260,37 @@ export default function ProductsPage() {
     }
   };
 
-  // 获取所有分类（用于筛选下拉框）
-  const getAllCategories = (): string[] => {
-    const categories = new Set<string>();
-    products.forEach(product => {
-      const cat = product.categoryName || product.category;
-      if (cat) categories.add(cat);
-    });
-    return Array.from(categories).sort();
-  };
-
   // 筛选后的产品
   const getFilteredProducts = (): Product[] => {
     if (categoryFilter === 'all') return products;
     return products.filter(product => {
-      const cat = product.categoryName || product.category;
-      return cat === categoryFilter;
+      return product.categoryId === categoryFilter ||
+             product.category === categoryFilter ||
+             product.categoryName === categoryFilter;
     });
+  };
+
+  // 获取当前用户（判断权限）
+  const getCurrentUser = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const u = localStorage.getItem('user');
+      return u ? JSON.parse(u) : null;
+    } catch { return null; }
+  };
+  const currentUser = getCurrentUser();
+  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SALES';
+  const canDelete = currentUser?.role === 'ADMIN';
+
+  // 单个删除
+  const handleSingleDelete = async (product: Product) => {
+    if (!confirm(`确定要删除产品 "${product.name}" (${product.sku}) 吗？`)) return;
+    try {
+      const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) { fetchProducts(); selectedIds.delete(product.id); setSelectedIds(new Set(selectedIds)); }
+      else { alert(data.error || '删除失败'); }
+    } catch { alert('删除失败'); }
   };
 
   // 打开编辑对话框（product 为 null 时表示新建产品）
@@ -619,7 +637,6 @@ export default function ProductsPage() {
   };
 
   const selectedCount = selectedIds.size;
-  const categories = getAllCategories();
   const filteredProducts = getFilteredProducts();
 
   return (
@@ -659,7 +676,7 @@ export default function ProductsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* 搜索和筛选栏 */}
+          {/* 分类筛选 - 读取品类管理数据 */}
           <div className="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-end">
             <div className="w-full sm:w-auto">
               <Label className="mb-2 block text-sm font-medium">搜索</Label>
@@ -678,20 +695,15 @@ export default function ProductsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部分类</SelectItem>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  {productCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.code})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             {categoryFilter !== 'all' && (
               <div className="w-full sm:w-auto">
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={() => setCategoryFilter('all')}
-                  className="w-full sm:w-auto"
-                >
+                <Button variant="outline" size="default" onClick={() => setCategoryFilter('all')} className="w-full sm:w-auto">
                   清除筛选
                 </Button>
               </div>
@@ -705,99 +717,79 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {/* 产品列表 - 卡片网格布局 */}
+          {/* 产品表格 */}
           {!loading && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredProducts.map((product) => (
-                  <Card 
-                    key={product.id} 
-                    className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
-                    onClick={() => openEditDialog(product)}
-                  >
-                    <CardContent className="p-4">
-                      {/* 头部：选择框 + SKU + 编辑按钮 */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Checkbox
-                            checked={selectedIds.has(product.id)}
-                            onCheckedChange={() => toggleSelection(product.id)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <span className="text-sm font-mono text-muted-foreground break-all">
-                            {product.sku}
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="h-7 w-7 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(product);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      {/* 产品名称 */}
-                      <h3 className="font-semibold text-base mb-2 line-clamp-2">
-                        {product.name}
-                      </h3>
-
-                      {/* 分类 */}
-                      <div className="mb-3">
-                        {(product.categoryName || product.category) ? (
-                          <Badge variant="secondary">
-                            {product.categoryName || product.category}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">未分类</Badge>
-                        )}
-                      </div>
-
-                      {/* 价格信息 */}
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                        <div>
-                          <div className="text-muted-foreground">成本价</div>
-                          <div className="font-medium">
-                            {product.costPrice ? `¥${Number(product.costPrice).toFixed(2)}` : '-'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">销售价</div>
-                          <div className="font-medium text-green-600">
-                            {product.salePrice ? `¥${Number(product.salePrice).toFixed(2)}` : '-'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 供应商 */}
-                      {(product.supplierName || product.supplier) && (
-                        <div className="text-sm text-muted-foreground mb-3">
-                          供应商：{product.supplierName || product.supplier}
-                        </div>
-                      )}
-
-                      {/* 状态 */}
-                      <div className="flex items-center justify-end">
-                        <Badge variant={product.status === 'active' ? 'default' : 'outline'}>
-                          {product.status === 'active' ? '在售' : product.status}
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {filteredProducts.length === 0 && (
+              {filteredProducts.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <div className="text-4xl mb-2">📦</div>
                   <p>暂无产品数据</p>
-                  {categoryFilter && (
-                    <p className="text-sm mt-1">当前筛选条件：{categoryFilter}</p>
-                  )}
+                  {categoryFilter !== 'all' && <p className="text-sm mt-1">当前筛选条件已生效</p>}
+                </div>
+              ) : (
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id))}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                        </TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>产品名称</TableHead>
+                        <TableHead>品类</TableHead>
+                        <TableHead>成本价</TableHead>
+                        <TableHead>销售价</TableHead>
+                        <TableHead>状态</TableHead>
+                        <TableHead className="text-right w-28">操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map(product => (
+                        <TableRow key={product.id} className={selectedIds.has(product.id) ? 'bg-muted/50' : ''}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(product.id)}
+                              onCheckedChange={() => toggleSelection(product.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell>
+                            {(product.categoryName || product.category) ? (
+                              <Badge variant="secondary">{product.categoryName || product.category}</Badge>
+                            ) : <span className="text-gray-400">-</span>}
+                          </TableCell>
+                          <TableCell>{product.costPrice ? `¥${Number(product.costPrice).toFixed(2)}` : '-'}</TableCell>
+                          <TableCell className="text-green-600 font-medium">{product.salePrice ? `¥${Number(product.salePrice).toFixed(2)}` : '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant={product.status === 'active' ? 'default' : 'outline'}>
+                              {product.status === 'active' ? '在售' : product.status === 'inactive' ? '下架' : product.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openEditDialog(product)} title="查看/编辑">
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              {canEdit && (
+                                <Button variant="ghost" size="sm" onClick={() => openEditDialog(product)} title="编辑">
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button variant="ghost" size="sm" className="text-red-400" onClick={() => handleSingleDelete(product)} title="删除">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </>
