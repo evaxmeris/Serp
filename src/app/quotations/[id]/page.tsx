@@ -88,7 +88,7 @@ export default function QuotationDetailPage() {
         throw new Error('Failed to fetch quotation');
       }
       const data = await res.json();
-      setQuotation(data);
+      setQuotation(data.data ?? data);
     } catch (error) {
       console.error('Failed to fetch quotation:', error);
     } finally {
@@ -122,11 +122,11 @@ export default function QuotationDetailPage() {
       });
 
       if (res.ok) {
-        toast.error('报价单已发送');
+        toast.success('报价单已发送');
         fetchQuotation(quotation.id);
       } else {
-        const data = await res.json();
-        toast.error(`发送失败：${data.error}`);
+        const d = await res.json();
+        toast.error(`发送失败：${d.error || d.message || '未知错误'}`);
       }
     } catch (error) {
       console.error('Failed to send quotation:', error);
@@ -152,12 +152,13 @@ export default function QuotationDetailPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        toast.error(`报价单已转为订单：${data.order.orderNo}`);
+        const raw = await res.json();
+        const data = raw.data ?? raw;
+        toast.success(`报价单已转为订单：${data.order.orderNo}`);
         router.push(`/orders/${data.order.id}`);
       } else {
-        const data = await res.json();
-        toast.error(`转换失败：${data.error}`);
+        const raw = await res.json();
+        toast.error(`转换失败：${raw.error || raw.message || '未知错误'}`);
       }
     } catch (error) {
       console.error('Failed to convert quotation:', error);

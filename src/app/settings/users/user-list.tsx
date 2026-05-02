@@ -46,13 +46,17 @@ export default function UserListTab() {
   const loadUsers = async () => {
     try {
       const res = await fetch('/api/users');
-      const users = await res.json();
+      const usersData = await res.json();
+      // API 可能返回 {success, data: [...]} 或直接返回数组
+      const usersList = Array.isArray(usersData) ? usersData : (usersData.data ?? []);
       const usersWithRoles = await Promise.all(
-        (Array.isArray(users) ? users : []).map(async (u: any) => {
+        usersList.map(async (u: any) => {
           try {
             const rr = await fetch(`/api/users/${u.id}/roles`);
             const rd = await rr.json();
-            const userRoles = rd.data?.items || rd.data || rd || [];
+            // 兼容多层包裹：{success, data: {data: [...]}} 或 {success, data: [...]} 或直接数组
+            let userRoles = rd.data?.data ?? rd.data ?? rd ?? [];
+            if (!Array.isArray(userRoles)) userRoles = [];
             return { ...u, roles: userRoles, permissions: [] };
           } catch { return { ...u, roles: [], permissions: [] }; }
         })
@@ -65,7 +69,9 @@ export default function UserListTab() {
     try {
       const res = await fetch('/api/roles');
       const data = await res.json();
-      setRoles((data.data?.items ?? data.data ?? []).filter((r: Role) => r.isActive));
+      // API 可能返回 {success, data: {items: [...]}} 或直接返回数组
+      const rolesList = data.data?.items ?? data.data ?? data ?? [];
+      setRoles(rolesList.filter((r: Role) => r.isActive));
     } catch (e) { console.error(e); }
   };
 
@@ -75,7 +81,8 @@ export default function UserListTab() {
     try {
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      const user = data.user || data;
+      // API 可能返回 {success, data: {...}} 或直接返回用户对象
+      const user = data.data || data.user || data;
       // ADMIN 拥有全部权限；其他角色从 API 返回的 permissions 读取
       if (user.role === 'ADMIN') {
         setPerms(['*']);

@@ -149,11 +149,13 @@ export default function ProfilePage() {
       try {
         const res = await fetch(`/api/users/${user.id}/permissions`);
         const data = await res.json();
-        setPermissions(data);
-        
+        // API 可能返回 {success, data: {data: [...], grouped, permissionCodes}}
+        const perms = data.data?.data ?? data.data ?? data ?? [];
+        setPermissions(perms);
+
         // 按模块分组
         const modules: Record<string, any[]> = {};
-        data.forEach((perm: any) => {
+        perms.forEach((perm: any) => {
           const module = perm.module || perm.name.split(':')[0];
           if (!modules[module]) {
             modules[module] = [];

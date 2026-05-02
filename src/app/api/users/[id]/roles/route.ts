@@ -65,7 +65,7 @@ export async function POST(
 
     const roles = updatedUserRoles.map(ur => ur.role);
 
-    return successResponse({ data: roles }, 'Roles updated successfully');
+    return successResponse(roles, 'Roles updated successfully');
   } catch (error) {
     console.error('Error assigning user roles:', error);
     return errorResponse('Failed to assign roles', 'INTERNAL_ERROR', 500);
@@ -103,7 +103,7 @@ export async function GET(
 
     const roles = userRoles.map(ur => ur.role);
 
-    return successResponse({ data: roles });
+    return successResponse(roles);
   } catch (error) {
     console.error('Error fetching user roles:', error);
     return errorResponse('Failed to fetch roles', 'INTERNAL_ERROR', 500);

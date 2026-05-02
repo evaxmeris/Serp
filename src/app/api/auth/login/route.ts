@@ -7,6 +7,7 @@
  */
 
 import { SignJWT } from 'jose';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { LoginSchema, validateBody } from '@/lib/api-schemas';
