@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Plus, Search, Eye } from 'lucide-react';
 
 interface Quotation {
@@ -113,6 +116,9 @@ export default function QuotationsPage() {
     setPagination({ ...pagination, page: newPage });
   };
 
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(quotations, 'createdAt');
+
   const formatAmount = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     return num.toFixed(2);
@@ -162,23 +168,71 @@ export default function QuotationsPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-28 shrink-0" />
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0 ml-auto" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>报价单号</TableHead>
-                    <TableHead>客户</TableHead>
-                    <TableHead>币种</TableHead>
-                    <TableHead className="text-right">总金额</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('quotationNo')}
+                    >
+                      报价单号
+                      <SortIndicator field="quotationNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('customer.companyName')}
+                    >
+                      客户
+                      <SortIndicator field="customer.companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('currency')}
+                    >
+                      币种
+                      <SortIndicator field="currency" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('totalAmount')}
+                    >
+                      总金额
+                      <SortIndicator field="totalAmount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {quotations.map((quotation) => (
+                  {sorted.map((quotation) => (
                     <TableRow key={quotation.id}>
                       <TableCell className="font-medium">
                         {quotation.quotationNo}
@@ -209,9 +263,14 @@ export default function QuotationsPage() {
               </Table>
 
               {quotations.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  暂无报价数据
-                </div>
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="暂无报价数据"
+                      description="还没有任何报价记录，创建一份报价开始使用"
+                    />
+                  </TableCell>
+                </TableRow>
               )}
 
               {/* 分页 */}

@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -232,15 +231,9 @@ export async function GET(request: NextRequest) {
       })),
     };
 
-    return NextResponse.json({
-      success: true,
-      data: responseData,
-    });
+    return successResponse(responseData);
   } catch (error) {
     console.error('Product dashboard API error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch product data' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch product data', 'INTERNAL_ERROR', 500);
   }
 }

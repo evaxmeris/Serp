@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -27,16 +26,13 @@ export async function GET(
     });
 
     if (!permission) {
-      return NextResponse.json({ error: 'Permission not found' }, { status: 404 });
+      return notFoundResponse('Permission');
     }
 
-    return NextResponse.json({ data: permission });
+    return successResponse({ data: permission });
   } catch (error) {
     console.error('Error fetching permission:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch permission' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch permission', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -66,13 +62,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ data: permission });
+    return successResponse({ data: permission });
   } catch (error) {
     console.error('Error updating permission:', error);
-    return NextResponse.json(
-      { error: 'Failed to update permission' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to update permission', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -99,29 +92,20 @@ export async function DELETE(
     });
 
     if (!permission) {
-      return NextResponse.json({ error: 'Permission not found' }, { status: 404 });
+      return notFoundResponse('Permission');
     }
 
     if (permission.roles.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Cannot delete permission assigned to roles',
-          roleCount: permission.roles.length,
-        },
-        { status: 400 }
-      );
+      return validationErrorResponse([{ field: 'permission', message: 'Cannot delete permission assigned to roles' }]);
     }
 
     await prisma.permission.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse(null, 'Permission deleted');
   } catch (error) {
     console.error('Error deleting permission:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete permission' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to delete permission', 'INTERNAL_ERROR', 500);
   }
 }

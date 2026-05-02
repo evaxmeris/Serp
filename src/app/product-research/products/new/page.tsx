@@ -56,6 +56,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // 图标
 import { ChevronLeft, ChevronRight, Save, Check, AlertCircle, TrendingUp, DollarSign, Target } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // ============================================
 // 类型定义
@@ -208,8 +210,12 @@ export default function ProductNewPage() {
   const [attributeValues, setAttributeValues] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [marketData, setMarketData] = useState({
-    costPrice: '',
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  const [marketData, setMarketData] = useState({});
+  const [formData, setFormData] = useState({
     salePrice: '',
     monthlySales: '',
     platformFee: '15',
@@ -345,7 +351,7 @@ export default function ProductNewPage() {
       for (const template of requiredTemplates) {
         const value = attributeValues[template.id];
         if (!value || value === '') {
-          alert(`请填写必填属性：${template.name}`);
+          toast.warning(`请填写必填属性：${template.name}`);
           return false;
         }
       }
@@ -358,7 +364,7 @@ export default function ProductNewPage() {
         return true;
       } catch (error: any) {
         if (error.errors) {
-          alert(error.errors[0].message);
+          toast.error(error.errors[0].message);
         }
         return false;
       }
@@ -366,11 +372,11 @@ export default function ProductNewPage() {
 
     if (currentStep === 4) {
       if (!conclusionData.conclusion) {
-        alert('请选择调研结论');
+        toast.warning('请选择调研结论');
         return false;
       }
       if (!conclusionData.rating) {
-        alert('请评分');
+        toast.warning('请评分');
         return false;
       }
       return true;
@@ -437,13 +443,13 @@ export default function ProductNewPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert('草稿已保存！');
+        toast.error('草稿已保存！');
       } else {
-        alert(`保存失败：${data.error || '未知错误'}`);
+        toast.error(`保存失败：${data.error || '未知错误'}`);
       }
     } catch (error) {
       console.error('保存草稿失败:', error);
-      alert('保存草稿失败，请重试');
+      toast.warning('保存草稿失败，请重试');
     } finally {
       setSavingDraft(false);
     }
@@ -511,14 +517,14 @@ export default function ProductNewPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert('产品创建成功！');
+        toast.error('产品创建成功！');
         router.push('/product-research/products');
       } else {
-        alert(`创建失败：${data.error || '未知错误'}`);
+        toast.error(`创建失败：${data.error || '未知错误'}`);
       }
     } catch (error) {
       console.error('提交失败:', error);
-      alert('提交失败，请重试');
+      toast.warning('提交失败，请重试');
     } finally {
       setSubmitting(false);
     }
@@ -1314,7 +1320,7 @@ export default function ProductNewPage() {
   // 主渲染
   // ============================================
 
-  return (
+  return (<>
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">产品录入</h1>
@@ -1332,5 +1338,8 @@ export default function ProductNewPage() {
         {currentStep === 4 && renderStep4()}
       </div>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

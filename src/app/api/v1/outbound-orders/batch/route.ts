@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
@@ -171,7 +171,7 @@ async function batchConfirm(orders: any[]) {
 }
 
 /**
- * 批量取消出库单
+ * 批量取消出库单 — 每个出库单使用独立事务，保证单笔操作的原子性
  */
 async function batchCancel(orders: any[]) {
   const results = {
@@ -190,29 +190,47 @@ async function batchCancel(orders: any[]) {
         continue;
       }
 
-      // 更新状态
-      await prisma.outboundOrder.update({
-        where: { id: order.id },
-        data: { status: 'CANCELLED' },
-      });
+      // 使用 $transaction 保证原子性：更新状态 + 恢复库存 + 日志 要么全成功要么全回滚
+      await prisma.$transaction(async (tx) => {
+        // 更新状态
+        await tx.outboundOrder.update({
+          where: { id: order.id },
+          data: { status: 'CANCELLED' },
+        });
 
-      // 如果是 PENDING 状态，恢复库存
-      if (order.status === 'PENDING') {
-        const warehouseCode = order.warehouseId; // 从父对象获取仓库 ID
+        // 恢复库存
+        const warehouseCode = order.warehouseId;
         for (const item of order.items) {
-          await prisma.inventoryItem.update({
+          // 获取当前 version（乐观锁）
+          const current = await tx.inventoryItem.findUniqueOrThrow({
             where: {
               productId_warehouse: {
                 productId: item.productId,
                 warehouse: warehouseCode,
               },
+            },
+            select: { version: true },
+          });
+
+          const updateResult = await tx.inventoryItem.updateMany({
+            where: {
+              productId_warehouse: {
+                productId: item.productId,
+                warehouse: warehouseCode,
+              },
+              version: current.version,
             },
             data: {
               quantity: { increment: item.quantity },
+              version: { increment: 1 },
             },
           });
 
-          const inventoryItem = await prisma.inventoryItem.findUnique({
+          if (updateResult.count === 0) {
+            throw new Error('库存数据已被其他操作修改，请重试');
+          }
+
+          const inventoryItem = await tx.inventoryItem.findUniqueOrThrow({
             where: {
               productId_warehouse: {
                 productId: item.productId,
@@ -221,21 +239,21 @@ async function batchCancel(orders: any[]) {
             },
           });
 
-          await prisma.inventoryLog.create({
+          await tx.inventoryLog.create({
             data: {
               productId: item.productId,
               warehouseId: warehouseCode,
               type: 'RETURN',
               quantity: item.quantity,
-              beforeQuantity: inventoryItem ? inventoryItem.quantity - item.quantity : 0,
-              afterQuantity: inventoryItem?.quantity || 0,
+              beforeQuantity: inventoryItem.quantity - item.quantity,
+              afterQuantity: inventoryItem.quantity,
               referenceType: 'OUTBOUND_ORDER',
               referenceId: order.id,
               note: `批量取消出库单：${order.outboundNo}`,
             },
           });
         }
-      }
+      });
 
       results.success.push(order.outboundNo);
     } catch (error) {
@@ -282,7 +300,20 @@ async function batchExport(orders: any[]) {
       ]);
     }
 
-    const csvContent = csvRows.map(row => row.join(',')).join('\n');
+    // 组合 CSV 内容（字段转义：含逗号/引号/换行的单元格用双引号包裹并转义内部引号）
+    const csvContent = csvRows
+      .map((row) =>
+        row
+          .map((cell) => {
+            const str = String(cell);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          })
+          .join(',')
+      )
+      .join('\n');
 
     return successResponse({
       action: 'export',

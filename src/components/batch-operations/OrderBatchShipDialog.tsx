@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import {
   Dialog,
   DialogContent,
@@ -80,6 +82,8 @@ export function OrderBatchShipDialog({
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<BatchResult | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
+  const { toast, toasts, removeToast } = useToast();
 
   // 只允许发货已确认且未发货的订单
   const validOrders = selectedOrders.filter(o => o.status === 'CONFIRMED' || o.status === 'READY');
@@ -144,12 +148,12 @@ export function OrderBatchShipDialog({
   const handleShip = async () => {
     const effectiveCarrier = getEffectiveCarrier();
     if (!effectiveCarrier) {
-      alert('请选择或输入物流服务商');
+      toast.warning('请选择或输入物流服务商');
       return;
     }
 
     if (!isComplete()) {
-      if (!confirm('还有订单未填写跟踪号，确认继续？')) {
+      if (!await confirm({ title: '确认继续', description: '还有订单未填写跟踪号，确认继续？' })) {
         return;
       }
     }
@@ -199,7 +203,7 @@ export function OrderBatchShipDialog({
 
   const filledCount = Object.keys(trackingNumbers).filter(id => trackingNumbers[id]).length;
 
-  return (
+  return (<>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
@@ -414,5 +418,11 @@ export function OrderBatchShipDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+    <ConfirmDialog />
+
+
+    </>
+    );
 }

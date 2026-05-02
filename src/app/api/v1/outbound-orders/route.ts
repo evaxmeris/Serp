@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession } from '@/middleware/auth';
 import { getAvailableQty } from '@/lib/inventory-utils';
 import {
   successResponse,
@@ -218,21 +219,38 @@ export async function POST(request: NextRequest) {
       // 扣减库存（不再手动维护 availableQty，由 getAvailableQty 动态计算）
       const warehouseCode = data.warehouseId; // 从出库单获取仓库 ID
       for (const item of data.items) {
-        await tx.inventoryItem.update({
+        // 获取当前 version（乐观锁）
+        const current = await tx.inventoryItem.findUniqueOrThrow({
           where: {
             productId_warehouse: {
               productId: item.productId,
               warehouse: warehouseCode,
             },
           },
+          select: { version: true },
+        });
+
+        const updateResult = await tx.inventoryItem.updateMany({
+          where: {
+            productId_warehouse: {
+              productId: item.productId,
+              warehouse: warehouseCode,
+            },
+            version: current.version,
+          },
           data: {
             quantity: { decrement: item.quantity },
             lastOutboundDate: now,
+            version: { increment: 1 },
           },
         });
 
-        // 创建库存日志
-        const inventoryItem = await tx.inventoryItem.findUnique({
+        if (updateResult.count === 0) {
+          throw new Error('库存数据已被其他操作修改，请重试');
+        }
+
+        // 重新查询库存记录用于日志
+        const inventoryItem = await tx.inventoryItem.findUniqueOrThrow({
           where: {
             productId_warehouse: {
               productId: item.productId,
@@ -247,8 +265,8 @@ export async function POST(request: NextRequest) {
             warehouseId: warehouseCode,
             type: 'OUT',
             quantity: -item.quantity,
-            beforeQuantity: inventoryItem ? inventoryItem.quantity + item.quantity : item.quantity,
-            afterQuantity: inventoryItem?.quantity || 0,
+            beforeQuantity: inventoryItem.quantity + item.quantity,
+            afterQuantity: inventoryItem.quantity,
             referenceType: 'OUTBOUND_ORDER',
             referenceId: order.id,
             note: `出库单：${outboundNo}`,

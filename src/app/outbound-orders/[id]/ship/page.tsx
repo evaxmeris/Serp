@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useToast, ToastContainer } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +59,7 @@ const LOGISTICS_COMPANIES = [
 export default function ShipOutboundOrderPage() {
   const router = useRouter();
   const params = useParams();
+  const { toast, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<OutboundOrder | null>(null);
@@ -89,17 +91,17 @@ export default function ShipOutboundOrderPage() {
           
           // 验证状态
           if (result.data.status !== 'SHIPPED') {
-            alert('只有已发货的出库单才能录入发货信息');
+            toast.warning('只有已发货的出库单才能录入发货信息');
             router.push(`/outbound-orders/${params.id}`);
             return;
           }
         } else {
-          alert('出库单不存在');
+          toast.warning('出库单不存在');
           router.push('/outbound-orders');
         }
       } catch (error) {
         console.error('Failed to fetch outbound order:', error);
-        alert('加载失败，请重试');
+        toast.error('加载失败，请重试');
       } finally {
         setLoading(false);
       }
@@ -116,7 +118,7 @@ export default function ShipOutboundOrderPage() {
   // 提交发货信息
   const handleSubmit = async () => {
     if (!formData.logisticsCompany || !formData.trackingNo) {
-      alert('请填写物流公司和物流单号');
+      toast.warning('请填写物流公司和物流单号');
       return;
     }
 
@@ -134,15 +136,15 @@ export default function ShipOutboundOrderPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('发货信息已保存');
+        toast.success('发货信息已保存');
         router.push(`/outbound-orders/${params.id}`);
       } else {
-        alert(`保存失败：${result.message}`);
+        toast.error(`保存失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to save shipment:', error);
       // 临时处理：直接更新出库单状态
-      alert('发货 API 待完善，已记录发货信息');
+      toast.success('发货 API 待完善，已记录发货信息');
       router.push(`/outbound-orders/${params.id}`);
     } finally {
       setSubmitting(false);
@@ -370,6 +372,7 @@ export default function ShipOutboundOrderPage() {
           </CardContent>
         </Card>
       </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

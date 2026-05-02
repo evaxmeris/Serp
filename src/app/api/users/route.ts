@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';
+import { successResponse, createdResponse, errorResponse, forbiddenResponse } from '@/lib/api-response';
 
 // GET /api/users - 获取用户列表
 export async function GET(request: NextRequest) {
@@ -11,10 +12,7 @@ export async function GET(request: NextRequest) {
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const users = await prisma.user.findMany({
@@ -30,13 +28,10 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(users);
+    return successResponse(users);
   } catch (error) {
     console.error('Error fetching users:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch users' },
-      { status: 500 }
-    );
+    return errorResponse('获取用户列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -46,18 +41,12 @@ export async function POST(request: NextRequest) {
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
     
     // 只有管理员可以创建用户
     if (currentUser.role !== 'ADMIN') {
-      return NextResponse.json(
-        { success: false, error: '权限不足', code: 'FORBIDDEN' },
-        { status: 403 }
-      );
+      return forbiddenResponse('权限不足');
     }
 
     const body = await request.json();
@@ -71,10 +60,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 400 }
-      );
+      return errorResponse('用户已存在', 'CONFLICT', 409);
     }
 
     // 使用 bcrypt 加密密码后存储（盐轮数 10）
@@ -96,12 +82,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(user, { status: 201 });
+    return createdResponse(user, '用户创建成功');
   } catch (error) {
     console.error('Error creating user:', error);
-    return NextResponse.json(
-      { error: 'Failed to create user' },
-      { status: 500 }
-    );
+    return errorResponse('创建用户失败', 'INTERNAL_ERROR', 500);
   }
 }

@@ -5,11 +5,11 @@
  */
 
 import { NextRequest } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { platformRegistry } from '@/lib/sync';
-import { decryptCredentials } from '@/lib/crypto-utils';
+import { decryptCredentials, encryptCredentials } from '@/lib/crypto-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,12 +47,13 @@ export async function POST(request: NextRequest) {
 
     // 构建完整的平台配置
     const platformConfig = {
+      id: config.id,
       platformCode,
       platformName: adapter.platformName,
       enabled: config.enabled,
       syncIntervalMin: config.syncIntervalMin || 120,
       credentials,
-      settings: config.settings || {},
+      settings: (config.settings || {}) as Record<string, any>,
     };
 
     // 调用认证测试

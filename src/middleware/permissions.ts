@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserPermissions, hasPermission, hasAnyPermission, hasAllPermissions } from '@/lib/permissions';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -120,32 +120,16 @@ export async function checkAllPermissions(
 
 /**
  * 从认证 token 中获取当前用户
- * 优先从 auth-simple 的 getCurrentUser 获取
+ * 优先从 middleware/auth.ts 的 getCurrentUser 获取
  * @param request Next.js 请求对象
  * @returns 认证用户上下文或 null
  */
 export async function getAuthenticatedUser(request: NextRequest): Promise<AuthUserContext | null> {
   try {
-    // 使用 auth-simple 的 getCurrentUser（从 cookie 获取）
+    // 使用 middleware/auth.ts 的 getCurrentUser（从 cookie 获取）
     const user = await getCurrentUser();
     
     if (!user) {
-      // 尝试从请求头获取（兼容旧版）
-      const userIdFromHeader = request.headers.get('x-user-id');
-      if (userIdFromHeader) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: userIdFromHeader },
-          select: { id: true, email: true, name: true, role: true },
-        });
-        if (dbUser) {
-          return {
-            id: dbUser.id,
-            email: dbUser.email,
-            name: dbUser.name || '',
-            role: dbUser.role,
-          };
-        }
-      }
       return null;
     }
     

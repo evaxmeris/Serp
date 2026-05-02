@@ -51,6 +51,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // ============================================
 // 类型定义
@@ -118,6 +120,9 @@ export default function ComparisonsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   // 属性合并（所有选中产品的属性并集）
   const [allAttributes, setAllAttributes] = useState<Array<{
     id: string;
@@ -159,12 +164,12 @@ export default function ComparisonsPage() {
   // 添加产品到对比
   const handleAddProduct = (product: Product) => {
     if (selectedProducts.length >= 5) {
-      alert('最多只能对比 5 个产品');
+      toast.error('最多只能对比 5 个产品');
       return;
     }
 
     if (selectedProducts.find(p => p.id === product.id)) {
-      alert('该产品已在对比列表中');
+      toast.error('该产品已在对比列表中');
       return;
     }
 
@@ -219,7 +224,7 @@ export default function ComparisonsPage() {
 
   const handleSave = async () => {
     if (selectedProducts.length < 2) {
-      alert('请至少选择 2 个产品进行对比');
+      toast.warning('请至少选择 2 个产品进行对比');
       return;
     }
 
@@ -240,14 +245,14 @@ export default function ComparisonsPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('对比报告已保存');
+        toast.error('对比报告已保存');
         // 可以跳转到详情页或刷新列表
       } else {
-        alert('保存失败：' + result.error);
+        toast.error('保存失败：' + result.error);
       }
     } catch (error) {
       console.error('保存失败:', error);
-      alert('保存失败，请重试');
+      toast.warning('保存失败，请重试');
     } finally {
       setSaving(false);
     }
@@ -359,7 +364,7 @@ export default function ComparisonsPage() {
   const maxPrice = findMaxPrice();
   const maxMargin = findMaxMargin();
 
-  return (
+  return (<>
     <div className="w-full py-6 px-4">
       {/* 页面头部 */}
       <div className="flex items-center justify-between mb-6">
@@ -570,7 +575,10 @@ export default function ComparisonsPage() {
         onSearchChange={setSearchTerm}
       />
     </div>
-  );
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    <ConfirmDialog />
+  </>
+);
 }
 
 // ============================================

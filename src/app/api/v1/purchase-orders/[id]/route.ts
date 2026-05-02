@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
   validationErrorResponse,
   extractZodErrors,
   notFoundResponse,
+  conflictResponse,
 } from '@/lib/api-response';
 import {
   UpdatePurchaseOrderSchema,
@@ -216,15 +217,118 @@ export async function DELETE(
       );
     }
 
-    // 删除采购订单
-    await prisma.purchaseOrder.delete({
+    // 软删除采购订单（设置 deletedAt）
+    await prisma.purchaseOrder.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     return successResponse(null, '采购订单删除成功', 'NO_CONTENT');
   } catch (error) {
     console.error('Error deleting purchase order:', error);
     return errorResponse('删除采购订单失败', 'INTERNAL_ERROR');
+  }
+}
+
+// 合法的状态转换映射
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  CONFIRMED: ['IN_PRODUCTION'],
+  IN_PRODUCTION: ['READY'],
+  READY: ['RECEIVED'],
+  RECEIVED: ['COMPLETED'],
+};
+
+const FINAL_STATUSES = ['COMPLETED', 'CANCELLED'];
+
+// PATCH /api/v1/purchase-orders/[id] - 推进采购订单状态
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // 认证检查
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const validationResult = PurchaseOrderIdSchema.safeParse({ id });
+
+    if (!validationResult.success) {
+      return validationErrorResponse(extractZodErrors(validationResult.error));
+    }
+
+    // 检查采购订单是否存在
+    const existingOrder = await prisma.purchaseOrder.findUnique({
+      where: { id },
+    });
+
+    if (!existingOrder) {
+      return notFoundResponse('采购订单');
+    }
+
+    const body = await request.json();
+    const { status } = body;
+
+    if (!status || typeof status !== 'string') {
+      return validationErrorResponse([{ field: 'status', message: '缺少目标状态' }]);
+    }
+
+    const currentStatus = existingOrder.status;
+
+    // 检查是否是已终态
+    if (FINAL_STATUSES.includes(currentStatus)) {
+      return conflictResponse('采购订单已处于终态，无法继续推进');
+    }
+
+    // 处理取消：任意状态 → CANCELLED
+    if (status === 'CANCELLED') {
+      const { cancelReason } = body;
+      const updatedOrder = await prisma.$transaction(async (tx) => {
+        const order = await tx.purchaseOrder.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelReason: cancelReason || null,
+          },
+        });
+        return order;
+      });
+
+      return successResponse(updatedOrder, '采购订单已取消');
+    }
+
+    // 验证状态转换合法性
+    const allowedNext = VALID_TRANSITIONS[currentStatus];
+    if (!allowedNext || !allowedNext.includes(status)) {
+      return errorResponse(
+        `不允许从 ${currentStatus} 转换到 ${status}`,
+        'ORDER_INVALID_STATUS',
+        409
+      );
+    }
+
+    // 执行状态推进
+    const updateData: Record<string, any> = { status };
+
+    // 如果推进到 COMPLETED，设置 completedAt
+    if (status === 'COMPLETED') {
+      updateData.completedAt = new Date();
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      return tx.purchaseOrder.update({
+        where: { id },
+        data: updateData,
+      });
+    });
+
+    return successResponse(updatedOrder, `采购订单状态已更新为 ${status}`);
+  } catch (error) {
+    console.error('Error updating purchase order status:', error);
+    return errorResponse('更新采购订单状态失败', 'INTERNAL_ERROR');
   }
 }
 

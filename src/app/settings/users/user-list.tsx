@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { UserRound, Shield, Search, Check, X, Eye, Edit, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 type User = {
   id: string; email: string; name?: string; role?: string; isApproved: boolean;
@@ -37,6 +39,9 @@ export default function UserListTab() {
 
   // 编辑表单
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', password: '', isApproved: true });
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const loadUsers = async () => {
     try {
@@ -107,10 +112,10 @@ export default function UserListTab() {
       });
       if (res.ok) { setEditUser(null); loadUsers(); } else {
         const err = await res.json();
-        alert(err.error || err.message || '保存失败');
+        toast.error(err.error || err.message || '保存失败');
       }
     } catch (e: any) {
-      alert('网络错误：' + (e?.message || '请检查连接'));
+      toast.warning('网络错误：' + (e?.message || '请检查连接'));
     }
   };
 
@@ -121,9 +126,9 @@ export default function UserListTab() {
       const res = await fetch(`/api/users/${deleteUser.id}`, { method: 'DELETE' });
       if (res.ok) { setDeleteUser(null); loadUsers(); } else {
         const err = await res.json();
-        alert(err.error || err.message || '删除失败');
+        toast.error(err.error || err.message || '删除失败');
       }
-    } catch (e: any) { alert('网络错误：' + (e?.message || '请检查连接')); }
+    } catch (e: any) { toast.warning('网络错误：' + (e?.message || '请检查连接')); }
   };
 
   // 角色分配
@@ -142,8 +147,8 @@ export default function UserListTab() {
         body: JSON.stringify({ roleIds: assignedRoleIds }),
       });
       if (res.ok) { setAssignUser(null); loadUsers(); }
-      else { const err = await res.json(); alert(err.error || '保存失败'); }
-    } catch (e: any) { alert('网络错误：' + (e?.message || '请检查连接')); }
+      else { const err = await res.json(); toast.error(err.error || '保存失败'); }
+    } catch (e: any) { toast.warning('网络错误：' + (e?.message || '请检查连接')); }
   };
 
   const filteredUsers = users.filter(user => {
@@ -152,7 +157,7 @@ export default function UserListTab() {
     return user.name?.toLowerCase().includes(q) || user.email.toLowerCase().includes(q);
   });
 
-  return (
+  return (<>
     <div className="space-y-4">
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -342,5 +347,8 @@ export default function UserListTab() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

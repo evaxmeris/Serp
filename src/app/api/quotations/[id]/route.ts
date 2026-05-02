@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateQuotationSchema } from '@/lib/api-schemas';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { successResponse, errorResponse, validationErrorResponse, notFoundResponse } from '@/lib/api-response';
 
 // GET /api/quotations/[id] - 获取报价单详情 - 需要认证
 export async function GET(
@@ -13,10 +13,7 @@ export async function GET(
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { id } = await params;
@@ -47,19 +44,36 @@ export async function GET(
     });
 
     if (!quotation) {
-      return NextResponse.json(
-        { error: 'Quotation not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('报价单');
     }
 
-    return NextResponse.json(quotation);
+    // 计算是否过期
+    let isExpired = false;
+    if (quotation.validityDays && quotation.createdAt) {
+      const expiryDate = new Date(quotation.createdAt);
+      expiryDate.setDate(expiryDate.getDate() + quotation.validityDays);
+      isExpired = new Date() > expiryDate;
+    }
+
+    // 如果已过期但状态未标记，自动更新状态为 EXPIRED
+    if (isExpired && quotation.status !== 'EXPIRED' && quotation.status !== 'ACCEPTED' && quotation.status !== 'REJECTED') {
+      await prisma.quotation.update({
+        where: { id },
+        data: { status: 'EXPIRED' },
+      });
+      quotation.status = 'EXPIRED';
+    }
+
+    return successResponse({
+      ...quotation,
+      isExpired,
+      expiryDate: quotation.validityDays
+        ? new Date(quotation.createdAt.getTime() + quotation.validityDays * 86400000)
+        : null,
+    });
   } catch (error) {
     console.error('Error fetching quotation:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch quotation' },
-      { status: 500 }
-    );
+    return errorResponse('获取报价详情失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -72,10 +86,7 @@ export async function PUT(
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { id } = await params;
@@ -86,16 +97,36 @@ export async function PUT(
     if (!v.success) return v.response;
     const validatedData = v.data;
 
-    // 检查报价单是否存在
+    // 检查报价单是否存在并获取当前状态
     const existingQuotation = await prisma.quotation.findUnique({
       where: { id },
+      select: { id: true, status: true },
     });
 
     if (!existingQuotation) {
-      return NextResponse.json(
-        { error: 'Quotation not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('报价单');
+    }
+
+    // 状态机验证：防止跳过中间状态或逆向流转
+    const currentStatus = existingQuotation.status;
+    const newStatus = validatedData.status;
+    const QUOTATION_TRANSITIONS: Record<string, string[]> = {
+      DRAFT:     ['SENT', 'EXPIRED'],
+      SENT:      ['VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED'],
+      VIEWED:    ['ACCEPTED', 'REJECTED', 'EXPIRED'],
+      ACCEPTED:  [],
+      REJECTED:  [],
+      EXPIRED:   [],
+    };
+    if (newStatus && newStatus !== currentStatus) {
+      const allowed = QUOTATION_TRANSITIONS[currentStatus] || [];
+      if (!allowed.includes(newStatus)) {
+        return errorResponse(
+          `无效的状态变更：${currentStatus} → ${newStatus}。允许的目标状态：${allowed.join(', ') || '无（终态不可变更）'}`,
+          'INVALID_TRANSITION',
+          422
+        );
+      }
     }
 
     // 构建更新数据（排除 customerId 和 inquiryId，因为这些通常不更新）
@@ -139,19 +170,13 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(quotation);
+    return successResponse(quotation, '报价单更新成功');
   } catch (error) {
     console.error('Error updating quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed' },
-        { status: 400 }
-      );
+      return errorResponse('验证失败', 'VALIDATION_ERROR', 400);
     }
-    return NextResponse.json(
-      { error: 'Failed to update quotation' },
-      { status: 500 }
-    );
+    return errorResponse('更新报价失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -164,10 +189,7 @@ export async function DELETE(
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { id } = await params;
@@ -178,23 +200,18 @@ export async function DELETE(
     });
 
     if (!existingQuotation) {
-      return NextResponse.json(
-        { error: 'Quotation not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('报价单');
     }
 
-    // 删除报价单（级联删除 items）
-    await prisma.quotation.delete({
+    // 软删除报价单（设置 deletedAt）
+    await prisma.quotation.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true }, '报价单已删除');
   } catch (error) {
     console.error('Error deleting quotation:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete quotation' },
-      { status: 500 }
-    );
+    return errorResponse('删除报价失败', 'INTERNAL_ERROR', 500);
   }
 }

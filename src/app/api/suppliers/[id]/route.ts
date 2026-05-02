@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse, successResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -27,19 +26,13 @@ export async function GET(
     });
 
     if (!supplier) {
-      return NextResponse.json(
-        { error: 'Supplier not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('Supplier');
     }
 
-    return NextResponse.json(supplier);
+    return successResponse(supplier);
   } catch (error) {
     console.error('Error fetching supplier:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch supplier' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch supplier', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -84,13 +77,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(supplier);
+    return successResponse(supplier);
   } catch (error) {
     console.error('Error updating supplier:', error);
-    return NextResponse.json(
-      { error: 'Failed to update supplier' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to update supplier', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -130,16 +120,14 @@ export async function DELETE(
       );
     }
 
-    await prisma.supplier.delete({
+    await prisma.supplier.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     return successResponse(null, '供应商删除成功');
   } catch (error) {
     console.error('Error deleting supplier:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete supplier' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to delete supplier', 'INTERNAL_ERROR', 500);
   }
 }

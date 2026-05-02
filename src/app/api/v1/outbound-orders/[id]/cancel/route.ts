@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
@@ -89,20 +89,37 @@ export async function POST(
       if (outboundOrder.status === 'PENDING') {
         const warehouseCode = outboundOrder.warehouseId; // 从父对象获取仓库 ID
         for (const item of outboundOrder.items) {
-          await tx.inventoryItem.update({
+          // 获取当前 version（乐观锁）
+          const current = await tx.inventoryItem.findUniqueOrThrow({
             where: {
               productId_warehouse: {
                 productId: item.productId,
                 warehouse: warehouseCode,
               },
             },
+            select: { version: true },
+          });
+
+          const updateResult = await tx.inventoryItem.updateMany({
+            where: {
+              productId_warehouse: {
+                productId: item.productId,
+                warehouse: warehouseCode,
+              },
+              version: current.version,
+            },
             data: {
               quantity: { increment: item.quantity },
+              version: { increment: 1 },
             },
           });
 
-          // 创建库存日志
-          const inventoryItem = await tx.inventoryItem.findUnique({
+          if (updateResult.count === 0) {
+            throw new Error('库存数据已被其他操作修改，请重试');
+          }
+
+          // 重新查询库存记录用于日志
+          const inventoryItem = await tx.inventoryItem.findUniqueOrThrow({
             where: {
               productId_warehouse: {
                 productId: item.productId,
@@ -117,8 +134,8 @@ export async function POST(
               warehouseId: warehouseCode,
               type: 'RETURN',
               quantity: item.quantity,
-              beforeQuantity: inventoryItem ? inventoryItem.quantity - item.quantity : 0,
-              afterQuantity: inventoryItem?.quantity || 0,
+              beforeQuantity: inventoryItem.quantity - item.quantity,
+              afterQuantity: inventoryItem.quantity,
               referenceType: 'OUTBOUND_ORDER',
               referenceId: id,
               note: `出库单取消恢复库存：${outboundOrder.outboundNo}${reason ? `，原因：${reason}` : ''}`,

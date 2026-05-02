@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { listResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateLogisticsOrderSchema } from '@/lib/api-schemas';
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         transitDays,
         currency: currency || 'CNY',
         totalAmount,
-        amountBreakdown: amountBreakdown || null,
+        amountBreakdown: amountBreakdown ?? undefined,
         insurance,
         insuranceAmount,
         customsBroker,
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
         estimatedArrival: estimatedArrival ? new Date(estimatedArrival) : null,
         status: 'DRAFT',
         notes,
-        documents: documents || null,
+        documents: documents ?? undefined,
       },
       include: {
         provider: {

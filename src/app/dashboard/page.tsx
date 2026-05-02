@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ClipboardList,
   AlertTriangle,
@@ -22,6 +23,11 @@ import {
 import Link from 'next/link';
 import { getCurrentUserRole } from '@/components/Sidebar';
 import { UserRole } from '@/components/Sidebar';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, Legend,
+} from 'recharts';
+import { useToast, ToastContainer } from '@/components/ui/toast';
 
 // 关键指标卡片数据结构
 interface MetricCard {
@@ -146,6 +152,7 @@ const getQuickActions = (role: UserRole): QuickAction[] => {
 };
 
 export default function DashboardPage() {
+  const { toast, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [period, setPeriod] = useState('7');
@@ -214,16 +221,42 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-100px)]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-zinc-500">加载仪表盘数据...</p>
+      <div className="p-4 md:p-6 space-y-6">
+        {/* Skeleton for time range selector */}
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-10 w-40 rounded-md" />
+        </div>
+        {/* Skeleton for metric cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-lg border p-4 h-[100px] flex items-center">
+              <Skeleton className="h-12 w-12 rounded-lg mr-4 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-7 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Skeleton for chart area */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="rounded-lg border p-6">
+              <Skeleton className="h-5 w-40 mb-2" />
+              <Skeleton className="h-4 w-56 mb-4" />
+              <Skeleton className="h-[200px] w-full rounded-md" />
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
-  return (
+  return (<>
     <div className="p-4 md:p-6 space-y-6">
         {/* 页面标题和筛选器 */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -277,20 +310,26 @@ export default function DashboardPage() {
               <CardDescription>📈 折线图展示销售趋势变化</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[200px] flex items-end gap-2">
-                {data?.salesTrend.map((item, index) => {
-                  const maxAmount = Math.max(...data.salesTrend.map(d => d.amount));
-                  const height = (item.amount / maxAmount) * 100;
-                  return (
-                    <div key={index} className="flex-1 flex flex-col justify-end items-center gap-2">
-                      <div
-                        className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-sm"
-                        style={{ height: `${height}%` }}
-                      />
-                      <span className="text-xs text-zinc-500">{item.date}</span>
-                    </div>
-                  );
-                })}
+              <div className="h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data?.salesTrend ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number) => [`¥${value.toLocaleString()}`, '销售额']}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={{ fill: '#3b82f6', r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -301,26 +340,30 @@ export default function DashboardPage() {
               <CardDescription>🍋 饼图展示各渠道销售分布</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[200px] flex items-center justify-center">
-                <div className="w-full space-y-3">
-                  {data?.channelDistribution.map((channel, index) => {
-                    const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500'];
-                    return (
-                      <div key={index} className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{channel.name}</span>
-                          <span className="text-zinc-500">{channel.value}%</span>
-                        </div>
-                        <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2.5">
-                          <div
-                            className={`h-2.5 rounded-full ${colors[index % colors.length]}`}
-                            style={{ width: `${channel.value}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data?.channelDistribution ?? []}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      dataKey="value"
+                      label={({ name, value }) => `${name} ${value}%`}
+                    >
+                      {['#3b82f6', '#22c55e', '#a855f7', '#f97316'].map((color, idx) => (
+                        <Cell key={idx} fill={color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number) => [`${value}%`, '占比']}
+                    />
+                    <Legend verticalAlign="bottom" height={30} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -416,5 +459,6 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-  );
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>);
 }

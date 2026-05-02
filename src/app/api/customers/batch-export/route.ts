@@ -2,9 +2,11 @@
  * 客户批量导出 API
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { applyRowLevelFilter } from '@/lib/row-level-filter';
+import { NextResponse } from 'next/server';
+import { errorResponse } from '@/lib/api-response';
 
 /**
  * GET /api/customers/batch-export
@@ -15,10 +17,7 @@ export async function GET(request: Request) {
     // 认证检查
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json(
-        { error: '请先登录' },
-        { status: 401 }
-      );
+      return errorResponse('请先登录', 'UNAUTHORIZED', 401);
     }
 
     // 获取查询参数
@@ -32,15 +31,22 @@ export async function GET(request: Request) {
       1000
     );
 
-    // 构建查询条件
-    const whereClause: any = {};
+    // 构建查询条件（含行级过滤和软删除过滤）
+    const whereClause: any = { deletedAt: null };
     if (ids) {
       whereClause.id = { in: ids.split(',') };
     }
 
+    // 应用行级过滤：非 ADMIN 只能导出自己负责的客户
+    const filteredWhere = applyRowLevelFilter(
+      { id: user.id, email: user.email, name: user.name || '', role: user.role },
+      'customer',
+      whereClause
+    );
+
     // 查询客户（限制导出数量）
     const customers = await prisma.customer.findMany({
-      where: whereClause,
+      where: filteredWhere,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -99,9 +105,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('批量导出错误:', error);
-    return NextResponse.json(
-      { error: '导出失败：' + error.message },
-      { status: 500 }
-    );
+    return errorResponse('导出失败：' + error.message, 'INTERNAL_ERROR', 500);
   }
 }

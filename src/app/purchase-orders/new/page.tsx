@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Plus, Trash2, Calculator } from 'lucide-react';
+import { useFormDraft, useLeaveConfirmation } from '@/lib/use-form-draft';
 
 const formSchema = z.object({
   supplierId: z.string().min(1, '请选择供应商'),
@@ -123,6 +124,20 @@ export default function CreatePurchaseOrderPage() {
     },
   });
 
+  // 草稿自动保存 & 离开确认
+  const formValues = form.watch();
+  const { loadDraft, clearDraft } = useFormDraft('purchase-order-new', formValues, form.formState.isDirty, loading);
+  useLeaveConfirmation(form.formState.isDirty);
+
+  // 页面加载时恢复草稿
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) {
+      form.reset(draft);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'items',
@@ -203,6 +218,7 @@ export default function CreatePurchaseOrderPage() {
       const result = await res.json();
 
       if (res.ok) {
+        clearDraft();
         router.push('/purchase-orders');
       } else {
         form.setError('root', {

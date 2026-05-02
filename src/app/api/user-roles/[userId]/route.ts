@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse } from '@/lib/api-response';
+import { invalidateUserPermissionsCache } from '@/lib/permissions';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -40,16 +40,13 @@ export async function GET(
       role.permissions.map(rp => rp.permission.name)
     );
 
-    return NextResponse.json({
+    return successResponse({
       data: roles,
       permissions: [...new Set(allPermissions)],
     });
   } catch (error) {
     console.error('Error fetching user roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch user roles', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -71,10 +68,7 @@ export async function DELETE(
     const roleId = searchParams.get('roleId');
 
     if (!roleId) {
-      return NextResponse.json(
-        { error: 'roleId is required' },
-        { status: 400 }
-      );
+      return validationErrorResponse([{ field: 'roleId', message: 'roleId is required' }]);
     }
 
     await prisma.userRole.deleteMany({
@@ -84,12 +78,12 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true });
+    // 主动失效权限缓存
+    invalidateUserPermissionsCache(userId);
+
+    return successResponse(null, 'Role removed successfully');
   } catch (error) {
     console.error('Error removing user role:', error);
-    return NextResponse.json(
-      { error: 'Failed to remove user role' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to remove user role', 'INTERNAL_ERROR', 500);
   }
 }

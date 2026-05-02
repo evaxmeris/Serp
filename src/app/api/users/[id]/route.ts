@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import bcrypt from 'bcryptjs';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';
+import { successResponse, errorResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
 
 // PATCH/PUT /api/users/[id] - 更新用户
 export async function PUT(
@@ -16,18 +17,12 @@ export async function PUT(
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     // 只有管理员可以更新用户
     if (currentUser.role !== 'ADMIN') {
-      return NextResponse.json(
-        { success: false, error: '权限不足', code: 'FORBIDDEN' },
-        { status: 403 }
-      );
+      return forbiddenResponse('权限不足');
     }
 
     const body = await request.json();
@@ -41,10 +36,7 @@ export async function PUT(
     });
 
     if (!existingUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('用户');
     }
 
     // 构建更新数据
@@ -74,13 +66,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(updatedUser);
+    return successResponse(updatedUser, '用户更新成功');
   } catch (error) {
     console.error('Error updating user:', error);
-    return NextResponse.json(
-      { error: 'Failed to update user' },
-      { status: 500 }
-    );
+    return errorResponse('更新用户失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -95,18 +84,12 @@ export async function DELETE(
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     // 只有管理员可以删除用户
     if (currentUser.role !== 'ADMIN') {
-      return NextResponse.json(
-        { success: false, error: '权限不足', code: 'FORBIDDEN' },
-        { status: 403 }
-      );
+      return forbiddenResponse('权限不足');
     }
 
     // 检查用户是否存在
@@ -115,23 +98,17 @@ export async function DELETE(
     });
 
     if (!existingUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('用户');
     }
 
     await prisma.user.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true }, '用户已删除');
   } catch (error) {
     console.error('Error deleting user:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete user' },
-      { status: 500 }
-    );
+    return errorResponse('删除用户失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -146,10 +123,7 @@ export async function GET(
     // 获取当前登录用户
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const user = await prisma.user.findUnique({
@@ -167,18 +141,12 @@ export async function GET(
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('用户');
     }
 
-    return NextResponse.json(user);
+    return successResponse(user);
   } catch (error) {
     console.error('Error fetching user:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user' },
-      { status: 500 }
-    );
+    return errorResponse('获取用户信息失败', 'INTERNAL_ERROR', 500);
   }
 }

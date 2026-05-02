@@ -95,3 +95,119 @@ export async function generateLogisticsOrderNo(): Promise<string> {
 
   return `LO-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
 }
+
+/**
+ * 生成质检单号
+ * 格式：QC-YYYYMMDD-<4位序号>
+ * 使用当天已创建的质检单数量自增序号
+ *
+ * @returns 生成的质检单号，如 QC-20260427-0001
+ */
+export async function generateQcNo(): Promise<string> {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const count = await prisma.qualityCheck.count({
+    where: {
+      createdAt: {
+        gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      },
+    },
+  });
+
+  return `QC-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+}
+
+/**
+ * 生成发票编号
+ * 格式：PI-YYYYMMDD-<3位序号> 或 CI-YYYYMMDD-<3位序号> 或 TAX-YYYYMMDD-<3位序号>
+ * 使用当天已创建的同类发票数量自增序号
+ */
+/**
+ * 生成收款单号
+ * 格式：PAY-YYYYMMDD-<4位序号>
+ * 使用当天已创建的收款单数量自增序号
+ */
+export async function generatePaymentNo(): Promise<string> {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const count = await prisma.payment.count({
+    where: {
+      createdAt: {
+        gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      },
+    },
+  });
+
+  return `PAY-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+}
+
+export async function generateInvoiceNo(type: 'PROFORMA' | 'COMMERCIAL' | 'TAX'): Promise<string> {
+  const prefix = type === 'PROFORMA' ? 'PI' : type === 'COMMERCIAL' ? 'CI' : 'TAX';
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const count = await prisma.invoice.count({
+    where: {
+      type,
+      createdAt: {
+        gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      },
+    },
+  });
+
+  return `${prefix}-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
+}
+
+/**
+ * 生成交易流水号
+ * 格式：TXN-YYYYMMDD-<4位序号>
+ * 使用当天已创建的交易流水数量自增序号
+ */
+export async function generateTransactionNo(): Promise<string> {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const count = await prisma.transaction.count({
+    where: {
+      createdAt: {
+        gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      },
+    },
+  });
+
+  return `TXN-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+}
+
+/**
+ * 生成报销单号
+ * 格式：RE-YYYYMMDD-<4位序号>
+ * 使用当天已创建的报销单数量自增序号
+ *
+ * @returns 生成的报销单号，如 RE-20260427-0001
+ */
+export async function generateReimbursementNo(): Promise<string> {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const count = await prisma.reimbursement.count({
+    where: {
+      createdAt: {
+        gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      },
+    },
+  });
+
+  return `RE-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+}

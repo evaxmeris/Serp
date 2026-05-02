@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { CheckCircle, XCircle, Clock, Phone, Calendar } from 'lucide-react';
 
 interface UserRegistration {
@@ -15,6 +17,8 @@ interface UserRegistration {
 
 export default function UserApprovalsTab() {
   const [registrations, setRegistrations] = useState<UserRegistration[]>([]);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [selected, setSelected] = useState<UserRegistration | null>(null);
@@ -44,13 +48,13 @@ export default function UserApprovalsTab() {
   const hasPerm = (p: string) => perms.includes(p) || perms.includes('*');
 
   const handleApprove = async (r: UserRegistration) => {
-    if (!confirm(`确认批准 ${r.email} 的注册申请吗？`)) return;
+    if (!await confirm({ title: '确认批准', description: `确认批准 ${r.email} 的注册申请吗？` })) return;
     await fetch(`/api/auth/approvals/${r.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     fetchData();
   };
 
   const handleReject = async () => {
-    if (!selected || !rejectReason.trim()) { alert('请填写拒绝原因'); return; }
+    if (!selected || !rejectReason.trim()) { toast.warning('请填写拒绝原因'); return; }
     await fetch(`/api/auth/approvals/${selected.id}/reject`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectReason }),
@@ -59,6 +63,7 @@ export default function UserApprovalsTab() {
   };
 
   return (
+    <>
     <div className="space-y-4">
       {loading ? <div className="text-center py-8 text-zinc-500">加载中...</div> :
         registrations.length === 0 ? <div className="text-center py-8 text-zinc-500">暂无待审批用户</div> : (
@@ -126,5 +131,8 @@ export default function UserApprovalsTab() {
         </DialogContent>
       </Dialog>
     </div>
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    <ConfirmDialog />
+    </>
   );
 }

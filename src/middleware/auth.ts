@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 
@@ -554,4 +555,54 @@ export function hasAllPermissions(
   permissions: PermissionName[]
 ): boolean {
   return permissions.every(p => hasPermission(session, p));
+}
+
+/**
+ * 从 cookies 获取当前用户（无需 Request 对象）
+ * 
+ * 用于 Route Handler 和 Server Component 中直接获取当前登录用户，
+ * 不需要传递 NextRequest 对象。基于服务器端 cookies() API。
+ * 
+ * @returns 用户基本信息 { id, email, name, role } 或 null
+ */
+export async function getCurrentUser(): Promise<{
+  id: string;
+  email: string;
+  name?: string;
+  role: string;
+} | null> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    if (!token) return null;
+
+    const tokenResult = await verifyToken(token);
+    if (!tokenResult) return null;
+
+    const user = await prisma.user.findUnique({
+      where: { id: tokenResult.id },
+      select: { id: true, email: true, name: true, role: true },
+    });
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name || undefined,
+      role: user.role,
+    };
+  } catch (error) {
+    console.error('获取当前用户失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 登出 - 清除 auth-token cookie
+ * 
+ * 用于 Route Handler 中登出用户，不需要传递 NextRequest 对象。
+ */
+export async function logout(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete('auth-token');
 }

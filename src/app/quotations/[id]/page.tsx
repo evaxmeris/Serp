@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -63,6 +65,9 @@ export default function QuotationDetailPage() {
     return num.toFixed(2);
   };
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   // 格式化数字函数 - 处理 string | number 类型
   const formatNumber = (value: string | number) => {
     const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -96,11 +101,11 @@ export default function QuotationDetailPage() {
     
     const customerEmail = quotation.customer.email;
     if (!customerEmail) {
-      alert('客户没有邮箱地址，无法发送');
+      toast.error('客户没有邮箱地址，无法发送');
       return;
     }
 
-    if (!confirm(`确定要发送报价单 ${quotation.quotationNo} 给 ${customerEmail} 吗？`)) {
+    if (!!await confirm({ title: '确认操作', description: `确定要发送报价单 ${quotation.quotationNo} 给 ${customerEmail} 吗？` })) {
       return;
     }
 
@@ -117,15 +122,15 @@ export default function QuotationDetailPage() {
       });
 
       if (res.ok) {
-        alert('报价单已发送');
+        toast.error('报价单已发送');
         fetchQuotation(quotation.id);
       } else {
         const data = await res.json();
-        alert(`发送失败：${data.error}`);
+        toast.error(`发送失败：${data.error}`);
       }
     } catch (error) {
       console.error('Failed to send quotation:', error);
-      alert('发送失败');
+      toast.error('发送失败');
     } finally {
       setSending(false);
     }
@@ -134,7 +139,7 @@ export default function QuotationDetailPage() {
   const handleConvert = async () => {
     if (!quotation) return;
 
-    if (!confirm(`确定要将报价单 ${quotation.quotationNo} 转为订单吗？`)) {
+    if (!!await confirm({ title: '确认操作', description: `确定要将报价单 ${quotation.quotationNo} 转为订单吗？` })) {
       return;
     }
 
@@ -148,15 +153,15 @@ export default function QuotationDetailPage() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(`报价单已转为订单：${data.order.orderNo}`);
+        toast.error(`报价单已转为订单：${data.order.orderNo}`);
         router.push(`/orders/${data.order.id}`);
       } else {
         const data = await res.json();
-        alert(`转换失败：${data.error}`);
+        toast.error(`转换失败：${data.error}`);
       }
     } catch (error) {
       console.error('Failed to convert quotation:', error);
-      alert('转换失败');
+      toast.error('转换失败');
     } finally {
       setConverting(false);
     }
@@ -165,7 +170,7 @@ export default function QuotationDetailPage() {
   const handleDelete = async () => {
     if (!quotation) return;
 
-    if (!confirm(`确定要删除报价单 ${quotation.quotationNo} 吗？此操作不可恢复。`)) {
+    if (!!await confirm({ title: '确认操作', description: `确定要删除报价单 ${quotation.quotationNo} 吗？此操作不可恢复。` })) {
       return;
     }
 
@@ -175,15 +180,15 @@ export default function QuotationDetailPage() {
       });
 
       if (res.ok) {
-        alert('报价单已删除');
+        toast.error('报价单已删除');
         router.push('/quotations');
       } else {
         const data = await res.json();
-        alert(`删除失败：${data.error}`);
+        toast.error(`删除失败：${data.error}`);
       }
     } catch (error) {
       console.error('Failed to delete quotation:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
@@ -233,7 +238,7 @@ export default function QuotationDetailPage() {
     );
   }
 
-  return (
+  return (<>
     <div className="container mx-auto py-8 space-y-6">
       {/* 头部操作栏 */}
       <div className="flex items-center justify-between">
@@ -398,5 +403,8 @@ export default function QuotationDetailPage() {
         </CardContent>
       </Card>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

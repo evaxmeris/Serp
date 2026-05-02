@@ -2,10 +2,12 @@
  * 文件上传 API
  * POST /api/upload — 上传图片（营业执照、身份证等）
  * 限制：单文件 ≤ 500KB，仅允许图片格式
+ * 安全：MIME 检查 + 文件头部魔数验证
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse } from '@/lib/api-response';
+import type { NextRequest } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -14,26 +16,56 @@ const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 const MAX_SIZE = 500 * 1024; // 500KB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
 
+// 魔数签名定义（文件头部字节）
+const MAGIC_SIGNATURES: Record<string, Uint8Array[]> = {
+  'image/jpeg': [new Uint8Array([0xFF, 0xD8, 0xFF])],
+  'image/jpg': [new Uint8Array([0xFF, 0xD8, 0xFF])],
+  'image/png': [new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])],
+  'image/webp': [new Uint8Array([0x52, 0x49, 0x46, 0x46])], // RIFF header
+};
+
+/**
+ * 验证文件头部魔数是否匹配声明的 MIME 类型
+ */
+function validateMagicBytes(buffer: Buffer, mimeType: string): boolean {
+  const signatures = MAGIC_SIGNATURES[mimeType];
+  if (!signatures) return false;
+
+  return signatures.some((sig) => {
+    if (buffer.length < sig.length) return false;
+    for (let i = 0; i < sig.length; i++) {
+      if (buffer[i] !== sig[i]) return false;
+    }
+    return true;
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getUserFromRequest(request);
     if (!session) {
-      return NextResponse.json({ success: false, error: '未认证', code: 'UNAUTHORIZED' }, { status: 401 });
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
     }
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ success: false, error: '请选择文件', code: 'NO_FILE' }, { status: 400 });
+      return errorResponse('请选择文件', 'NO_FILE', 400);
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json({ success: false, error: '仅支持 JPG/PNG/WebP 格式', code: 'INVALID_TYPE' }, { status: 400 });
+      return errorResponse('仅支持 JPG/PNG/WebP 格式', 'INVALID_TYPE', 400);
     }
 
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ success: false, error: '文件不能超过 500KB', code: 'FILE_TOO_LARGE' }, { status: 400 });
+      return errorResponse('文件不能超过 500KB', 'FILE_TOO_LARGE', 400);
+    }
+
+    // 文件头部魔数验证（防止 MIME 类型伪造）
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (!validateMagicBytes(buffer, file.type)) {
+      return errorResponse('文件内容与声明格式不符，疑似伪造文件', 'INVALID_MAGIC_BYTES', 400);
     }
 
     // 确保上传目录存在
@@ -44,19 +76,16 @@ export async function POST(request: NextRequest) {
     const uniqueName = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${ext}`;
     const filePath = path.join(UPLOAD_DIR, uniqueName);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
     // 返回可访问的 URL
     const url = `/uploads/${uniqueName}`;
 
-    return NextResponse.json({
-      success: true,
-      data: { url, name: uniqueName, size: file.size },
-      message: '上传成功',
-    });
+    return successResponse({
+      url, name: uniqueName, size: file.size,
+    }, '上传成功');
   } catch (error) {
     console.error('文件上传失败:', error);
-    return NextResponse.json({ success: false, error: '上传失败' }, { status: 500 });
+    return errorResponse('上传失败', 'INTERNAL_ERROR', 500);
   }
 }

@@ -1,69 +1,59 @@
 /**
  * 现金流报表页面
- * 展示企业现金流入流出情况 - 支持日期范围选择
+ * 展示企业现金流入流出情况 - 从真实 API 获取数据
  */
 
 'use client';
 
 import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 export default function CashflowReportPage() {
   const [period, setPeriod] = useState('month');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
-
-  // 示例现金流数据
-  const sampleData = {
-    operatingActivities: {
-      cashInflow: 1500000,
-      cashOutflow: 1200000,
-      netCashflow: 300000,
-    },
-    investingActivities: {
-      cashInflow: 200000,
-      cashOutflow: 500000,
-      netCashflow: -300000,
-    },
-    financingActivities: {
-      cashInflow: 800000,
-      cashOutflow: 600000,
-      netCashflow: 200000,
-    },
-    summary: {
-      totalInflow: 2500000,
-      totalOutflow: 2300000,
-      netChange: 200000,
-      openingBalance: 1800000,
-      closingBalance: 2000000,
-    },
-    receivables: {
-      total: 450000,
-      overdue: 80000,
-      overdueRate: 17.8,
-    },
-    payables: {
-      total: 380000,
-      overdue: 50000,
-      overdueRate: 13.2,
-    },
-  };
+  const { toasts, removeToast, toast } = useToast();
 
   async function loadReport() {
     setLoading(true);
+    setError('');
     try {
-      // TODO: 调用 API 获取实际数据
-      // const response = await fetch(`/api/v1/reports/cashflow?startDate=${startDate}&endDate=${endDate}&period=${period}`);
-      // const result = await response.json();
-      // setData(result.data);
-      
-      // 使用示例数据
-      setData(sampleData);
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        period,
+      });
+      const response = await fetch(`/api/v1/reports/cashflow?${params}`);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || '获取数据失败');
+      }
+      const result = await response.json();
+      if (result.success) {
+        setData(result.data);
+      } else {
+        throw new Error(result.error || '数据格式错误');
+      }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : '加载现金流报表失败';
       console.error('加载现金流报表失败:', error);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -71,21 +61,45 @@ export default function CashflowReportPage() {
 
   async function handleExport() {
     if (!data) {
-      alert('请先加载报表数据');
+      toast.error('请先加载报表数据');
       return;
     }
 
     setExporting(true);
     setExportSuccess(false);
-    
+
     try {
-      // TODO: 调用 API 导出报表
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('/api/v1/reports/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportType: 'cashflow',
+          data,
+          period,
+          startDate,
+          endDate,
+          format: 'excel',
+        }),
+      });
+
+      if (!response.ok) throw new Error('导出失败');
+
+      const contentType = response.headers.get('Content-Type');
+      if (contentType && contentType.includes('spreadsheetml')) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `现金流报表_${startDate || 'all'}_${endDate || 'all'}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (error) {
       console.error('导出失败:', error);
-      alert('导出失败，请重试');
+      toast.error('导出失败，请重试');
     } finally {
       setExporting(false);
     }
@@ -143,7 +157,7 @@ export default function CashflowReportPage() {
         )}
       </div>
 
-      {/* 筛选条件 - 始终显示 */}
+      {/* 筛选条件 */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">筛选条件</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -191,6 +205,13 @@ export default function CashflowReportPage() {
         </div>
       </div>
 
+      {/* 错误提示 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-700">
+          {error}
+        </div>
+      )}
+
       {data && (
         <>
           {/* 核心指标 */}
@@ -205,8 +226,8 @@ export default function CashflowReportPage() {
             </div>
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
               <p className="text-sm text-gray-600">净变化</p>
-              <p className={`text-2xl font-bold mt-1 ${data.summary.netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ¥{data.summary.netChange.toLocaleString()}
+              <p className={`text-2xl font-bold mt-1 ${data.summary.netCashflow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ¥{data.summary.netCashflow.toLocaleString()}
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
@@ -285,6 +306,66 @@ export default function CashflowReportPage() {
             </div>
           </div>
 
+          {/* 趋势 - 图表 */}
+          {data.trends && data.trends.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">现金流趋势图表</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.trends}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'inflow') return [`¥${value.toLocaleString()}`, '流入'];
+                        if (name === 'outflow') return [`¥${value.toLocaleString()}`, '流出'];
+                        if (name === 'net') return [`¥${value.toLocaleString()}`, '净额'];
+                        return [value, name];
+                      }}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="inflow" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="inflow" />
+                    <Line type="monotone" dataKey="outflow" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} name="outflow" />
+                    <Line type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="net" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* 趋势 - 明细表格 */}
+          {data.trends && data.trends.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">现金流趋势</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">期间</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">流入</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">流出</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">净额</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {data.trends.map((t: any, i: number) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{t.date}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">¥{t.inflow.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">¥{t.outflow.toLocaleString()}</td>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${t.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ¥{t.net.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* 应收应付 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
@@ -331,11 +412,12 @@ export default function CashflowReportPage() {
       )}
 
       {/* 空状态 */}
-      {!data && !loading && (
+      {!data && !loading && !error && (
         <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
           <p className="text-gray-500 text-lg">设置筛选条件后点击"查询"按钮加载现金流报表数据</p>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

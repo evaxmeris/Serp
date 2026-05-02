@@ -8,7 +8,8 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession } from '@/middleware/auth';
 import { successResponse, createdResponse, errorResponse, notFoundResponse, listResponse } from '@/lib/api-response';
 
 // GET /api/v1/shipments

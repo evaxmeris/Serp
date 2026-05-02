@@ -164,12 +164,12 @@ export default function SupplierEditPage() {
           notes: data.notes || '',
         });
       } else {
-        alert('加载供应商信息失败');
+        toast.error('加载供应商信息失败');
         router.push('/suppliers');
       }
     } catch (error) {
       console.error('Failed to fetch supplier:', error);
-      alert('加载失败');
+      toast.error('加载失败');
       router.push('/suppliers');
     } finally {
       setLoading(false);

@@ -39,6 +39,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ArrowLeft, Edit, Trash2, Save, X, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // ============================================
 // 类型定义
@@ -158,10 +160,11 @@ export default function ProductDetailPage() {
   const [converting, setConverting] = useState(false);
   const [convertedProductId, setConvertedProductId] = useState<string | null>(null);
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   // 编辑表单数据
   const [formData, setFormData] = useState({
-    name: '',
-    nameEn: '',
     brand: '',
     brandEn: '',
     model: '',
@@ -235,11 +238,11 @@ export default function ProductDetailPage() {
           loadAttributeTemplates(data.categoryId);
         }
       } else {
-        alert('加载产品失败：' + result.error);
+        toast.error('加载产品失败：' + result.error);
       }
     } catch (error) {
       console.error('加载产品失败:', error);
-      alert('加载产品失败，请重试');
+      toast.warning('加载产品失败，请重试');
     } finally {
       setLoading(false);
     }
@@ -315,7 +318,7 @@ export default function ProductDetailPage() {
 
       // 验证必填字段
       if (!formData.name || !formData.categoryId) {
-        alert('请填写产品名称和选择品类');
+        toast.warning('请填写产品名称和选择品类');
         return;
       }
 
@@ -353,15 +356,15 @@ export default function ProductDetailPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('保存成功');
+        toast.error('保存成功');
         setMode('view');
         loadProduct(); // 重新加载最新数据
       } else {
-        alert('保存失败：' + result.error);
+        toast.error('保存失败：' + result.error);
       }
     } catch (error) {
       console.error('保存失败:', error);
-      alert('保存失败，请重试');
+      toast.warning('保存失败，请重试');
     } finally {
       setSaving(false);
     }
@@ -380,14 +383,14 @@ export default function ProductDetailPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('删除成功');
+        toast.error('删除成功');
         router.push('/product-research/products'); // 返回列表页
       } else {
-        alert('删除失败：' + result.error);
+        toast.error('删除失败：' + result.error);
       }
     } catch (error) {
       console.error('删除失败:', error);
-      alert('删除失败，请重试');
+      toast.warning('删除失败，请重试');
     } finally {
       setIsDeleteDialogOpen(false);
     }
@@ -411,13 +414,13 @@ export default function ProductDetailPage() {
         setConvertedProductId(result.data.productId);
         // 重新加载产品数据（状态会变为 ARCHIVED）
         await loadProduct();
-        alert(`转化成功！正式产品 SKU: ${result.data.sku}`);
+        toast.error(`转化成功！正式产品 SKU: ${result.data.sku}`);
       } else {
-        alert('转化失败：' + result.error);
+        toast.error('转化失败：' + result.error);
       }
     } catch (error) {
       console.error('转化失败:', error);
-      alert('转化失败，请重试');
+      toast.warning('转化失败，请重试');
     } finally {
       setConverting(false);
       setIsConvertDialogOpen(false);
@@ -518,7 +521,7 @@ export default function ProductDetailPage() {
   // 页面渲染
   // ============================================
 
-  return (
+  return (<>
     <div className="container mx-auto py-6 px-4 max-w-6xl">
       {/* 页面头部 */}
       <div className="flex items-center justify-between mb-6">
@@ -1041,5 +1044,8 @@ export default function ProductDetailPage() {
         </Dialog>
       )}
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

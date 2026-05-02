@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
@@ -151,16 +151,26 @@ export async function POST(
           });
         }
 
-        // 更新库存数量
+        // 更新库存数量（乐观锁）
         const beforeQuantity = inventoryItem.quantity;
         const afterQuantity = beforeQuantity + actualQty;
 
-        await tx.inventoryItem.update({
-          where: { id: inventoryItem.id },
+        const updateResult = await tx.inventoryItem.updateMany({
+          where: { id: inventoryItem.id, version: inventoryItem.version },
           data: {
             quantity: afterQuantity,
             lastInboundDate: new Date(),
+            version: { increment: 1 },
           },
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error('库存数据已被其他操作修改，请重试');
+        }
+
+        // 重新查询库存记录（version 已变）
+        inventoryItem = await tx.inventoryItem.findUniqueOrThrow({
+          where: { id: inventoryItem.id },
         });
 
         // 创建库存流水
@@ -172,7 +182,7 @@ export async function POST(
             type: 'IN',
             quantity: actualQty,
             beforeQuantity,
-            afterQuantity,
+            afterQuantity: inventoryItem.quantity,
             referenceType: 'INBOUND_ORDER',
             referenceId: id,
             note: `入库单 ${order.inboundNo} 入库`,

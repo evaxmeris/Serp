@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
@@ -179,9 +179,10 @@ export async function DELETE(
       );
     }
 
-    // 删除供应商
-    await prisma.supplier.delete({
+    // 软删除供应商（设置 deletedAt）
+    await prisma.supplier.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     return successResponse(null, '供应商删除成功', 'NO_CONTENT');

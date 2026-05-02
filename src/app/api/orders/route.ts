@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession, requirePermission } from '@/middleware/auth';
 import { applyRowLevelFilter } from '@/lib/row-level-filter';
 import {
   successResponse,
@@ -16,6 +17,38 @@ import { orderListQuerySchema } from '@/lib/validators/order';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateOrderSchema } from '@/lib/api-schemas';
 import { generateOrderNo } from '@/lib/id-generator';
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
+}
 
 /**
  * GET /api/orders - 获取订单列表（行级隔离）
@@ -185,6 +218,11 @@ export async function POST(request: NextRequest) {
     }
     const currentUser = session;
 
+    // 权限检查：orders:create
+    const authSession = await getSession(request);
+    const permError = requirePermission(authSession!, 'orders:create');
+    if (permError) return permError;
+
     // 解析并验证请求体
     const body = await request.json();
     const v = validateOrReturn(CreateOrderSchema, body);
@@ -310,6 +348,18 @@ export async function POST(request: NextRequest) {
       itemCount: order.items.length,
       createdAt: order.createdAt,
     };
+
+    // 记录创建订单审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'CREATE_ORDER',
+      entityType: 'ORDER',
+      entityId: order.id,
+      userId: currentUser.id,
+      details: { orderNo: order.orderNo, totalAmount: order.totalAmount.toNumber(), currency: order.currency },
+      ipAddress,
+      userAgent,
+    });
 
     return createdResponse(responseData, '订单创建成功');
   } catch (error) {

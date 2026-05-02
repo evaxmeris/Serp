@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -86,6 +88,8 @@ const STATUS_COLORS: Record<string, string> = {
 export default function OutboundOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [order, setOrder] = useState<OutboundOrder | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -110,7 +114,7 @@ export default function OutboundOrderDetailPage() {
   }, [params.id]);
 
   const handleConfirm = async () => {
-    if (!confirm('确认要发货此出库单吗？')) return;
+    if (!await confirm({ title: '确认操作', description: '确认要发货此出库单吗？' })) return;
 
     try {
       const response = await fetch(`/api/v1/outbound-orders/${params.id}/confirm`, {
@@ -121,19 +125,19 @@ export default function OutboundOrderDetailPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单已确认发货');
+        toast.success('出库单已确认发货');
         fetchOrder();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to confirm outbound order:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     }
   };
 
   const handleCancel = async () => {
-    if (!confirm('确认要取消此出库单吗？')) return;
+    if (!await confirm({ title: '确认操作', description: '确认要取消此出库单吗？' })) return;
 
     try {
       const response = await fetch(`/api/v1/outbound-orders/${params.id}/cancel`, {
@@ -144,14 +148,14 @@ export default function OutboundOrderDetailPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单已取消');
+        toast.success('出库单已取消');
         fetchOrder();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to cancel outbound order:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     }
   };
 
@@ -315,6 +319,8 @@ export default function OutboundOrderDetailPage() {
           </CardContent>
         </Card>
       </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Download,
   Upload,
@@ -37,7 +39,10 @@ import {
 } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import Link from 'next/link';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 import { ProductBatchImportDialog } from '@/components/batch-operations/ProductBatchImportDialog';
 import { ProductBatchExportDialog } from '@/components/batch-operations/ProductBatchExportDialog';
 import { ProductBatchDeleteDialog } from '@/components/batch-operations/ProductBatchDeleteDialog';
@@ -116,6 +121,7 @@ export default function ProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [totalFiltered, setTotalFiltered] = useState(0);
   
@@ -125,6 +131,9 @@ export default function ProductsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   const [editFormData, setEditFormData] = useState<EditFormData>({
     sku: '',
     name: '',
@@ -144,6 +153,12 @@ export default function ProductsPage() {
   const [loadingAttributes, setLoadingAttributes] = useState(false);
   const [attributeValues, setAttributeValues] = useState<AttributeValueState>({});
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // 键盘快捷键
   useEffect(() => {
@@ -171,7 +186,7 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
     loadCategories();
-  }, [search]);
+  }, [debouncedSearch]);
 
   // 加载品类列表
   const loadCategories = async () => {
@@ -284,13 +299,13 @@ export default function ProductsPage() {
 
   // 单个删除
   const handleSingleDelete = async (product: Product) => {
-    if (!confirm(`确定要删除产品 "${product.name}" (${product.sku}) 吗？`)) return;
+    if (!await confirm({ title: '确认删除', description: `确定要删除产品 "${product.name}" (${product.sku}) 吗？` })) return;
     try {
       const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) { fetchProducts(); selectedIds.delete(product.id); setSelectedIds(new Set(selectedIds)); }
-      else { alert(data.error || '删除失败'); }
-    } catch { alert('删除失败'); }
+      else { toast.error(data.error || '删除失败'); }
+    } catch { toast.error('删除失败'); }
   };
 
   // 打开编辑对话框（product 为 null 时表示新建产品）
@@ -474,14 +489,14 @@ export default function ProductsPage() {
     for (const template of requiredTemplates) {
       const value = attributeValues[template.id];
       if (!value || (Array.isArray(value) && value.length === 0)) {
-        alert(`请填写必填属性：${template.name}`);
+        toast.warning(`请填写必填属性：${template.name}`);
         return;
       }
     }
 
     // 验证必填字段
     if (!editFormData.sku || !editFormData.name) {
-      alert('SKU 和产品名称为必填项');
+      toast.error('SKU 和产品名称为必填项');
       return;
     }
 
@@ -542,15 +557,15 @@ export default function ProductsPage() {
 
       const result = await response.json();
       if (result.success) {
-        alert(isNew ? '产品创建成功' : '产品更新成功');
+        toast.error(isNew ? '产品创建成功' : '产品更新成功');
         setEditDialogOpen(false);
         fetchProducts();
       } else {
-        alert(result.error || (isNew ? '创建失败' : '更新失败'));
+        toast.error(result.error || (isNew ? '创建失败' : '更新失败'));
       }
     } catch (error) {
       console.error('Failed to save product:', error);
-      alert('保存失败');
+      toast.error('保存失败');
     }
   };
 
@@ -605,7 +620,7 @@ export default function ProductsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      alert('导出失败');
+      toast.error('导出失败');
       console.error('Export failed:', error);
     }
   };
@@ -624,14 +639,14 @@ export default function ProductsPage() {
 
       const result = await response.json();
       if (result.success) {
-        alert(`删除完成：成功 ${result.success} 个，失败 ${result.failed} 个`);
+        toast.error(`删除完成：成功 ${result.success} 个，失败 ${result.failed} 个`);
         setSelectedIds(new Set());
         fetchProducts();
       } else {
-        alert('删除失败：' + (result.error || '未知错误'));
+        toast.error('删除失败：' + (result.error || '未知错误'));
       }
     } catch (error) {
-      alert('删除失败');
+      toast.error('删除失败');
       console.error('Delete failed:', error);
     }
   };
@@ -639,7 +654,10 @@ export default function ProductsPage() {
   const selectedCount = selectedIds.size;
   const filteredProducts = getFilteredProducts();
 
-  return (
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(filteredProducts, 'sku');
+
+  return (<>
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
@@ -712,8 +730,19 @@ export default function ProductsPage() {
 
           {/* 加载状态 */}
           {loading && (
-            <div className="text-center py-8 text-muted-foreground">
-              加载中...
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-5 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                </div>
+              ))}
             </div>
           )}
 
@@ -721,11 +750,11 @@ export default function ProductsPage() {
           {!loading && (
             <>
               {filteredProducts.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <div className="text-4xl mb-2">📦</div>
-                  <p>暂无产品数据</p>
-                  {categoryFilter !== 'all' && <p className="text-sm mt-1">当前筛选条件已生效</p>}
-                </div>
+                <EmptyState
+                  icon={<div className="text-4xl">📦</div>}
+                  title="暂无产品数据"
+                  description={categoryFilter !== 'all' ? "当前筛选条件已生效" : "还没有任何产品记录，创建一款产品开始使用"}
+                />
               ) : (
                 <div className="border rounded-md">
                   <Table>
@@ -737,17 +766,53 @@ export default function ProductsPage() {
                             onCheckedChange={toggleSelectAll}
                           />
                         </TableHead>
-                        <TableHead>SKU</TableHead>
-                        <TableHead>产品名称</TableHead>
-                        <TableHead>品类</TableHead>
-                        <TableHead>成本价</TableHead>
-                        <TableHead>销售价</TableHead>
-                        <TableHead>状态</TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('sku')}
+                        >
+                          SKU
+                          <SortIndicator field="sku" sortConfig={sortConfig} />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('name')}
+                        >
+                          产品名称
+                          <SortIndicator field="name" sortConfig={sortConfig} />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('categoryName')}
+                        >
+                          品类
+                          <SortIndicator field="categoryName" sortConfig={sortConfig} />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('costPrice')}
+                        >
+                          成本价
+                          <SortIndicator field="costPrice" sortConfig={sortConfig} />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('salePrice')}
+                        >
+                          销售价
+                          <SortIndicator field="salePrice" sortConfig={sortConfig} />
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none"
+                          onClick={() => requestSort('status')}
+                        >
+                          状态
+                          <SortIndicator field="status" sortConfig={sortConfig} />
+                        </TableHead>
                         <TableHead className="text-right w-28">操作</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredProducts.map(product => (
+                      {sorted.map(product => (
                         <TableRow key={product.id} className={selectedIds.has(product.id) ? 'bg-muted/50' : ''}>
                           <TableCell>
                             <Checkbox
@@ -1018,5 +1083,8 @@ export default function ProductsPage() {
       {/* 给底部操作栏留空间 */}
       {selectedCount > 0 && <div className="h-20" />}
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

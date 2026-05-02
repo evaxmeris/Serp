@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Payment {
   id: string; type: string; amount: number; currency: string;
@@ -20,6 +22,8 @@ interface Payment {
 
 export default function PaymentsPage() {
   const router = useRouter();
+  const { confirm, ConfirmDialog } = useConfirm();
+  const { toast, toasts, removeToast } = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -72,8 +76,9 @@ export default function PaymentsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定删除？')) return;
+    if (!await confirm({ title: '确认删除', description: '确定删除此收付款记录吗？' })) return;
     await fetch(`/api/v1/payments/${id}`, { method: 'DELETE' });
+    toast.success('删除成功');
     fetchPayments();
   };
 
@@ -128,6 +133,8 @@ export default function PaymentsPage() {
         </div>
         <DialogFooter><Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button><Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button></DialogFooter>
       </DialogContent></Dialog>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

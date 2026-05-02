@@ -46,6 +46,8 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // Tab 定义
 type TabKey = 'business' | 'system' | 'security' | 'notification' | 'data' | 'appearance' | 'sync';
@@ -82,6 +84,8 @@ const mockConfig = {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('business');
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [saved, setSaved] = useState(false);
   const [syncPlatforms, setSyncPlatforms] = useState<any[]>([]);
   const [syncLoading, setSyncLoading] = useState(true);
@@ -104,10 +108,10 @@ export default function SettingsPage() {
       const msg = params.get('msg');
       if (oauth === 'success' && msg) {
         setActiveTab('sync');
-        setTimeout(() => alert(msg), 500);
+        setTimeout(() => toast.success(msg), 500);
       } else if (oauth === 'error' && msg) {
         setActiveTab('sync');
-        setTimeout(() => alert('授权失败：' + msg), 500);
+        setTimeout(() => toast.error('授权失败：' + msg), 500);
       }
       // 清理 URL 参数
       if (oauth) {
@@ -165,14 +169,14 @@ export default function SettingsPage() {
       });
       const data = await response.json();
       if (data.success) {
-        alert(`${selectedPlatform.name} 配置已更新`);
+        toast.success(`${selectedPlatform.name} 配置已更新`);
         setConfigDialogOpen(false);
         loadSyncStatus();
       } else {
-        alert(`保存失败：${data.error}`);
+        toast.error(`保存失败：${data.error}`);
       }
     } catch {
-      alert('请求失败');
+      toast.error('请求失败');
     }
   };
 
@@ -481,14 +485,51 @@ export default function SettingsPage() {
           </Dialog>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }
 
 /**
  * 业务设置 - 币种、贸易条款、付款方式、物流方式
+ * 从 API 加载真实数据
  */
 function BusinessSettings() {
+  const [config, setConfig] = useState<typeof mockConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/v1/settings');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setConfig(json.data);
+        }
+      } catch (err) {
+        console.error('加载系统设置失败:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent>
+            <div className="text-center py-8 text-muted-foreground">加载中...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const data = config || mockConfig;
+
   return (
     <div className="space-y-6">
       {/* 币种设置 */}
@@ -506,7 +547,7 @@ function BusinessSettings() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            {mockConfig.currencies.map((c) => (
+            {data.currencies.map((c) => (
               <div
                 key={c.code}
                 className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"
@@ -540,7 +581,7 @@ function BusinessSettings() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {mockConfig.tradeTerms.map((t) => (
+            {data.tradeTerms.map((t) => (
               <Badge
                 key={t}
                 variant="outline"
@@ -568,7 +609,7 @@ function BusinessSettings() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2">
-            {mockConfig.paymentMethods.map((m) => (
+            {data.paymentMethods.map((m) => (
               <div
                 key={m}
                 className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"
@@ -596,7 +637,7 @@ function BusinessSettings() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2">
-            {mockConfig.shippingMethods.map((m) => (
+            {data.shippingMethods.map((m) => (
               <div
                 key={m}
                 className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"

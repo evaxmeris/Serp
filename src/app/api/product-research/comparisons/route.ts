@@ -7,9 +7,8 @@
  * @method DELETE - 删除对比
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse, createdResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -80,20 +79,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: comparisons,
-    });
+    return successResponse(comparisons);
   } catch (error) {
     console.error('Error fetching comparisons:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取对比列表失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取对比列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -159,13 +148,7 @@ async function getComparisonDetail(comparisonId: string) {
   ]);
 
   if (!comparison) {
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '对比不存在' 
-      },
-      { status: 404 }
-    );
+    return notFoundResponse('对比');
   }
 
   // 如果有品类ID，获取具体品类
@@ -230,13 +213,7 @@ async function getComparisonDetail(comparisonId: string) {
   }));
 
   if (!comparison) {
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '对比不存在' 
-      },
-      { status: 404 }
-    );
+    return notFoundResponse('对比');
   }
 
   // 构建完整的对比对象
@@ -249,13 +226,7 @@ async function getComparisonDetail(comparisonId: string) {
   // 生成差异分析
   const diffAnalysis = generateDiffAnalysis(fullComparison);
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      ...comparison,
-      diffAnalysis,
-    },
-  });
+  return successResponse({ ...comparison, diffAnalysis });
 }
 
 // 生成差异分析报告
@@ -385,23 +356,11 @@ export async function POST(request: NextRequest) {
 
     // 验证必填字段
     if (!name || !products || !Array.isArray(products) || products.length === 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '对比名称和对比产品为必填项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('对比名称和对比产品为必填项', 'VALIDATION_ERROR', 400);
     }
 
     if (products.length < 2) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '至少需要两个产品才能进行对比' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('至少需要两个产品才能进行对比', 'VALIDATION_ERROR', 400);
     }
 
     // 验证所有产品是否存在
@@ -417,13 +376,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingProducts.length !== productIds.length) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '部分产品不存在' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('部分产品不存在', 'VALIDATION_ERROR', 400);
     }
 
     // 如果指定了品类，验证产品是否属于该品类
@@ -433,24 +386,12 @@ export async function POST(request: NextRequest) {
       });
 
       if (!category) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: '品类不存在' 
-          },
-          { status: 400 }
-        );
+        return errorResponse('品类不存在', 'VALIDATION_ERROR', 400);
       }
 
       const invalidProducts = existingProducts.filter(p => p.categoryId !== categoryId);
       if (invalidProducts.length > 0) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: '部分产品不属于指定品类' 
-          },
-          { status: 400 }
-        );
+        return errorResponse('部分产品不属于指定品类', 'VALIDATION_ERROR', 400);
       }
     }
 
@@ -513,24 +454,10 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: comparison,
-        message: '产品对比创建成功',
-      },
-      { status: 201 }
-    );
+    return createdResponse(comparison, '产品对比创建成功');
   } catch (error) {
     console.error('Error creating comparison:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '创建产品对比失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('创建产品对比失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -549,13 +476,7 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '对比 ID 为必填项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('对比 ID 为必填项', 'VALIDATION_ERROR', 400);
     }
 
     // 检查对比是否存在
@@ -564,13 +485,7 @@ export async function DELETE(request: NextRequest) {
     });
 
     if (!comparison) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '对比不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('对比');
     }
 
     // 删除对比（对比项会级联删除）
@@ -578,19 +493,9 @@ export async function DELETE(request: NextRequest) {
       where: { id },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: '对比删除成功',
-    });
+    return successResponse(null, '对比删除成功');
   } catch (error) {
     console.error('Error deleting comparison:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '删除对比失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('删除对比失败', 'INTERNAL_ERROR', 500);
   }
 }

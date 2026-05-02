@@ -27,12 +27,29 @@ const STATUS_MAP: Record<string, OrderStatus> = {
   'REFUNDED': OrderStatus.CANCELLED,
   
   // 阿里国际站特定状态
-  'WAIT_BUYER_PAY': OrderStatus.PENDING,
-  'WAIT_SELLER_SEND_GOODS': OrderStatus.CONFIRMED,
-  'WAIT_BUYER_CONFIRM_GOODS': OrderStatus.SHIPPED,
+  // TOP API 状态（alibaba.seller.order.list/order.get 返回的 trade_status）
+  'unpay': OrderStatus.PENDING,
+  'paying': OrderStatus.PENDING,
+  'paid': OrderStatus.CONFIRMED,
+  'relating': OrderStatus.CONFIRMED,
+  'captured': OrderStatus.CONFIRMED,
+  'undeliver': OrderStatus.CONFIRMED,
+  'delivering': OrderStatus.SHIPPED,
+  'wait_confirm_receipt': OrderStatus.SHIPPED,
+  'trade_success': OrderStatus.COMPLETED,
+  'intention_processing': OrderStatus.PENDING,
+  'trade_close': OrderStatus.CANCELLED,
+  'wait_confirm_modify': OrderStatus.PENDING,
+  'charge_back': OrderStatus.CANCELLED,
+  'frozen': OrderStatus.PENDING,
+  'to_be_audited': OrderStatus.PENDING,
+  // 旧兼容
   'TRADE_FINISHED': OrderStatus.COMPLETED,
   'TRADE_CLOSED': OrderStatus.CANCELLED,
   'TRADE_CANCELED': OrderStatus.CANCELLED,
+  'WAIT_BUYER_PAY': OrderStatus.PENDING,
+  'WAIT_SELLER_SEND_GOODS': OrderStatus.CONFIRMED,
+  'WAIT_BUYER_CONFIRM_GOODS': OrderStatus.SHIPPED,
   
   // TikTok Shop 特定状态（预留）
   'UNPAID': OrderStatus.PENDING,
@@ -48,7 +65,6 @@ const STATUS_MAP: Record<string, OrderStatus> = {
   
   // Shopify 特定状态（预留）
   'open': OrderStatus.PENDING,
-  'paid': OrderStatus.CONFIRMED,
   'fulfilled': OrderStatus.SHIPPED,
   'partially_fulfilled': OrderStatus.SHIPPED,
 };

@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { applyRowLevelFilter } from '@/lib/row-level-filter';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreatePurchaseOrderSchema } from '@/lib/api-schemas';

@@ -1,9 +1,41 @@
-import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth-unified';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateProductSchema } from '@/lib/api-schemas';
+import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response';
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
+}
 
 // CODE-002: 使用 withAuth() 高阶函数统一认证逻辑
 // GET /api/products/[id] - 获取产品详情
@@ -16,19 +48,13 @@ export const GET = withAuth(async (request, session) => {
     });
 
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('产品');
     }
 
-    return NextResponse.json(product);
+    return successResponse(product);
   } catch (error) {
     console.error('Error fetching product:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch product' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch product', 'INTERNAL_ERROR');
   }
 });
 
@@ -90,13 +116,22 @@ export const PUT = withAuth(async (request, session) => {
       );
     }
 
-    return NextResponse.json({ success: true, product });
+    // 记录更新产品审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'UPDATE_PRODUCT',
+      entityType: 'PRODUCT',
+      entityId: id,
+      userId: session.id,
+      details: { sku: product.sku, name: product.name },
+      ipAddress,
+      userAgent,
+    });
+
+    return successResponse(product, '产品更新成功');
   } catch (error) {
     console.error('Error updating product:', error);
-    return NextResponse.json(
-      { error: 'Failed to update product' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to update product', 'INTERNAL_ERROR');
   }
 });
 
@@ -104,16 +139,14 @@ export const PUT = withAuth(async (request, session) => {
 export const DELETE = withAuth(async (request, session) => {
   try {
     const id = request.nextUrl.pathname.split('/').pop()!;
-    await prisma.product.delete({
+    await prisma.product.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse(null, '产品删除成功');
   } catch (error) {
     console.error('Error deleting product:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete product' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to delete product', 'INTERNAL_ERROR');
   }
 });

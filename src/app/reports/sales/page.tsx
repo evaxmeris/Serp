@@ -1,56 +1,62 @@
 /**
  * 销售报表页面
  * 展示销售数据和分析 - 支持日期范围选择
+ * 从真实 API 获取数据
  */
 
 'use client';
 
 import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
 export default function SalesReportPage() {
   const [period, setPeriod] = useState('month');
   const [groupBy, setGroupBy] = useState('category');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
-
-  // 示例销售数据
-  const sampleData = {
-    summary: {
-      totalRevenue: 2580000,
-      totalOrders: 1250,
-      totalQuantity: 8500,
-      averageOrderValue: 2064,
-      totalCustomers: 380
-    },
-    groupedData: [
-      { name: '电子产品', revenue: 850000, orders: 420, quantity: 2800 },
-      { name: '服装服饰', revenue: 620000, orders: 380, quantity: 3200 },
-      { name: '家居用品', revenue: 480000, orders: 250, quantity: 1500 },
-      { name: '美妆护肤', revenue: 380000, orders: 150, quantity: 800 },
-      { name: '其他', revenue: 250000, orders: 50, quantity: 200 }
-    ],
-    trends: [
-      { date: '2026-03-01', revenue: 85000, orders: 42 },
-      { date: '2026-03-05', revenue: 92000, orders: 45 },
-      { date: '2026-03-10', revenue: 78000, orders: 38 },
-      { date: '2026-03-15', revenue: 105000, orders: 52 }
-    ]
-  };
+  const { toasts, removeToast, toast } = useToast();
 
   async function loadReport() {
     setLoading(true);
+    setError('');
     try {
-      // TODO: 调用 API 获取实际数据
-      // const response = await fetch(`/api/v1/reports/sales?startDate=${startDate}&endDate=${endDate}&period=${period}&groupBy=${groupBy}`);
-      // const result = await response.json();
-      // setData(result.data);
-      setData(sampleData);
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        period,
+        groupBy,
+      });
+      const response = await fetch(`/api/v1/reports/sales?${params}`);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || '获取数据失败');
+      }
+      const result = await response.json();
+      if (result.success) {
+        setData(result.data);
+      } else {
+        throw new Error(result.error || '数据格式错误');
+      }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : '加载销售报表失败';
       console.error('加载销售报表失败:', error);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -58,19 +64,45 @@ export default function SalesReportPage() {
 
   async function handleExport() {
     if (!data) {
-      alert('请先加载报表数据');
+      toast.error('请先加载报表数据');
       return;
     }
     setExporting(true);
     setExportSuccess(false);
     try {
-      // TODO: 调用 API 导出报表
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('/api/v1/reports/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportType: 'sales',
+          data,
+          period,
+          startDate,
+          endDate,
+          format: 'excel',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('导出请求失败');
+      }
+
+      const contentType = response.headers.get('Content-Type');
+      if (contentType && contentType.includes('spreadsheetml')) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `销售报表_${startDate || 'all'}_${endDate || 'all'}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (error) {
       console.error('导出失败:', error);
-      alert('导出失败，请重试');
+      toast.error('导出失败，请重试');
     } finally {
       setExporting(false);
     }
@@ -79,7 +111,7 @@ export default function SalesReportPage() {
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('zh-CN', {
       style: 'currency',
-      currency: 'CNY'
+      currency: 'CNY',
     }).format(value);
   }
 
@@ -135,7 +167,7 @@ export default function SalesReportPage() {
         )}
       </div>
 
-      {/* 筛选条件 - 始终显示 */}
+      {/* 筛选条件 */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">筛选条件</h2>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -163,7 +195,6 @@ export default function SalesReportPage() {
               <option value="category">按品类</option>
               <option value="product">按产品</option>
               <option value="customer">按客户</option>
-              <option value="salesRep">按销售员</option>
             </select>
           </div>
           <div>
@@ -196,6 +227,13 @@ export default function SalesReportPage() {
         </div>
       </div>
 
+      {/* 错误提示 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* 关键指标卡片 */}
       {data && (
         <>
@@ -222,48 +260,148 @@ export default function SalesReportPage() {
             </div>
           </div>
 
-          {/* 分组数据表格 */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              按{groupBy === 'category' ? '品类' : groupBy === 'product' ? '产品' : groupBy === 'customer' ? '客户' : '销售员'}统计
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">名称</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">销售额</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">订单数</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">数量</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">占比</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {data.groupedData.map((item: any, index: number) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(item.revenue)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.orders}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {((item.revenue / data.summary.totalRevenue) * 100).toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* 品类/产品分布 BarChart */}
+          {data.groupedData && data.groupedData.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                按{groupBy === 'category' ? '品类' : groupBy === 'product' ? '产品' : '客户'}分布
+              </h2>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.groupedData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'revenue') return [formatCurrency(value), '销售额'];
+                        return [value, name === 'orders' ? '订单数' : '数量'];
+                      }}
+                    />
+                    <Bar dataKey="revenue" fill="#3b82f6" name="revenue" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="orders" fill="#22c55e" name="orders" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 趋势图表 */}
-          {data.trends && (
+          {/* 分组数据表格 */}
+          {data.groupedData && data.groupedData.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                按{groupBy === 'category' ? '品类' : groupBy === 'product' ? '产品' : '客户'}统计
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">名称</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">销售额</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">订单数</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">数量</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">占比</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {data.groupedData.map((item: any, index: number) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(item.revenue)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.orders}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {item.proportion || ((item.revenue / data.summary.totalRevenue) * 100).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Top 产品 */}
+          {data.topProducts && data.topProducts.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Top 产品</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">排名</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">产品名称</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">销售额</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">销量</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {data.topProducts.map((item: any, index: number) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">{index + 1}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(item.revenue)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.orders}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 销售额趋势 LineChart */}
+          {data.trends && data.trends.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">销售趋势</h2>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.trends}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'revenue') return [formatCurrency(value), '销售额'];
+                        if (name === 'orders') return [value, '订单数'];
+                        return [value, name];
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={{ fill: '#3b82f6', r: 3 }}
+                      activeDot={{ r: 5 }}
+                      name="revenue"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="orders"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      dot={{ fill: '#22c55e', r: 3 }}
+                      activeDot={{ r: 5 }}
+                      name="orders"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* 趋势表格 */}
+          {data.trends && data.trends.length > 0 && (
             <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">销售趋势</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">日期</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">期间</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">销售额</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">订单数</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">日均订单</th>
@@ -287,11 +425,12 @@ export default function SalesReportPage() {
       )}
 
       {/* 空状态 */}
-      {!data && !loading && (
+      {!data && !loading && !error && (
         <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
           <p className="text-gray-500 text-lg">设置筛选条件后点击"查询"按钮加载销售报表数据</p>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import GlobalSearch from '@/components/ui/global-search';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -15,6 +16,7 @@ import {
   BarChart3,
   Settings,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   Menu,
   Search,
@@ -34,6 +36,7 @@ import {
   Warehouse,
   Globe,
   RefreshCw,
+  History,
 } from 'lucide-react';
 
 export type UserRole =
@@ -57,12 +60,12 @@ export interface MenuGroup {
 }
 
 /**
- * 完整菜单配置 - 12 个一级模块
- * 外贸ERP标准架构：仪表盘→客户→供应商→产品→产品开发→报价→订单→采购→仓储物流→财务管理→报表→系统设置
+ * 完整菜单配置 - 8 个一级模块
+ * 按业务性质分类：总览→产品中心→业务中心→供应链→仓储物流→财务管理→报表中心→系统设置
  */
 const menuConfig: MenuGroup[] = [
   {
-    group: '仪表盘',
+    group: '总览',
     items: [
       {
         key: 'dashboard',
@@ -74,31 +77,7 @@ const menuConfig: MenuGroup[] = [
     ],
   },
   {
-    group: '客户管理',
-    items: [
-      {
-        key: 'customers',
-        label: '客户列表',
-        icon: Users,
-        href: '/customers',
-        roles: ['ADMIN', 'SALES'],
-      },
-    ],
-  },
-  {
-    group: '供应商管理',
-    items: [
-      {
-        key: 'suppliers',
-        label: '供应商列表',
-        icon: Building2,
-        href: '/suppliers',
-        roles: ['ADMIN', 'PURCHASING'],
-      },
-    ],
-  },
-  {
-    group: '产品管理',
+    group: '产品中心',
     items: [
       {
         key: 'products',
@@ -121,11 +100,6 @@ const menuConfig: MenuGroup[] = [
         href: '/product-research/templates',
         roles: ['ADMIN', 'SALES'],
       },
-    ],
-  },
-  {
-    group: '产品开发',
-    items: [
       {
         key: 'research-dashboard',
         label: '调研看板',
@@ -164,8 +138,15 @@ const menuConfig: MenuGroup[] = [
     ],
   },
   {
-    group: '报价管理',
+    group: '业务中心',
     items: [
+      {
+        key: 'customers',
+        label: '客户列表',
+        icon: Users,
+        href: '/customers',
+        roles: ['ADMIN', 'SALES'],
+      },
       {
         key: 'quotations',
         label: '报价列表',
@@ -173,11 +154,6 @@ const menuConfig: MenuGroup[] = [
         href: '/quotations',
         roles: ['ADMIN', 'SALES'],
       },
-    ],
-  },
-  {
-    group: '订单管理',
-    items: [
       {
         key: 'orders',
         label: '订单列表',
@@ -188,8 +164,15 @@ const menuConfig: MenuGroup[] = [
     ],
   },
   {
-    group: '采购管理',
+    group: '供应链',
     items: [
+      {
+        key: 'suppliers',
+        label: '供应商列表',
+        icon: Building2,
+        href: '/suppliers',
+        roles: ['ADMIN', 'PURCHASING'],
+      },
       {
         key: 'purchase-orders',
         label: '采购订单',
@@ -203,6 +186,20 @@ const menuConfig: MenuGroup[] = [
         icon: Inbox,
         href: '/inbound-orders',
         roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
+      },
+      {
+        key: 'production-records',
+        label: '生产管理',
+        icon: Package,
+        href: '/production',
+        roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
+      },
+      {
+        key: 'quality-checks',
+        label: '质检管理',
+        icon: ShieldCheck,
+        href: '/quality',
+        roles: ['ADMIN', 'WAREHOUSE'],
       },
     ],
   },
@@ -249,6 +246,13 @@ const menuConfig: MenuGroup[] = [
   {
     group: '财务管理',
     items: [
+      {
+        key: 'invoices',
+        label: '发票管理',
+        icon: FileText,
+        href: '/invoices',
+        roles: ['ADMIN', 'SALES'],
+      },
       {
         key: 'finance',
         label: '财务管理',
@@ -316,6 +320,13 @@ const menuConfig: MenuGroup[] = [
         roles: ['ADMIN'],
       },
       {
+        key: 'audit-logs',
+        label: '审计日志',
+        icon: History,
+        href: '/settings/audit-logs',
+        roles: ['ADMIN'],
+      },
+      {
         key: 'settings',
         label: '系统配置',
         icon: Settings,
@@ -356,6 +367,11 @@ export default function Sidebar({
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
   const [isMobileOpen, setIsMobileOpen] = useState(mobileOpen);
+  // 手机端打开侧边栏时，强制展开显示文字
+  const effectiveCollapsed = isMobileOpen ? false : isCollapsed;
+  // 分组折叠状态 - 默认展开所有分组
+  const allGroupNames = menuConfig.map(g => g.group);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(allGroupNames));
 
   useEffect(() => {
     setIsCollapsed(collapsed);
@@ -406,6 +422,85 @@ export default function Sidebar({
     router.push(href);
   };
 
+  // 切换分组展开/折叠
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupName)) {
+        next.delete(groupName);
+      } else {
+        next.add(groupName);
+      }
+      return next;
+    });
+  };
+
+  const navRef = useRef<HTMLDivElement>(null);
+
+  // 初始化分组状态 + 自动展开当前页所在分组 + 滚动到可见位置
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    // 找到当前路径匹配的分组
+    let activeGroup: string | null = null;
+    for (const group of filteredMenu) {
+      for (const item of group.items) {
+        if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+          activeGroup = group.group;
+          break;
+        }
+      }
+      if (activeGroup) break;
+    }
+    
+    const initialExpanded = new Set<string>();
+    if (isMobile && activeGroup) {
+      // 手机端只展开当前激活的分组
+      initialExpanded.add(activeGroup);
+    } else if (!isMobile) {
+      // 桌面端全展开
+      allGroupNames.forEach(g => initialExpanded.add(g));
+    }
+    setExpandedGroups(initialExpanded);
+    
+    // 滚动到激活项
+    setTimeout(() => {
+      if (navRef.current) {
+        const activeEl = navRef.current.querySelector('[aria-current="page"]');
+        if (activeEl) {
+          activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }
+    }, 100);
+  }, []); // 只在挂载时执行
+
+  // 路径变化时自动展开并滚动到激活菜单
+  useEffect(() => {
+    if (!pathname) return;
+    // 找到当前路径匹配的分组
+    for (const group of filteredMenu) {
+      const hasActive = group.items.some(
+        item => pathname === item.href || pathname.startsWith(item.href + '/')
+      );
+      if (hasActive) {
+        setExpandedGroups(prev => {
+          const next = new Set(prev);
+          next.add(group.group);
+          return next;
+        });
+        // 滚动到激活项
+        setTimeout(() => {
+          if (navRef.current) {
+            const activeEl = navRef.current.querySelector('[aria-current="page"]');
+            if (activeEl) {
+              activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }
+        }, 100);
+        break;
+      }
+    }
+  }, [pathname]);
+
   return (
     <>
       {isMobileOpen && (
@@ -419,63 +514,80 @@ export default function Sidebar({
       <aside
         className={cn(
           'fixed left-0 top-0 z-40 flex flex-col bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 transition-all duration-300 ease-in-out h-screen pt-16',
-          isCollapsed ? 'w-16' : 'w-64',
+          effectiveCollapsed ? 'w-16' : 'w-max max-w-[220px] lg:w-64',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           className
         )}
         role="navigation"
         aria-label="侧边导航"
       >
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
-          {filteredMenu.map((group) => (
-            <div key={group.group} className="mb-4">
-              {!isCollapsed && (
-                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-3 mb-2">
-                  {group.group}
-                </div>
-              )}
-              <ul className="space-y-1">
-                {(() => {
-                  const matchingItems = group.items.filter(
-                    (item) => pathname === item.href || pathname.startsWith(item.href + '/')
-                  );
-                  const bestMatch = matchingItems.length > 0
-                    ? matchingItems.reduce((a, b) => a.href.length > b.href.length ? a : b)
-                    : null;
+        <nav ref={navRef} className="flex-1 overflow-y-auto py-2 px-3">
+          {filteredMenu.map((group) => {
+            const isExpanded = expandedGroups.has(group.group);
+            // 取第一个菜单项的图标作为分组图标
+            const GroupIcon = group.items[0]?.icon;
+            return (
+              <div key={group.group} className="mb-1">
+                {!effectiveCollapsed && (
+                  <button
+                    onClick={() => toggleGroup(group.group)}
+                    className="flex items-center gap-2 w-full text-base font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider border-l-[3px] border-blue-400/60 pl-[9px] pr-3 py-2 rounded-r-lg bg-zinc-50/80 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    {GroupIcon && <GroupIcon className="h-5 w-5 flex-shrink-0" />}
+                    <span className="flex-1 text-left">{group.group}</span>
+                    <ChevronDown
+                      className={cn(
+                        'h-3.5 w-3.5 transition-transform duration-200',
+                        isExpanded ? 'rotate-0' : '-rotate-90'
+                      )}
+                    />
+                  </button>
+                )}
+                {isExpanded && (
+                  <ul className="space-y-1">
+                    {(() => {
+                      const matchingItems = group.items.filter(
+                        (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+                      );
+                      const bestMatch = matchingItems.length > 0
+                        ? matchingItems.reduce((a, b) => a.href.length > b.href.length ? a : b)
+                        : null;
 
-                  return group.items.map((item) => {
-                    const isActive = bestMatch?.key === item.key;
-                    return (
-                      <li key={item.key}>
-                        <button
-                          onClick={() => handleMenuClick(item.href)}
-                          className={cn(
-                            'flex items-center w-full rounded-lg transition-all duration-200 group',
-                            isActive
-                              ? 'bg-blue-500 text-white shadow-sm'
-                              : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800',
-                            isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2.5 gap-3'
-                          )}
-                          title={isCollapsed ? item.label : undefined}
-                          aria-current={isActive ? 'page' : undefined}
-                          aria-label={isCollapsed ? item.label : undefined}
-                        >
-                          <div className="flex-shrink-0">
-                            <item.icon className="h-5 w-5" />
-                          </div>
-                          {!isCollapsed && (
-                            <span className="text-sm font-medium whitespace-nowrap">
-                              {item.label}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  });
-                })()}
-              </ul>
-            </div>
-          ))}
+                      return group.items.map((item) => {
+                        const isActive = bestMatch?.key === item.key;
+                        return (
+                          <li key={item.key}>
+                            <button
+                              onClick={() => handleMenuClick(item.href)}
+                              className={cn(
+                                'flex items-center w-full rounded-lg transition-all duration-200 group',
+                                isActive
+                                  ? 'bg-blue-500 text-white shadow-sm'
+                                  : 'text-gray-900 dark:text-gray-100 hover:bg-zinc-100 dark:hover:bg-zinc-800',
+                                effectiveCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2.5 gap-2',
+                              )}
+                              title={effectiveCollapsed ? item.label : undefined}
+                              aria-current={isActive ? 'page' : undefined}
+                              aria-label={effectiveCollapsed ? item.label : undefined}
+                            >
+                              <div className="flex-shrink-0">
+                                <item.icon className="h-5 w-5" />
+                              </div>
+                              {!effectiveCollapsed && (
+                                <span className="text-sm font-medium whitespace-nowrap">
+                                  {item.label}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      });
+                    })()}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="border-t border-zinc-200 dark:border-zinc-800 p-3">

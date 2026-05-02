@@ -2,8 +2,8 @@
  * 产品批量删除 API
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
+import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { BatchDeleteSchema } from '@/lib/api-schemas';

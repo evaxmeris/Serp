@@ -7,9 +7,8 @@
  * @method PUT - 批量更新产品属性值
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse, createdResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -33,13 +32,7 @@ export async function GET(request: NextRequest) {
 
     // 验证必填参数
     if (!productId && !categoryId) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'productId 或 categoryId 至少提供一个' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('productId 或 categoryId 至少提供一个', 'VALIDATION_ERROR', 400);
     }
 
     const where: any = {};
@@ -128,20 +121,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: filteredValues,
-    });
+    return successResponse(filteredValues);
   } catch (error) {
     console.error('Error fetching attributes:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取属性值失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取属性值失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -163,13 +146,7 @@ export async function POST(request: NextRequest) {
 
     // 验证必填参数
     if (!productId || !attributes || !Array.isArray(attributes)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'productId 和 attributes 为必填项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('productId 和 attributes 为必填项', 'VALIDATION_ERROR', 400);
     }
 
     // 验证产品是否存在
@@ -178,13 +155,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!product) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '产品调研不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('产品调研');
     }
 
     // 使用事务批量创建/更新属性值
@@ -235,21 +206,10 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
-      success: true,
-      data: results,
-      message: `成功保存 ${results.length} 个属性值`,
-    });
+    return successResponse(results, `成功保存 ${results.length} 个属性值`);
   } catch (error) {
     console.error('Error saving attributes:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '保存属性值失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('保存属性值失败', 'INTERNAL_ERROR', 500);
   }
 }
 

@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { quotationListQuerySchema } from '@/lib/validators/quotation';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateQuotationSchema } from '@/lib/api-schemas';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { successResponse, listResponse, createdResponse, errorResponse, validationErrorResponse, notFoundResponse } from '@/lib/api-response';
 
 // GET /api/quotations - 获取报价列表（支持分页、筛选、搜索）- 需要认证
 export async function GET(request: Request) {
@@ -11,10 +11,7 @@ export async function GET(request: Request) {
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { searchParams } = new URL(request.url);
@@ -81,27 +78,18 @@ export async function GET(request: Request) {
       prisma.quotation.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: quotations,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+    return listResponse(quotations, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
     console.error('Error fetching quotations:', error);
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Invalid query parameters' },
-        { status: 400 }
-      );
+      return errorResponse('无效的查询参数', 'VALIDATION_ERROR', 400);
     }
-    return NextResponse.json(
-      { error: 'Failed to fetch quotations' },
-      { status: 500 }
-    );
+    return errorResponse('获取报价列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -111,10 +99,7 @@ export async function POST(request: Request) {
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const body = await request.json();
@@ -168,18 +153,12 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(quotation, { status: 201 });
+    return createdResponse(quotation, '报价单创建成功');
   } catch (error) {
     console.error('Error creating quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed' },
-        { status: 400 }
-      );
+      return errorResponse('验证失败', 'VALIDATION_ERROR', 400);
     }
-    return NextResponse.json(
-      { error: 'Failed to create quotation' },
-      { status: 500 }
-    );
+    return errorResponse('创建报价失败', 'INTERNAL_ERROR', 500);
   }
 }

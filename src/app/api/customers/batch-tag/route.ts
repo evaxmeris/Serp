@@ -2,8 +2,7 @@
  * 客户批量打标签 API
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { BatchTagSchema } from '@/lib/api-schemas';
@@ -17,10 +16,7 @@ export async function POST(request: Request) {
     // 认证检查
     const user = await getCurrentUser();
     if (!user || !['ADMIN', 'SALES'].includes(user.role)) {
-      return NextResponse.json(
-        { error: '需要客户管理权限' },
-        { status: 403 }
-      );
+      return forbiddenResponse('需要客户管理权限');
     }
 
     // 解析请求数据
@@ -46,16 +42,9 @@ export async function POST(request: Request) {
     };
 
     // TODO: 批量标签功能待实现 - tags 字段未添加到 schema
-    return NextResponse.json({
-      success: false,
-      message: '批量标签功能暂未实现',
-      results,
-    });
+    return successResponse({ results }, '批量标签功能暂未实现');
   } catch (error: any) {
     console.error('批量标签错误:', error);
-    return NextResponse.json(
-      { error: '操作失败：' + error.message },
-      { status: 500 }
-    );
+    return errorResponse('操作失败：' + error.message, 'INTERNAL_ERROR', 500);
   }
 }

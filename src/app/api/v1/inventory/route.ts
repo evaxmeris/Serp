@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { computeAvailableQty } from '@/lib/inventory-utils';
 import {
   successResponse,
@@ -138,29 +138,54 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const beforeQuantity = inventoryItem.quantity;
-    const afterQuantity = beforeQuantity + data.quantity;
+    // 更新库存（乐观锁 + 重试机制，最多 3 次）
+    let updatedItem: any;
+    let success = false;
 
-    // 检查调整后库存是否为负
-    if (afterQuantity < 0) {
-      return conflictResponse('调整后库存不能为负数');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await prisma.inventoryItem.findUniqueOrThrow({
+        where: { id: inventoryItem.id },
+        select: { version: true, quantity: true },
+      });
+
+      const beforeQty = current.quantity;
+      const afterQty = beforeQty + data.quantity;
+
+      if (afterQty < 0) {
+        return conflictResponse('调整后库存不能为负数');
+      }
+
+      const updateData: any = {
+        quantity: afterQty,
+      };
+
+      if (data.quantity > 0) {
+        updateData.lastInboundDate = new Date();
+      } else {
+        updateData.lastOutboundDate = new Date();
+      }
+
+      const result = await prisma.inventoryItem.updateMany({
+        where: { id: inventoryItem.id, version: current.version },
+        data: { ...updateData, version: { increment: 1 } },
+      });
+
+      if (result.count > 0) {
+        success = true;
+        updatedItem = await prisma.inventoryItem.findUniqueOrThrow({
+          where: { id: inventoryItem.id },
+        });
+        break;
+      }
+
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
 
-    // 更新库存
-    const updateData: any = {
-      quantity: afterQuantity,
-    };
-
-    if (data.quantity > 0) {
-      updateData.lastInboundDate = new Date();
-    } else {
-      updateData.lastOutboundDate = new Date();
+    if (!success) {
+      return conflictResponse('库存数据已被其他操作修改，请重试');
     }
-
-    await prisma.inventoryItem.update({
-      where: { id: inventoryItem.id },
-      data: updateData,
-    });
 
     // 创建库存流水
     const log = await prisma.inventoryLog.create({
@@ -169,8 +194,8 @@ export async function POST(request: NextRequest) {
         warehouseId: data.warehouseId,
         type: data.type,
         quantity: data.quantity,
-        beforeQuantity,
-        afterQuantity,
+        beforeQuantity: updatedItem.quantity - data.quantity,
+        afterQuantity: updatedItem.quantity,
         referenceType: data.referenceType,
         referenceId: data.referenceId,
         note: data.note,
@@ -180,8 +205,8 @@ export async function POST(request: NextRequest) {
     return successResponse({
       inventoryItem,
       log,
-      beforeQuantity,
-      afterQuantity,
+      beforeQuantity: updatedItem.quantity - data.quantity,
+      afterQuantity: updatedItem.quantity,
     }, '库存调整成功');
   } catch (error) {
     console.error('Error adjusting inventory:', error);

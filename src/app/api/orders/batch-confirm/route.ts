@@ -2,10 +2,11 @@
  * 订单批量确认 API
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
+import { successResponse, errorResponse, forbiddenResponse } from '@/lib/api-response';
+import { canTransition } from '@/lib/order-status-machine';
 import { z } from 'zod';
 
 /**
@@ -17,10 +18,7 @@ export async function POST(request: Request) {
     // 认证检查
     const user = await getCurrentUser();
     if (!user || !['ADMIN', 'SALES'].includes(user.role)) {
-      return NextResponse.json(
-        { error: '需要销售管理权限' },
-        { status: 403 }
-      );
+      return forbiddenResponse('需要销售管理权限');
     }
 
     // 解析请求数据
@@ -39,15 +37,10 @@ export async function POST(request: Request) {
       },
     });
 
-    // 验证订单状态
-    const invalidOrders = orders.filter((o) => o.status !== 'PENDING');
+    // 验证订单状态 — 使用状态机检查 PENDING → CONFIRMED 是合法转换
+    const invalidOrders = orders.filter((o) => !canTransition(o.status, 'CONFIRMED'));
     if (invalidOrders.length > 0) {
-      return NextResponse.json(
-        {
-          error: `以下订单状态不是待确认：${invalidOrders.map((o) => o.orderNo).join(', ')}`,
-        },
-        { status: 400 }
-      );
+      return errorResponse(`以下订单状态不是待确认：${invalidOrders.map((o) => o.orderNo).join(', ')}`, 'VALIDATION_ERROR', 400);
     }
 
     // 使用事务包装所有数据库操作
@@ -61,32 +54,12 @@ export async function POST(request: Request) {
         },
       });
 
-      // 记录操作日志
-      await tx.approvalHistory.createMany({
-        data: ids.map((id: string) => ({
-          recordId: id,
-          orderId: id,
-          step: 1,
-          approverId: user.id,
-          action: 'APPROVE',
-          status: 'APPROVED',
-          comments: `批量确认订单，共 ${ids.length} 条`,
-        })),
-      });
-
       return orderResult;
     });
 
-    return NextResponse.json({
-      success: true,
-      message: `成功确认 ${result.count} 条订单`,
-      confirmedCount: result.count,
-    });
+    return successResponse({ confirmedCount: result.count }, `成功确认 ${result.count} 条订单`);
   } catch (error: any) {
     console.error('批量确认错误:', error);
-    return NextResponse.json(
-      { error: '确认失败：' + error.message },
-      { status: 500 }
-    );
+    return errorResponse('确认失败：' + error.message, 'INTERNAL_ERROR', 500);
   }
 }

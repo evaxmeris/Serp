@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -21,7 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Search, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface InboundOrder {
   id: string;
@@ -83,6 +88,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function InboundOrdersPage() {
   const router = useRouter();
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog: ConfirmDlg } = useConfirm();
   const [orders, setOrders] = useState<InboundOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -149,7 +156,8 @@ export default function InboundOrdersPage() {
   };
 
   const handleConfirm = async (id: string) => {
-    if (!confirm('确认入库此订单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确认入库此订单吗？' });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/v1/inbound-orders/${id}/confirm`, {
@@ -160,19 +168,20 @@ export default function InboundOrdersPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('入库确认成功');
+        toast.success('入库确认成功');
         fetchOrders();
       } else {
-        alert(data.message || '入库确认失败');
+        toast.error(data.message || '入库确认失败');
       }
     } catch (error) {
       console.error('Failed to confirm inbound order:', error);
-      alert('入库确认失败');
+      toast.error('入库确认失败');
     }
   };
 
   const handleCancel = async (id: string) => {
-    if (!confirm('确定要取消此入库单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确定要取消此入库单吗？' });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/v1/inbound-orders/${id}/cancel`, {
@@ -183,16 +192,19 @@ export default function InboundOrdersPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('入库单已取消');
+        toast.success('入库单已取消');
         fetchOrders();
       } else {
-        alert(data.message || '取消失败');
+        toast.error(data.message || '取消失败');
       }
     } catch (error) {
       console.error('Failed to cancel inbound order:', error);
-      alert('取消失败');
+      toast.error('取消失败');
     }
   };
+
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(orders, 'createdAt');
 
   return (
     <div className="container mx-auto py-6 px-4">
@@ -265,32 +277,97 @@ export default function InboundOrdersPage() {
 
           {/* 数据表格 */}
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-28 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-1/5" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0 ml-auto" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>入库单号</TableHead>
-                    <TableHead>类型</TableHead>
-                    <TableHead>供应商</TableHead>
-                    <TableHead>仓库</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>金额</TableHead>
-                    <TableHead>预计日期</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('inboundNo')}
+                    >
+                      入库单号
+                      <SortIndicator field="inboundNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('type')}
+                    >
+                      类型
+                      <SortIndicator field="type" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('supplierName')}
+                    >
+                      供应商
+                      <SortIndicator field="supplierName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('warehouseName')}
+                    >
+                      仓库
+                      <SortIndicator field="warehouseName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('totalAmount')}
+                    >
+                      金额
+                      <SortIndicator field="totalAmount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('expectedDate')}
+                    >
+                      预计日期
+                      <SortIndicator field="expectedDate" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
-                          暂无数据
-                        </TableCell>
-                      </TableRow>
+                  {sorted.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9}>
+                        <EmptyState
+                          title="暂无入库单"
+                          description="还没有任何入库记录，创建一笔入库单开始使用"
+                        />
+                      </TableCell>
+                    </TableRow>
                   ) : (
-                    orders.map((order) => (
+                    sorted.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-medium">
                           {order.inboundNo}
@@ -394,6 +471,8 @@ export default function InboundOrdersPage() {
           )}
         </CardContent>
       </Card>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDlg />
     </div>
   );
 }

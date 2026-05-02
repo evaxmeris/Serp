@@ -1,10 +1,41 @@
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { successResponse, errorResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateCustomerSchema } from '@/lib/api-schemas';
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
+}
 
 // GET /api/customers/[id] - 获取客户详情
 export async function GET(
@@ -72,6 +103,18 @@ export async function PUT(
       data: v.data,
     });
 
+    // 记录更新客户审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'UPDATE_CUSTOMER',
+      entityType: 'CUSTOMER',
+      entityId: id,
+      userId: session.id,
+      details: { companyName: customer.companyName },
+      ipAddress,
+      userAgent,
+    });
+
     return successResponse(customer, '客户更新成功');
   } catch (error) {
     console.error('Error updating customer:', error);
@@ -137,8 +180,9 @@ export async function DELETE(
       return conflictResponse(`无法删除客户：存在关联${entities.join('、')}`);
     }
 
-    await prisma.customer.delete({
+    await prisma.customer.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     return successResponse(null, '客户删除成功');

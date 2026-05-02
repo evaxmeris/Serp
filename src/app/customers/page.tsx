@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ToastContainer, useToast } from '@/components/ui/toast';
@@ -24,6 +25,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Plus, Upload, Tag, CheckSquare, Square, Eye, Edit, Trash2 } from 'lucide-react';
 import { CustomerBatchImportDialog } from '@/components/batch-operations/CustomerBatchImportDialog';
 import { CustomerBatchTagsDialog } from '@/components/batch-operations/CustomerBatchTagsDialog';
@@ -57,6 +60,7 @@ export default function CustomersPage() {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -86,6 +90,15 @@ export default function CustomersPage() {
   });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  // 服务端排序状态
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // 键盘快捷键
   useEffect(() => {
@@ -112,12 +125,12 @@ export default function CustomersPage() {
   useEffect(() => {
     fetchCustomers();
     fetchAvailableTags();
-  }, [search, page]);
+  }, [debouncedSearch, page, sortBy, sortOrder]);
 
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/customers?search=${search}&page=${page}&limit=20`);
+      const res = await fetch(`/api/customers?search=${debouncedSearch}&page=${page}&limit=20&sortBy=${sortBy}&sortOrder=${sortOrder}`);
       const data = await res.json();
       const customerData = data.data?.items ?? data.data ?? [];
       setCustomers(customerData);
@@ -269,6 +282,15 @@ export default function CustomersPage() {
 
   const selectedCount = selectedIds.size;
 
+  // 列排序 - 服务端排序模式
+  const { sorted, requestSort, sortConfig } = useSortable(customers, sortBy, sortOrder, {
+    onSort: (key, dir) => {
+      setSortBy(key);
+      setSortOrder(dir);
+      setPage(1);
+    },
+  });
+
   return (
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
@@ -375,7 +397,23 @@ export default function CustomersPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-5 shrink-0" />
+                  <Skeleton className="h-5 w-1/5" />
+                  <Skeleton className="h-5 w-1/6" />
+                  <Skeleton className="h-5 w-1/6" />
+                  <Skeleton className="h-5 w-1/6" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-10 shrink-0" />
+                  <Skeleton className="h-5 w-10 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-28 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="border rounded-lg">
               <Table>
@@ -387,20 +425,62 @@ export default function CustomersPage() {
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>公司名称</TableHead>
-                    <TableHead>联系人</TableHead>
-                    <TableHead>邮箱</TableHead>
-                    <TableHead>电话</TableHead>
-                    <TableHead>国家</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('companyName')}
+                    >
+                      公司名称
+                      <SortIndicator field="companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('contactName')}
+                    >
+                      联系人
+                      <SortIndicator field="contactName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('email')}
+                    >
+                      邮箱
+                      <SortIndicator field="email" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('phone')}
+                    >
+                      电话
+                      <SortIndicator field="phone" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('country')}
+                    >
+                      国家
+                      <SortIndicator field="country" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead>标签</TableHead>
-                    <TableHead className="text-center">询盘</TableHead>
-                    <TableHead className="text-center">订单</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead className="text-center cursor-pointer select-none" onClick={() => requestSort('_count.inquiries')}>
+                      询盘
+                      <SortIndicator field="_count.inquiries" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead className="text-center cursor-pointer select-none" onClick={() => requestSort('_count.orders')}>
+                      订单
+                      <SortIndicator field="_count.orders" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customers.map((customer) => (
+                  {sorted.map((customer) => (
                     <TableRow key={customer.id} className={selectedIds.has(customer.id) ? 'bg-muted' : ''}>
                       <TableCell>
                         <Checkbox
@@ -473,9 +553,10 @@ export default function CustomersPage() {
           )}
 
           {customers.length === 0 && !loading && (
-            <div className="text-center py-8 text-gray-500">
-              暂无客户数据
-            </div>
+            <EmptyState
+              title="暂无客户数据"
+              description="还没有任何客户记录，创建一位客户开始使用"
+            />
           )}
 
           {/* Pagination */}

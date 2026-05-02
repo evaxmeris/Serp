@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse } from '@/lib/api-response';
 import { getPendingQty } from '@/lib/purchase-utils';
 import { prisma } from '@/lib/prisma';
@@ -121,11 +120,12 @@ export async function DELETE(
       }
 
     const { id } = await params;
-    await prisma.purchaseOrder.delete({
+    await prisma.purchaseOrder.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse(null, '删除成功');
   } catch (error) {
     console.error('Error deleting purchase order:', error);
     return NextResponse.json(

@@ -1,10 +1,41 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { listResponse, createdResponse, errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateProductSchema } from '@/lib/api-schemas';
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
+}
 
 // GET /api/products - 获取产品列表
 export async function GET(request: NextRequest) {
@@ -49,21 +80,15 @@ export async function GET(request: NextRequest) {
       prisma.product.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: products,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+    return listResponse(products, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
     console.error('Error fetching products:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch products' },
-      { status: 500 }
-    );
+    return errorResponse('获取产品列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -119,12 +144,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(product, { status: 201 });
+    // 记录创建产品审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'CREATE_PRODUCT',
+      entityType: 'PRODUCT',
+      entityId: product.id,
+      userId: session.id,
+      details: { sku: product.sku, name: product.name },
+      ipAddress,
+      userAgent,
+    });
+
+    return createdResponse(product, '产品创建成功');
   } catch (error) {
     console.error('Error creating product:', error);
-    return NextResponse.json(
-      { error: 'Failed to create product' },
-      { status: 500 }
-    );
+    return errorResponse('创建产品失败', 'INTERNAL_ERROR', 500);
   }
 }

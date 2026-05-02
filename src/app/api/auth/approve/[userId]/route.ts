@@ -1,7 +1,8 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { validateOrReturn } from '@/lib/api-validation';
+import { successResponse, errorResponse, notFoundResponse, forbiddenResponse } from '@/lib/api-response';
 import { z } from 'zod';
 
 interface ApproveParams {
@@ -24,20 +25,14 @@ export async function POST(
     const { approved, reason: rejectReason } = v.data;
 
     // 获取当前登录用户（审批人）
-    const currentSession = await getCurrentUser(request);
+    const currentSession = await getCurrentUser();
     if (!currentSession) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return errorResponse('Unauthorized', 'UNAUTHORIZED', 401);
     }
 
     // 检查当前用户是否有审批权限（需要管理员角色）
-    if (currentSession.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Permission denied' },
-        { status: 403 }
-      );
+    if (currentSession.role !== 'ADMIN') {
+      return forbiddenResponse('Permission denied');
     }
 
     // 使用事务确保原子性：检查 PENDING 状态 + 创建用户 + 更新状态
@@ -74,7 +69,7 @@ export async function POST(
           where: { id: registrationId },
           data: {
             status: approved ? 'APPROVED' : 'REJECTED',
-            approvedById: currentSession.user.id,
+            approvedById: currentSession.id,
             rejectReason,
           },
         });
@@ -90,41 +85,28 @@ export async function POST(
       });
     } catch (error: any) {
       if (error.message === 'NOT_FOUND') {
-        return NextResponse.json(
-          { error: 'Registration not found' },
-          { status: 404 }
-        );
+        return notFoundResponse('Registration');
       }
       if (error.message === 'ALREADY_PROCESSED') {
-        return NextResponse.json(
-          { error: 'This registration has already been processed' },
-          { status: 400 }
-        );
+        return errorResponse('This registration has already been processed', 'ALREADY_PROCESSED', 400);
       }
       throw error; // 其他异常抛给外层 catch 处理
     }
 
-    return NextResponse.json(
+    return successResponse(
       {
-        success: true,
-        message: approved
-          ? 'Registration approved, user account created'
-          : 'Registration rejected, request deleted',
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          createdAt: user.createdAt,
-        },
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
       },
-      { status: 200 }
+      approved
+        ? 'Registration approved, user account created'
+        : 'Registration rejected, request deleted'
     );
   } catch (error) {
     console.error('Error approving registration:', error);
-    return NextResponse.json(
-      { error: 'Failed to process approval' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to process approval', 'INTERNAL_ERROR');
   }
 }

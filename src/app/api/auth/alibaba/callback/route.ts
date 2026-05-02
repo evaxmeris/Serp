@@ -13,8 +13,8 @@ import { encryptCredentials } from '@/lib/crypto-utils';
  * 4. 跳回设置页面
  */
 
-const APP_KEY = '504486';
-const APP_SECRET = '1fb2a78f6e7dab63d9ec81d10462961f';
+const APP_KEY = process.env.ALIBABA_APP_KEY || '504486';
+const APP_SECRET = process.env.ALIBABA_APP_SECRET || '';
 const TOKEN_BASE = 'https://open-api.alibaba.com/rest';
 
 function generateSign(apiName: string, params: Record<string, string>, appSecret: string): string {

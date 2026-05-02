@@ -14,9 +14,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // CSRF 保护：仅生产环境启用，且排除 /api/auth/
+  // CSRF 保护：所有环境均启用，但排除 /api/auth/
   // 通过校验 Origin/Referer 与请求 Host 是否一致来防御跨站请求
-  if (process.env.NODE_ENV === 'production' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
     const host = request.headers.get('host'); // 请求目标主机

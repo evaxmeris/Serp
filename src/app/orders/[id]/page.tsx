@@ -31,6 +31,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import {
   ArrowLeft,
   Edit,
@@ -52,6 +54,8 @@ export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const { data: order, isLoading, error } = useOrder(id);
   const confirmOrder = useConfirmOrder();
@@ -120,10 +124,10 @@ export default function OrderDetailPage() {
       { id },
       {
         onSuccess: () => {
-          alert('订单已确认');
+          toast.success('订单已确认');
         },
         onError: (err) => {
-          alert(err.message);
+          toast.error(err.message);
         },
       }
     );
@@ -131,7 +135,7 @@ export default function OrderDetailPage() {
 
   const handleCancel = () => {
     if (!cancelReason.trim()) {
-      alert('请填写取消原因');
+      toast.warning('请填写取消原因');
       return;
     }
     cancelOrder.mutate(
@@ -140,17 +144,17 @@ export default function OrderDetailPage() {
         onSuccess: () => {
           setCancelDialogOpen(false);
           setCancelReason('');
-          alert('订单已取消');
+          toast.success('订单已取消');
         },
         onError: (err) => {
-          alert(err.message);
+          toast.error(err.message);
         },
       }
     );
   };
 
-  const handleDelete = () => {
-    if (!confirm('确定要删除此订单吗？此操作不可恢复。')) {
+  const handleDelete = async () => {
+    if (!await confirm({ title: '确认删除', description: '确定要删除此订单吗？此操作不可恢复。' })) {
       return;
     }
     deleteOrder.mutate(id, {
@@ -158,7 +162,7 @@ export default function OrderDetailPage() {
         router.push('/orders');
       },
       onError: (err) => {
-        alert(err.message);
+        toast.error(err.message);
       },
     });
   };
@@ -168,12 +172,12 @@ export default function OrderDetailPage() {
     if (!order) return;
     
     if (!selectedSupplierId) {
-      alert('请选择供应商');
+      toast.warning('请选择供应商');
       return;
     }
     
     if (purchaseItems.length === 0) {
-      alert('没有商品项');
+      toast.warning('没有商品项');
       return;
     }
 
@@ -211,12 +215,12 @@ export default function OrderDetailPage() {
       }
 
       const purchaseOrder = result.data;
-      alert(`采购订单创建成功：${purchaseOrder.poNo}`);
+      toast.success(`采购订单创建成功：${purchaseOrder.poNo}`);
       setGenerateDialogOpen(false);
       router.push(`/purchase-orders/${purchaseOrder.id}`);
     } catch (err) {
       console.error('Failed to create purchase order:', err);
-      alert(`创建失败：${(err as Error).message}`);
+      toast.error(`创建失败：${(err as Error).message}`);
     } finally {
       setCreating(false);
     }
@@ -570,16 +574,47 @@ export default function OrderDetailPage() {
           </CardContent>
         </Card>
 
-        {/* 收款记录 */}
-        {order.payments.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                收款记录
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+        {/* 收款记录 - 始终显示 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              收款记录
+              {order.balanceAmount <= 0 && order.paidAmount > 0 && (
+                <Badge className="bg-green-100 text-green-800 ml-2">已全部收齐</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* 收款进度概览 */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-gray-600">收款进度</span>
+                <span className="text-sm font-medium">
+                  {order.currency} {order.paidAmount.toFixed(2)} / {order.totalAmount.toFixed(2)}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${order.totalAmount > 0
+                      ? Math.min(100, (order.paidAmount / order.totalAmount) * 100)
+                      : 0}%`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-xs text-gray-500">
+                  已收：{order.currency} {order.paidAmount.toFixed(2)}
+                </span>
+                <span className="text-xs text-gray-500">
+                  余额：{order.currency} {order.balanceAmount.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {order.payments.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -587,7 +622,7 @@ export default function OrderDetailPage() {
                     <TableHead>金额</TableHead>
                     <TableHead>付款方式</TableHead>
                     <TableHead>收款日期</TableHead>
-                    <TableHead>状态</TableHead>
+                    <TableHead>银行参考号</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -599,22 +634,16 @@ export default function OrderDetailPage() {
                       <TableCell>
                         {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('zh-CN') : '-'}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {payment.status === 'PENDING' && '待处理'}
-                          {payment.status === 'PROCESSING' && '处理中'}
-                          {payment.status === 'COMPLETED' && '已完成'}
-                          {payment.status === 'FAILED' && '失败'}
-                          {payment.status === 'CANCELLED' && '已取消'}
-                        </Badge>
-                      </TableCell>
+                      <TableCell>{payment.bankReference || '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">暂无收款记录</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* 发货记录 */}
         {order.shipments.length > 0 && (
@@ -779,6 +808,8 @@ export default function OrderDetailPage() {
             </CardContent>
           </Card>
         )}
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+        <ConfirmDialog />
       </div>
     </div>
   );

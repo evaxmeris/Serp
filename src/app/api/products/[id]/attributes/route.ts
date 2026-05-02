@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -24,15 +23,9 @@ export async function GET(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: attributes,
-    });
+    return successResponse(attributes);
   } catch (error) {
     console.error('Error fetching product attributes:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch product attributes' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch product attributes', 'INTERNAL_ERROR', 500);
   }
 }

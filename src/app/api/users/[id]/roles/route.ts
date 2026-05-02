@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -32,7 +31,7 @@ export async function POST(
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFoundResponse('User');
     }
 
     // 删除现有的角色分配
@@ -66,16 +65,10 @@ export async function POST(
 
     const roles = updatedUserRoles.map(ur => ur.role);
 
-    return NextResponse.json({
-      data: roles,
-      message: 'Roles updated successfully',
-    });
+    return successResponse({ data: roles }, 'Roles updated successfully');
   } catch (error) {
     console.error('Error assigning user roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to assign roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to assign roles', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -99,7 +92,7 @@ export async function GET(
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFoundResponse('User');
     }
 
     // 获取用户角色
@@ -110,12 +103,9 @@ export async function GET(
 
     const roles = userRoles.map(ur => ur.role);
 
-    return NextResponse.json({ data: roles });
+    return successResponse({ data: roles });
   } catch (error) {
     console.error('Error fetching user roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch roles', 'INTERNAL_ERROR', 500);
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ export function OrderBatchConfirmDialog({
 }: OrderBatchConfirmDialogProps) {
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<BatchResult | null>(null);
+  const { toast, toasts, removeToast } = useToast();
 
   // 只允许确认待确认订单
   const validOrders = selectedOrders.filter(o => o.status === 'PENDING');
@@ -59,7 +61,7 @@ export function OrderBatchConfirmDialog({
 
   const handleConfirm = async () => {
     if (validOrders.length === 0) {
-      alert('没有可确认的订单');
+      toast.warning('没有可确认的订单');
       return;
     }
 
@@ -97,7 +99,7 @@ export function OrderBatchConfirmDialog({
     onOpenChange(false);
   };
 
-  return (
+  return (<>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
@@ -233,5 +235,8 @@ export function OrderBatchConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+    </>
+    );
 }

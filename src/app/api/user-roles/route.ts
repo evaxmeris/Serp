@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse } from '@/lib/api-response';
+import { invalidateUserPermissionsCache } from '@/lib/permissions';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       });
 
       const roles = userRoles.map(ur => ur.role);
-      return NextResponse.json({ data: roles });
+      return successResponse({ data: roles });
     }
 
     // 获取所有用户角色分配（分页）
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       prisma.userRole.count(),
     ]);
 
-    return NextResponse.json({
+    return successResponse({
       data: userRoles,
       pagination: {
         page,
@@ -67,10 +67,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching user roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch user roles', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -110,13 +107,13 @@ export async function POST(request: NextRequest) {
       include: { role: true },
     });
 
+    // 主动失效权限缓存
+    invalidateUserPermissionsCache(userId);
+
     const roles = updatedUserRoles.map(ur => ur.role);
-    return NextResponse.json({ data: roles });
+    return successResponse({ data: roles });
   } catch (error) {
     console.error('Error assigning user roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to assign user roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to assign user roles', 'INTERNAL_ERROR', 500);
   }
 }

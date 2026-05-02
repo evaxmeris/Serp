@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession, requirePermission } from '@/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import {
   successResponse,
@@ -14,6 +15,38 @@ import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateOrderSchema } from '@/lib/api-schemas';
 import { validateTransition, canCancel } from '@/lib/order-status-machine';
 import type { OrderStatus } from '@/types/order';
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
+}
 
 /**
  * GET /api/orders/[id] - 获取订单详情
@@ -190,6 +223,11 @@ export async function PUT(
   try {
     const { id } = await params;
 
+    // 权限检查：orders:edit
+    const authSession = await getSession(request);
+    const permError = requirePermission(authSession!, 'orders:edit');
+    if (permError) return permError;
+
     // 检查订单是否存在
     const existingOrder = await prisma.order.findUnique({
       where: { id },
@@ -221,10 +259,11 @@ export async function PUT(
     }
 
     // === 状态流转验证 (审计 2.5) ===
+    // 获取当前用户信息（用于状态流转 ADMIN 权限判断和审计日志）
+    const session = await getUserFromRequest(request);
+
     // 如果请求中包含 status 字段且与当前状态不同，验证状态跳转是否合法
     if (restData.status && restData.status !== existingOrder.status) {
-      // 获取当前用户角色用于 ADMIN 权限判断
-      const session = await getUserFromRequest(request);
       const isAdmin = session?.role === 'ADMIN';
 
       const result = validateTransition(
@@ -266,6 +305,18 @@ export async function PUT(
       },
     });
 
+    // 记录更新订单审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'UPDATE_ORDER',
+      entityType: 'ORDER',
+      entityId: id,
+      userId: session?.id,
+      details: { orderNo: order.orderNo, status: order.status },
+      ipAddress,
+      userAgent,
+    });
+
     return successResponse({
       id: order.id,
       orderNo: order.orderNo,
@@ -291,6 +342,11 @@ export async function DELETE(
       if (!session) {
         return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
       }
+
+    // 权限检查：orders:delete
+    const authSession = await getSession(request);
+    const permError = requirePermission(authSession!, 'orders:delete');
+    if (permError) return permError;
 
     const { id } = await params;
 
@@ -327,9 +383,22 @@ export async function DELETE(
       );
     }
 
-    // 删除订单
-    await prisma.order.delete({
+    // 软删除订单（设置 deletedAt）
+    await prisma.order.update({
       where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    // 记录删除订单审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'DELETE_ORDER',
+      entityType: 'ORDER',
+      entityId: id,
+      userId: session.id,
+      details: { orderNo: order.orderNo },
+      ipAddress,
+      userAgent,
     });
 
     return successResponse(null, '订单删除成功', 'NO_CONTENT');

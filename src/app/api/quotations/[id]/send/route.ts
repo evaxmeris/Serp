@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse } from '@/lib/api-response';
 
 // POST /api/quotations/[id]/send - 发送报价单 - 需要认证
 export async function POST(
@@ -13,10 +13,7 @@ export async function POST(
     // 认证检查
     const currentUser = await getUserFromRequest(request);
     if (!currentUser) {
-      return NextResponse.json(
-        { success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
     const { id } = await params;
@@ -57,10 +54,7 @@ export async function POST(
     });
 
     if (!quotation) {
-      return NextResponse.json(
-        { error: 'Quotation not found' },
-        { status: 404 }
-      );
+      return notFoundResponse('Quotation');
     }
 
     // 更新报价单状态为 SENT
@@ -83,24 +77,12 @@ export async function POST(
       // 处理附件
     }
 
-    return NextResponse.json({
-      success: true,
-      message: '报价单已发送',
-      quotation: updatedQuotation,
-      sentTo: validatedData.recipientEmails,
-      sentAt: new Date().toISOString(),
-    });
+    return successResponse({ quotation: updatedQuotation, sentTo: validatedData.recipientEmails, sentAt: new Date().toISOString() }, '报价单已发送');
   } catch (error) {
     console.error('Error sending quotation:', error);
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed' },
-        { status: 400 }
-      );
+      return errorResponse('Validation failed', 'VALIDATION_ERROR', 400);
     }
-    return NextResponse.json(
-      { error: 'Failed to send quotation' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to send quotation', 'INTERNAL_ERROR', 500);
   }
 }

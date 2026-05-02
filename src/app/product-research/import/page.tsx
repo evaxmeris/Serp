@@ -39,6 +39,8 @@ import {
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import * as XLSX from 'xlsx';
 
 // ============================================
@@ -80,6 +82,8 @@ export default function ImportPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   // ============================================
   // 加载品类列表
   // ============================================
@@ -151,7 +155,7 @@ export default function ImportPage() {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       
       if (!['xlsx', 'xls', 'csv'].includes(fileExtension || '')) {
-        alert('不支持的文件格式，请上传 .xlsx, .xls 或 .csv 文件');
+        toast.warning('不支持的文件格式，请上传 .xlsx, .xls 或 .csv 文件');
         setLoading(false);
         return;
       }
@@ -163,7 +167,7 @@ export default function ImportPage() {
       const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
 
       if (jsonData.length === 0) {
-        alert('文件为空，请检查文件内容');
+        toast.warning('文件为空，请检查文件内容');
         setLoading(false);
         return;
       }
@@ -181,7 +185,7 @@ export default function ImportPage() {
       setLoading(false);
     } catch (error) {
       console.error('文件解析失败:', error);
-      alert('文件解析失败，请检查文件格式');
+      toast.warning('文件解析失败，请检查文件格式');
       setLoading(false);
     }
   }, []);
@@ -278,14 +282,14 @@ export default function ImportPage() {
         setImportProgress(Math.round(((i + 1) / totalBatches) * 100));
       }
 
-      alert(`导入成功！共导入 ${validData.length} 条产品数据`);
+      toast.error(`导入成功！共导入 ${validData.length} 条产品数据`);
       setIsConfirmDialogOpen(false);
       setPreview(null);
       router.push('/product-research/products');
 
     } catch (error) {
       console.error('导入失败:', error);
-      alert('导入失败：' + (error as Error).message);
+      toast.error('导入失败：' + (error as Error).message);
     } finally {
       setImporting(false);
       setImportProgress(0);
@@ -325,7 +329,7 @@ export default function ImportPage() {
       const result = await response.json();
 
       if (!result.success) {
-        alert('获取数据失败');
+        toast.error('获取数据失败');
         return;
       }
 
@@ -363,10 +367,10 @@ export default function ImportPage() {
         link.click();
       }
 
-      alert(`导出成功！共 ${products.length} 条产品数据`);
+      toast.error(`导出成功！共 ${products.length} 条产品数据`);
     } catch (error) {
       console.error('导出失败:', error);
-      alert('导出失败，请重试');
+      toast.warning('导出失败，请重试');
     }
   };
 
@@ -374,7 +378,7 @@ export default function ImportPage() {
   // 页面渲染
   // ============================================
 
-  return (
+  return (<>
     <div className="w-full py-6 px-4">
       {/* 页面头部 */}
       <div className="flex items-center gap-4 mb-6">
@@ -562,5 +566,8 @@ export default function ImportPage() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

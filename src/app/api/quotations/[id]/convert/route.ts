@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { successResponse, errorResponse } from '@/lib/api-response';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -48,18 +48,12 @@ export async function POST(
     });
 
     if (!quotation) {
-      return NextResponse.json(
-        { error: 'Quotation not found' },
-        { status: 404 }
-      );
+      return errorResponse('Quotation not found', 'NOT_FOUND', 404);
     }
 
     // 检查报价单状态
     if (quotation.status === 'DRAFT') {
-      return NextResponse.json(
-        { error: '草稿状态的报价单不能转为订单，请先发送报价单' },
-        { status: 400 }
-      );
+      return errorResponse('草稿状态的报价单不能转为订单，请先发送报价单', 'BAD_REQUEST', 400);
     }
 
     // 生成订单号
@@ -120,9 +114,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: '报价单已转为订单',
+    return successResponse({
       order: {
         id: order.id,
         orderNo: order.orderNo,
@@ -134,18 +126,12 @@ export async function POST(
         createdAt: order.createdAt,
       },
       quotationId: id,
-    });
+    }, '报价单已转为订单');
   } catch (error) {
     console.error('Error converting quotation to order:', error);
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: '请求参数验证失败' },
-        { status: 400 }
-      );
+      return errorResponse('请求参数验证失败', 'VALIDATION_ERROR', 400);
     }
-    return NextResponse.json(
-      { error: 'Failed to convert quotation to order' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to convert quotation to order');
   }
 }

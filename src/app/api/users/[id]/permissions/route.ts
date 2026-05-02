@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -25,7 +24,7 @@ export async function GET(
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFoundResponse('User');
     }
 
     // 获取用户的所有角色，然后通过角色获取所有权限
@@ -65,16 +64,9 @@ export async function GET(
       return acc;
     }, {} as Record<string, typeof permissions>);
 
-    return NextResponse.json({
-      data: permissions,
-      grouped: groupedPermissions,
-      permissionCodes: permissions.map(p => p.name),
-    });
+    return successResponse({ data: permissions, grouped: groupedPermissions, permissionCodes: permissions.map(p => p.name) });
   } catch (error) {
     console.error('Error fetching user permissions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch permissions' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch permissions', 'INTERNAL_ERROR', 500);
   }
 }

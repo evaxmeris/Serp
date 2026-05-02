@@ -27,10 +27,6 @@ import {
   Save,
   CheckCircle2,
   Camera,
-  Clock,
-  Globe,
-  Bell,
-  Palette,
   Lock,
   FileText,
   Package,
@@ -44,6 +40,8 @@ import {
   Truck,
   TrendingUp,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { UserPreferencesPanel } from '@/components/preferences/UserPreferences';
 
 // 角色显示映射
 const roleLabels: Record<string, { label: string; color: string }> = {
@@ -185,6 +183,8 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({
           name: formName,
+          phone: formPhone || undefined,
+          department: formDepartment || undefined,
         }),
       });
 
@@ -351,7 +351,6 @@ export default function ProfilePage() {
                       placeholder="请输入手机号"
                       aria-label="手机号"
                     />
-                    <p className="text-xs text-zinc-400 mt-1">手机号暂未同步到数据库</p>
                   </div>
                   <div>
                     <label htmlFor="profile-department" className="text-sm font-medium mb-1.5 block flex items-center gap-2">
@@ -365,7 +364,6 @@ export default function ProfilePage() {
                       placeholder="请输入部门"
                       aria-label="部门"
                     />
-                    <p className="text-xs text-zinc-400 mt-1">部门暂未同步到数据库</p>
                   </div>
                 </div>
 
@@ -440,63 +438,7 @@ export default function ProfilePage() {
 
       {/* 个人偏好 Tab */}
       {activeTab === 'preferences' && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                <Palette className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <CardTitle>个人偏好</CardTitle>
-                <CardDescription>自定义您的使用体验</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                {
-                  icon: <Globe className="h-4 w-4" />,
-                  label: '默认币种',
-                  value: 'USD (美元)',
-                  desc: '新建订单和报价时的默认币种',
-                },
-                {
-                  icon: <Bell className="h-4 w-4" />,
-                  label: '通知偏好',
-                  value: '站内消息 + 邮件',
-                  desc: '接收系统通知的方式',
-                },
-                {
-                  icon: <Clock className="h-4 w-4" />,
-                  label: '时区设置',
-                  value: 'Asia/Shanghai (UTC+8)',
-                  desc: '日期和时间的显示时区',
-                },
-                {
-                  icon: <Palette className="h-4 w-4" />,
-                  label: '主题',
-                  value: '跟随系统',
-                  desc: '界面外观风格',
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-zinc-400">{item.icon}</div>
-                    <div>
-                      <div className="font-medium text-sm">{item.label}</div>
-                      <div className="text-xs text-zinc-500">{item.desc}</div>
-                    </div>
-                  </div>
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <UserPreferencesPanel />
       )}
 
       {/* 我的权限 Tab */}
@@ -545,10 +487,11 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               {Object.keys(permissionModules).length === 0 ? (
-                <div className="text-center py-12 text-zinc-500">
-                  <Key className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                  <p>暂无权限数据</p>
-                </div>
+                <EmptyState
+                  icon={<Key className="h-12 w-12 opacity-20" />}
+                  title="暂无权限数据"
+                  description="当前账号还没有分配任何权限模块"
+                />
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {Object.entries(permissionModules).map(([module, perms]) => {

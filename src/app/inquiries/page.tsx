@@ -29,9 +29,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Search, Eye, Edit, Trash2, FileText } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/toast';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 
 interface Inquiry {
   id: string;
@@ -62,6 +65,7 @@ export default function InquiriesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -69,6 +73,7 @@ export default function InquiriesPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [convertLoading, setConvertLoading] = useState<string | null>(null);
   const [newInquiry, setNewInquiry] = useState({
     customerId: '',
     source: 'Website',
@@ -90,10 +95,16 @@ export default function InquiriesPage() {
     { value: 'LOST', label: '丢失' },
   ];
 
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchInquiries();
     fetchCustomers();
-  }, [page, search, statusFilter]);
+  }, [page, debouncedSearch, statusFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,6 +180,46 @@ export default function InquiriesPage() {
     }
   };
 
+  /** 询盘一键转报价单 */
+  const handleConvertToQuotation = async (inquiryId: string, inquiryNo: string) => {
+    if (!confirm(`确定从询盘 "${inquiryNo}" 生成报价单吗？将创建 DRAFT 状态的报价单。`)) {
+      return;
+    }
+
+    setConvertLoading(inquiryId);
+    try {
+      const res = await fetch(`/api/inquiries/${inquiryId}/convert-to-quotation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          validityDays: 30,
+          paymentTerms: '',
+          deliveryTerms: '',
+          notes: '',
+        }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        const quotationNo = result.data?.quotation?.quotationNo || '';
+        const quotationId = result.data?.quotation?.id || result.data?.id;
+        toast.success(`报价单 ${quotationNo} 创建成功`);
+        fetchInquiries();
+        if (quotationId) {
+          router.push(`/quotations/${quotationId}`);
+        }
+      } else {
+        toast.error(result.message || result.error || '生成报价单失败');
+      }
+    } catch (error) {
+      console.error('Failed to convert to quotation:', error);
+      toast.error('生成报价单失败');
+    } finally {
+      setConvertLoading(null);
+    }
+  };
+
   const fetchInquiries = async () => {
     setLoading(true);
     try {
@@ -177,7 +228,7 @@ export default function InquiriesPage() {
         limit: '20',
       });
 
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
       if (statusFilter !== 'all') params.append('status', statusFilter);
 
       const res = await fetch(`/api/inquiries?${params}`);
@@ -279,6 +330,9 @@ export default function InquiriesPage() {
     };
     return colors[priority] || 'bg-gray-100 text-gray-800';
   };
+
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(inquiries, 'createdAt');
 
   return (
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
@@ -450,7 +504,23 @@ export default function InquiriesPage() {
 
           {/* 表格 */}
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-5 shrink-0" />
+                  <Skeleton className="h-5 w-24 shrink-0" />
+                  <Skeleton className="h-5 w-1/5" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-1/5" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-48 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
@@ -463,20 +533,74 @@ export default function InquiriesPage() {
                         onClick={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>询盘编号</TableHead>
-                    <TableHead>客户</TableHead>
-                    <TableHead>来源</TableHead>
-                    <TableHead>产品</TableHead>
-                    <TableHead>数量</TableHead>
-                    <TableHead>目标价</TableHead>
-                    <TableHead>优先级</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('inquiryNo')}
+                    >
+                      询盘编号
+                      <SortIndicator field="inquiryNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('customer.companyName')}
+                    >
+                      客户
+                      <SortIndicator field="customer.companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('source')}
+                    >
+                      来源
+                      <SortIndicator field="source" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('products')}
+                    >
+                      产品
+                      <SortIndicator field="products" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('quantity')}
+                    >
+                      数量
+                      <SortIndicator field="quantity" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('targetPrice')}
+                    >
+                      目标价
+                      <SortIndicator field="targetPrice" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('priority')}
+                    >
+                      优先级
+                      <SortIndicator field="priority" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inquiries.map((inquiry) => (
+                  {sorted.map((inquiry) => (
                     <TableRow key={inquiry.id}>
                       <TableCell>
                         <Checkbox
@@ -535,6 +659,16 @@ export default function InquiriesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => handleConvertToQuotation(inquiry.id, inquiry.inquiryNo)}
+                            disabled={convertLoading === inquiry.id}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            {convertLoading === inquiry.id ? '转换中...' : '生成报价单'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             onClick={() => handleDelete(inquiry.id)}
                           >
@@ -549,9 +683,10 @@ export default function InquiriesPage() {
               </Table>
 
               {inquiries.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">
-                  暂无询盘数据
-                </div>
+                <EmptyState
+                  title="暂无询盘数据"
+                  description="还没有任何询盘记录，创建一条询盘开始使用"
+                />
               )}
 
               {/* 分页 */}

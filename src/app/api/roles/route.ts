@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getSession, requirePermission } from '@/middleware/auth';
+import { successResponse, createdResponse, listResponse, errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -60,21 +60,17 @@ export async function GET(request: NextRequest) {
       prisma.role.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: roles,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
+    const pagination = {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
+
+    return listResponse(roles, pagination);
   } catch (error) {
     console.error('Error fetching roles:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch roles' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch roles');
   }
 }
 
@@ -87,6 +83,14 @@ export async function POST(request: NextRequest) {
     if (!session) {
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
+
+    // 权限检查：只有拥有 settings:roles 权限的用户才能创建角色
+    const authSession = await getSession(request);
+    if (!authSession) {
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
+    }
+    const permError = requirePermission(authSession, 'settings:roles');
+    if (permError) return permError;
 
     const body = await request.json();
     const v = validateOrReturn(CreateRoleSchema, body);
@@ -122,7 +126,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ data: role, message: '角色创建成功' }, { status: 201 });
+    return createdResponse(role, '角色创建成功');
   } catch (error) {
     console.error('创建角色失败:', error);
     return errorResponse('创建角色失败', 'INTERNAL_ERROR', 500);

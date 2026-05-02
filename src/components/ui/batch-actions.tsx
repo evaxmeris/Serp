@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from './dialog';
 import { Trash2, Download, CheckSquare, Square } from 'lucide-react';
+import { useToast } from './toast';
 
 interface BatchActionsProps<T> {
   items: T[];
@@ -38,6 +39,7 @@ export function BatchActions<T>({
 }: BatchActionsProps<T>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const { toast } = useToast();
 
   const allSelected = items.length > 0 && items.every(item => selectedIds.includes(getId(item)));
 
@@ -67,7 +69,7 @@ export function BatchActions<T>({
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('批量删除失败:', error);
-      alert('批量删除失败，请重试');
+      toast.error('批量删除失败，请重试');
     } finally {
       setProcessing(false);
     }
@@ -81,7 +83,7 @@ export function BatchActions<T>({
       await onBatchExport(selectedIds);
     } catch (error) {
       console.error('批量导出失败:', error);
-      alert('批量导出失败，请重试');
+      toast.error('批量导出失败，请重试');
     } finally {
       setProcessing(false);
     }

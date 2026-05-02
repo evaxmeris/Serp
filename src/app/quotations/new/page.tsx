@@ -8,7 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
+import { useFormDraft, useLeaveConfirmation } from '@/lib/use-form-draft';
 
 interface Customer {
   id: string;
@@ -30,6 +33,9 @@ export default function NewQuotationPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   const [formData, setFormData] = useState({
     customerId: '',
     currency: 'USD',
@@ -42,6 +48,26 @@ export default function NewQuotationPage() {
   const [items, setItems] = useState<QuotationItem[]>([
     { productName: '', specification: '', quantity: '', unitPrice: '', notes: '' },
   ]);
+
+  // 草稿自动保存 & 离开确认
+  const draftData = { formData, items };
+  const initialFormData = { customerId: '', currency: 'USD', paymentTerms: '', deliveryTerms: '', validityDays: '30', notes: '' };
+  const initialItems = [{ productName: '', specification: '', quantity: '', unitPrice: '', notes: '' }];
+  const isDirty = JSON.stringify(draftData) !== JSON.stringify({ formData: initialFormData, items: initialItems });
+  const { loadDraft, clearDraft } = useFormDraft('quotation-new', draftData, isDirty, submitting);
+  useLeaveConfirmation(isDirty);
+
+  // 页面加载时恢复草稿
+  useEffect(() => {
+    const draft = loadDraft() as { formData: typeof formData; items: QuotationItem[] } | null;
+    if (draft) {
+      setFormData(draft.formData);
+      if (draft.items?.length > 0) {
+        setItems(draft.items);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const incotermOptions = getIncotermOptions();
   const paymentTermOptions = getPaymentTermOptions();
@@ -89,22 +115,22 @@ export default function NewQuotationPage() {
 
   const handleSubmit = async () => {
     if (!formData.customerId) {
-      alert('请选择客户');
+      toast.warning('请选择客户');
       return;
     }
 
     // 验证 items
     for (let i = 0; i < items.length; i++) {
       if (!items[i].productName) {
-        alert(`第 ${i + 1} 项产品名称必填`);
+        toast.error(`第 ${i + 1} 项产品名称必填`);
         return;
       }
       if (!items[i].quantity || parseFloat(items[i].quantity) <= 0) {
-        alert(`第 ${i + 1} 项数量必须为正数`);
+        toast.error(`第 ${i + 1} 项数量必须为正数`);
         return;
       }
       if (!items[i].unitPrice || parseFloat(items[i].unitPrice) < 0) {
-        alert(`第 ${i + 1} 项单价不能为负数`);
+        toast.error(`第 ${i + 1} 项单价不能为负数`);
         return;
       }
     }
@@ -128,22 +154,23 @@ export default function NewQuotationPage() {
       });
 
       if (res.ok) {
+        clearDraft();
         const data = await res.json();
-        alert('报价单创建成功');
+        toast.error('报价单创建成功');
         router.push(`/quotations/${data.id}`);
       } else {
         const data = await res.json();
-        alert(`创建失败：${data.error}`);
+        toast.error(`创建失败：${data.error}`);
       }
     } catch (error) {
       console.error('Failed to create quotation:', error);
-      alert('创建失败');
+      toast.error('创建失败');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
+  return (<>
     <div className="container mx-auto py-8 space-y-6">
       {/* 头部 */}
       <div className="flex items-center gap-4">
@@ -358,5 +385,8 @@ export default function NewQuotationPage() {
         </Button>
       </div>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

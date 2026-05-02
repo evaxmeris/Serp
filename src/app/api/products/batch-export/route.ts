@@ -3,8 +3,7 @@
  * 导出为 CSV 格式
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';
@@ -18,10 +17,7 @@ export async function POST(request: Request) {
     // 认证检查
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json(
-        { error: '请先登录' },
-        { status: 401 }
-      );
+      return errorResponse('请先登录', 'UNAUTHORIZED', 401);
     }
 
     // 解析请求数据
@@ -96,9 +92,6 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('批量导出错误:', error);
-    return NextResponse.json(
-      { error: '导出失败：' + error.message },
-      { status: 500 }
-    );
+    return errorResponse('导出失败：' + error.message, 'INTERNAL_ERROR', 500);
   }
 }

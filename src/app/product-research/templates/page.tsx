@@ -42,6 +42,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // ============================================
 // 类型定义
@@ -155,6 +157,9 @@ export default function TemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<AttributeTemplate | null>(null);
   const [draggedTemplateId, setDraggedTemplateId] = useState<string | null>(null);
   const [newOption, setNewOption] = useState('');
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // 表单数据
   const [formData, setFormData] = useState<TemplateFormData>({
@@ -295,14 +300,14 @@ export default function TemplatesPage() {
   const handleSave = async () => {
     // 验证必填字段
     if (!formData.name || !formData.code) {
-      alert('属性名称和编码为必填项');
+      toast.error('属性名称和编码为必填项');
       return;
     }
 
     // 验证选择类型必须有选项
     const selectTypes = ['SELECT', 'MULTI_SELECT'];
     if (selectTypes.includes(formData.type) && formData.options.length === 0) {
-      alert('选择类型属性必须提供选项');
+      toast.error('选择类型属性必须提供选项');
       return;
     }
 
@@ -322,7 +327,7 @@ export default function TemplatesPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert(editingTemplate ? '属性更新成功' : '属性创建成功');
+        toast.error(editingTemplate ? '属性更新成功' : '属性创建成功');
         setShowModal(false);
         if (selectedCategoryId) {
           loadTemplates(selectedCategoryId);
@@ -330,17 +335,17 @@ export default function TemplatesPage() {
       } else {
         // 提取详细错误信息
         const errMsg = result.errors?.[0]?.message || result.error || result.message || '操作失败';
-        alert(errMsg);
+        toast.error(errMsg);
       }
     } catch (error) {
       console.error('保存属性模板失败:', error);
-      alert('保存失败');
+      toast.error('保存失败');
     }
   };
 
   // 删除属性模板
   const handleDelete = async (template: AttributeTemplate) => {
-    if (!confirm(`确定要删除属性"${template.name}"吗？`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除属性模板 "${template.name}" 吗？` })) {
       return;
     }
 
@@ -352,14 +357,14 @@ export default function TemplatesPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('属性删除成功');
+        toast.error('属性删除成功');
         loadTemplates(selectedCategoryId);
       } else {
-        alert(result.error || '删除失败');
+        toast.error(result.error || '删除失败');
       }
     } catch (error) {
       console.error('删除属性模板失败:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
@@ -480,7 +485,7 @@ export default function TemplatesPage() {
     ));
   };
 
-  return (
+  return (<>
     <div className="p-6">
       {/* 页面标题 */}
       <div className="mb-6">
@@ -824,5 +829,8 @@ export default function TemplatesPage() {
         </Dialog>
       )}
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

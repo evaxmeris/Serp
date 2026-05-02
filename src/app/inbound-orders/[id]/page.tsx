@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +89,8 @@ export default function InboundOrderDetailPage() {
   const params = useParams();
   const [order, setOrder] = useState<InboundOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog: ConfirmDlg } = useConfirm();
 
   const fetchOrder = async () => {
     try {
@@ -110,7 +114,8 @@ export default function InboundOrderDetailPage() {
   }, [params.id]);
 
   const handleConfirm = async () => {
-    if (!confirm('确认入库此订单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确认入库此订单吗？' });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/v1/inbound-orders/${params.id}/confirm`, {
@@ -121,19 +126,20 @@ export default function InboundOrderDetailPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('入库确认成功');
+        toast.success('入库确认成功');
         fetchOrder();
       } else {
-        alert(data.message || '入库确认失败');
+        toast.error(data.message || '入库确认失败');
       }
     } catch (error) {
       console.error('Failed to confirm:', error);
-      alert('入库确认失败');
+      toast.error('入库确认失败');
     }
   };
 
   const handleCancel = async () => {
-    if (!confirm('确定要取消此入库单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确定要取消此入库单吗？' });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/v1/inbound-orders/${params.id}/cancel`, {
@@ -144,14 +150,14 @@ export default function InboundOrderDetailPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert('入库单已取消');
+        toast.success('入库单已取消');
         fetchOrder();
       } else {
-        alert(data.message || '取消失败');
+        toast.error(data.message || '取消失败');
       }
     } catch (error) {
       console.error('Failed to cancel:', error);
-      alert('取消失败');
+      toast.error('取消失败');
     }
   };
 
@@ -349,6 +355,8 @@ export default function InboundOrderDetailPage() {
           </CardContent>
         </Card>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDlg />
     </div>
   );
 }

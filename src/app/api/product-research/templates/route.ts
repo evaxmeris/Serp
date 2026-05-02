@@ -6,9 +6,8 @@
  * @method POST - 创建新属性模板
  */
 
-import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { successResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -75,20 +74,10 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({
-      success: true,
-      data: templates,
-    });
+    return successResponse(templates);
   } catch (error) {
     console.error('Error fetching templates:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取属性模板列表失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取属性模板列表失败');
   }
 }
 
@@ -126,13 +115,7 @@ export async function POST(request: NextRequest) {
 
     // 验证必填字段
     if (!name || !code || !categoryId) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '属性名称、编码和所属品类为必填项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('属性名称、编码和所属品类为必填项', 'VALIDATION_ERROR', 400);
     }
 
     // 检查编码是否已存在
@@ -141,13 +124,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingTemplate) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '属性编码已存在' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('属性编码已存在', 'CONFLICT', 400);
     }
 
     // 验证品类是否存在
@@ -156,25 +133,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!category) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '所属品类不存在' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('所属品类不存在', 'NOT_FOUND', 400);
     }
 
     // 验证选项（针对 SELECT 和 MULTI_SELECT 类型）
     const selectTypes = ['SELECT', 'MULTI_SELECT'];
     if (type && selectTypes.includes(type) && (!options || options.length === 0)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '选择类型属性必须提供选项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('选择类型属性必须提供选项', 'VALIDATION_ERROR', 400);
     }
 
     // 创建属性模板
@@ -207,23 +172,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: template,
-        message: '属性模板创建成功',
-      },
-      { status: 201 }
-    );
+    return createdResponse(template, '属性模板创建成功');
   } catch (error) {
     console.error('Error creating template:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '创建属性模板失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('创建属性模板失败');
   }
 }

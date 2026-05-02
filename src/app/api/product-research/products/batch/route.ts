@@ -10,9 +10,8 @@
  * - 返回导入结果统计
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse, createdResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -75,24 +74,11 @@ export async function POST(request: NextRequest) {
       )
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        total: createdProducts.length,
-        products: createdProducts,
-      },
-    });
+    return successResponse({ total: createdProducts.length, products: createdProducts });
   } catch (error) {
     console.error('批量导入失败:', error);
     
     // 事务失败回滚
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '批量导入失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('批量导入失败', 'INTERNAL_ERROR', 500);
   }
 }

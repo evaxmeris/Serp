@@ -23,6 +23,8 @@ import {
   getRowLevelFilter,
   loadUserPermissions,
   optionalAuth,
+  getCurrentUser,
+  logout,
 } from '@/middleware/auth';
 
 // 重新导出类型和核心功能
@@ -41,9 +43,11 @@ export { hasAllPermissions };
 export { getRowLevelFilter };
 export { loadUserPermissions };
 export { optionalAuth };
+export { getCurrentUser };
+export { logout };
 
-// 兼容旧代码的别名
-export { getSessionFromMiddleware as getCurrentUser };
+// 兼容旧代码的别名（getSession 也可作为 getCurrentUserWithRequest 使用）
+// 注意：getCurrentUser 现为新版无参数版本，使用 cookies() 直接从 cookie 获取
 
 /**
  * 用户角色枚举（保留用于向后兼容）

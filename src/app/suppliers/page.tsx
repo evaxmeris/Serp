@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Select,
   SelectContent,
@@ -28,8 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Search, Eye, Edit } from 'lucide-react';
 import { ToastContainer, useToast } from '@/components/ui/toast';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 
 interface Supplier {
   id: string;
@@ -87,6 +90,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [levelFilter, setLevelFilter] = useState<string>('all');
@@ -112,9 +116,15 @@ export default function SuppliersPage() {
     notes: '',
   });
 
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchSuppliers();
-  }, [page, search, statusFilter, typeFilter, levelFilter]);
+  }, [page, debouncedSearch, statusFilter, typeFilter, levelFilter]);
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -126,7 +136,7 @@ export default function SuppliersPage() {
         sortOrder: 'desc',
       });
 
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (typeFilter !== 'all') params.append('type', typeFilter);
       if (levelFilter !== 'all') params.append('level', levelFilter);
@@ -251,6 +261,9 @@ export default function SuppliersPage() {
       setCreating(false);
     }
   };
+
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(suppliers, 'createdAt');
 
   return (
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
@@ -503,27 +516,103 @@ export default function SuppliersPage() {
 
           {/* Table */}
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-24 shrink-0" />
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-1/5" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-24 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>供应商编号</TableHead>
-                    <TableHead>公司名称</TableHead>
-                    <TableHead>联系人</TableHead>
-                    <TableHead>邮箱</TableHead>
-                    <TableHead>电话</TableHead>
-                    <TableHead>类型</TableHead>
-                    <TableHead>等级</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>采购单</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('supplierNo')}
+                    >
+                      供应商编号
+                      <SortIndicator field="supplierNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('companyName')}
+                    >
+                      公司名称
+                      <SortIndicator field="companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('contactName')}
+                    >
+                      联系人
+                      <SortIndicator field="contactName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('email')}
+                    >
+                      邮箱
+                      <SortIndicator field="email" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('phone')}
+                    >
+                      电话
+                      <SortIndicator field="phone" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('type')}
+                    >
+                      类型
+                      <SortIndicator field="type" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('level')}
+                    >
+                      等级
+                      <SortIndicator field="level" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('_count.purchaseOrders')}
+                    >
+                      采购单
+                      <SortIndicator field="_count.purchaseOrders" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Array.isArray(suppliers) && suppliers.map((supplier) => (
+                  {Array.isArray(sorted) && sorted.map((supplier) => (
                     <TableRow key={supplier.id}>
                       <TableCell className="font-medium text-sm">
                         {supplier.supplierNo}
@@ -584,9 +673,10 @@ export default function SuppliersPage() {
               </Table>
 
               {suppliers.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">
-                  暂无供应商数据
-                </div>
+                <EmptyState
+                  title="暂无供应商数据"
+                  description="还没有任何供应商记录，创建一位供应商开始使用"
+                />
               )}
 
               {/* Pagination */}

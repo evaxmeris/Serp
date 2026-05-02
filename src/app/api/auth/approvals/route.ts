@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
+import { successResponse, errorResponse, forbiddenResponse } from '@/lib/api-response';
 
 /**
  * GET /api/auth/approvals - 获取注册申请列表
@@ -11,10 +11,7 @@ export async function GET(request: Request) {
     // 验证管理员权限
     const user = await getCurrentUser();
     if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: '无权限访问' },
-        { status: 403 }
-      );
+      return forbiddenResponse('无权限访问');
     }
 
     // 获取查询参数
@@ -41,17 +38,13 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       registrations,
       total: registrations.length,
       pendingCount: registrations.filter(r => r.status === 'PENDING').length,
     });
   } catch (error) {
     console.error('Error fetching approvals:', error);
-    return NextResponse.json(
-      { error: '获取审批列表失败' },
-      { status: 500 }
-    );
+    return errorResponse('获取审批列表失败', 'INTERNAL_ERROR', 500);
   }
 }

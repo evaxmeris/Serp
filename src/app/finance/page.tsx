@@ -9,14 +9,47 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DollarSign, ArrowUpCircle, ArrowDownCircle, Receipt, TrendingUp } from 'lucide-react';
 
 export default function FinancePage() {
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({
+    receivables: 0,
+    payables: 0,
+    monthlyIncome: 0,
+    monthlyExpense: 0,
+  });
 
-  useEffect(() => { setLoading(false); }, []);
+  useEffect(() => {
+    fetch('/api/v1/finance/summary')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setSummary(data.data);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">加载中...</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-8 w-full max-w-7xl">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-lg border p-6 space-y-3">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-lg" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-6 w-3/4" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
@@ -36,7 +69,7 @@ export default function FinancePage() {
               <div className="bg-blue-100 p-3 rounded-lg"><ArrowDownCircle className="h-6 w-6 text-blue-600" /></div>
               <div>
                 <p className="text-sm text-gray-500">应收账款</p>
-                <p className="text-2xl font-bold text-blue-600">¥0.00</p>
+                <p className="text-2xl font-bold text-blue-600">¥{Number(summary.receivables).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
           </CardContent>
@@ -47,7 +80,7 @@ export default function FinancePage() {
               <div className="bg-red-100 p-3 rounded-lg"><ArrowUpCircle className="h-6 w-6 text-red-600" /></div>
               <div>
                 <p className="text-sm text-gray-500">应付账款</p>
-                <p className="text-2xl font-bold text-red-600">¥0.00</p>
+                <p className="text-2xl font-bold text-red-600">¥{Number(summary.payables).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
           </CardContent>
@@ -57,8 +90,8 @@ export default function FinancePage() {
             <div className="flex items-center gap-4">
               <div className="bg-green-100 p-3 rounded-lg"><DollarSign className="h-6 w-6 text-green-600" /></div>
               <div>
-                <p className="text-sm text-gray-500">收付款记录</p>
-                <p className="text-2xl font-bold text-gray-900">0 笔</p>
+                <p className="text-sm text-gray-500">本月收入</p>
+                <p className="text-2xl font-bold text-green-600">¥{Number(summary.monthlyIncome).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
           </CardContent>
@@ -68,8 +101,8 @@ export default function FinancePage() {
             <div className="flex items-center gap-4">
               <div className="bg-purple-100 p-3 rounded-lg"><Receipt className="h-6 w-6 text-purple-600" /></div>
               <div>
-                <p className="text-sm text-gray-500">费用报销</p>
-                <p className="text-2xl font-bold text-purple-600">¥0.00</p>
+                <p className="text-sm text-gray-500">本月支出</p>
+                <p className="text-2xl font-bold text-purple-600">¥{Number(summary.monthlyExpense).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
           </CardContent>

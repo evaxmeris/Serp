@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Order {
   id: string;
@@ -82,6 +84,8 @@ export default function CreateOutboundOrderPage() {
   // 搜索
   const [searchOrder, setSearchOrder] = useState('');
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   // 加载仓库列表
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -176,12 +180,12 @@ export default function CreateOutboundOrderPage() {
   // 提交创建
   const handleSubmit = async () => {
     if (!selectedOrderId) {
-      alert('请选择销售订单');
+      toast.warning('请选择销售订单');
       return;
     }
 
     if (orderItems.length === 0) {
-      alert('请至少添加一个商品');
+      toast.warning('请至少添加一个商品');
       return;
     }
 
@@ -209,20 +213,20 @@ export default function CreateOutboundOrderPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单创建成功');
+        toast.error('出库单创建成功');
         router.push(`/outbound-orders/${result.data.id}`);
       } else {
-        alert(`创建失败：${result.message}`);
+        toast.error(`创建失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to create outbound order:', error);
-      alert('创建失败，请重试');
+      toast.warning('创建失败，请重试');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
+  return (<>
     <div className="container mx-auto py-6">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push('/outbound-orders')}>
@@ -397,5 +401,8 @@ export default function CreateOutboundOrderPage() {
         )}
       </div>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

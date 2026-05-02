@@ -15,7 +15,7 @@
  * @创建日期 2026-04-27
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useToast, ToastContainer } from '@/components/ui/toast';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,7 @@ import {
   CheckCircle2,
   XCircle,
   Settings,
+  Loader2,
 } from 'lucide-react';
 
 // ============================================================
@@ -77,6 +79,18 @@ const moduleOptions: { key: ModuleKey; label: string }[] = [
   { key: 'procurement', label: '采购' },
   { key: 'product', label: '产品' },
 ];
+
+/** 后端适用模块值映射 */
+const moduleToApi: Record<ModuleKey, string> = {
+  logistics: 'LOGISTICS',
+  procurement: 'PURCHASE',
+  product: 'PRODUCT',
+};
+const apiToModule: Record<string, ModuleKey> = {
+  LOGISTICS: 'logistics',
+  PURCHASE: 'procurement',
+  PRODUCT: 'product',
+};
 
 /** 审批人类型 */
 type ApproverType = 'user' | 'role';
@@ -95,6 +109,7 @@ interface ApprovalStep {
   id: string;
   name: string;
   order: number;
+  description?: string | null;
   approvers: ApproverConfig[];
   /** 审批模式: or = 任一审批, and = 全部审批 */
   mode: 'or' | 'and';
@@ -115,10 +130,9 @@ interface ApprovalWorkflow {
 }
 
 // ============================================================
-// 模拟数据
+// 模拟用户/角色列表（用于选择审批人）
 // ============================================================
 
-/** 模拟用户列表（用于选择审批人） */
 const mockUsers = [
   { id: 'u1', name: '张三', email: 'zhangsan@example.com' },
   { id: 'u2', name: '李四', email: 'lisi@example.com' },
@@ -127,103 +141,11 @@ const mockUsers = [
   { id: 'u5', name: '孙七', email: 'sunqi@example.com' },
 ];
 
-/** 模拟角色列表（用于选择审批人） */
 const mockRoles = [
   { id: 'r1', name: 'ADMIN', displayName: '管理员' },
   { id: 'r2', name: 'SALES', displayName: '业务员' },
   { id: 'r3', name: 'PURCHASING', displayName: '采购员' },
   { id: 'r4', name: 'WAREHOUSE', displayName: '仓管员' },
-];
-
-/** 模拟审批流程数据 */
-const mockWorkflows: ApprovalWorkflow[] = [
-  {
-    id: 'wf1',
-    name: '采购订单审批',
-    code: 'PURCHASE_ORDER_APPROVAL',
-    description: '采购订单提交后需经采购主管和财务审批',
-    modules: ['procurement'],
-    steps: [
-      {
-        id: 's1',
-        name: '采购主管审批',
-        order: 1,
-        approvers: [{ id: 'a1', type: 'role', targetId: 'r3', targetName: '采购员' }],
-        mode: 'or',
-        expanded: false,
-      },
-      {
-        id: 's2',
-        name: '财务审批',
-        order: 2,
-        approvers: [
-          { id: 'a2', type: 'user', targetId: 'u2', targetName: '李四' },
-          { id: 'a3', type: 'user', targetId: 'u3', targetName: '王五' },
-        ],
-        mode: 'and',
-        expanded: false,
-      },
-    ],
-    enabled: true,
-    createdAt: '2026-04-10',
-    updatedAt: '2026-04-20',
-  },
-  {
-    id: 'wf2',
-    name: '物流费用审批',
-    code: 'LOGISTICS_COST_APPROVAL',
-    description: '物流费用超过 5000 元需要审批',
-    modules: ['logistics'],
-    steps: [
-      {
-        id: 's1',
-        name: '物流经理审批',
-        order: 1,
-        approvers: [{ id: 'a4', type: 'role', targetId: 'r3', targetName: '采购员' }],
-        mode: 'or',
-        expanded: false,
-      },
-    ],
-    enabled: true,
-    createdAt: '2026-04-15',
-    updatedAt: '2026-04-18',
-  },
-  {
-    id: 'wf3',
-    name: '新品上架审批',
-    code: 'NEW_PRODUCT_APPROVAL',
-    description: '新品上架需经产品经理和市场部审批',
-    modules: ['product'],
-    steps: [
-      {
-        id: 's1',
-        name: '产品经理确认',
-        order: 1,
-        approvers: [{ id: 'a5', type: 'user', targetId: 'u1', targetName: '张三' }],
-        mode: 'or',
-        expanded: false,
-      },
-      {
-        id: 's2',
-        name: '市场部审核',
-        order: 2,
-        approvers: [{ id: 'a6', type: 'role', targetId: 'r2', targetName: '业务员' }],
-        mode: 'or',
-        expanded: false,
-      },
-      {
-        id: 's3',
-        name: '总经理终审',
-        order: 3,
-        approvers: [{ id: 'a7', type: 'user', targetId: 'u1', targetName: '张三' }],
-        mode: 'or',
-        expanded: false,
-      },
-    ],
-    enabled: false,
-    createdAt: '2026-03-20',
-    updatedAt: '2026-04-01',
-  },
 ];
 
 // ============================================================
@@ -233,14 +155,99 @@ const mockWorkflows: ApprovalWorkflow[] = [
 let stepIdCounter = 0;
 const generateStepId = () => `step_${++stepIdCounter}`;
 const generateApproverId = () => `approver_${++stepIdCounter}`;
-const generateWorkflowId = () => `wf_${++stepIdCounter}`;
+
+/** 从名称查用户/角色（用于展示） */
+function resolveUserName(userId: string): string {
+  return mockUsers.find((u) => u.id === userId)?.name || userId;
+}
+function resolveRoleName(roleId: string): string {
+  return mockRoles.find((r) => r.id === roleId)?.displayName || roleId;
+}
+
+// ============================================================
+// 后端 API 类型映射
+// ============================================================
+
+interface ApiAssignee {
+  id: string;
+  userId: string | null;
+  role: string | null;
+  isRequired: boolean;
+}
+
+interface ApiStep {
+  id: string;
+  workflowId: string;
+  order: number;
+  name: string;
+  description: string | null;
+  assignees: ApiAssignee[];
+}
+
+interface ApiWorkflow {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  applicableTo: string[];
+  isActive: boolean;
+  steps: ApiStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 后端 ApiWorkflow → 前端 ApprovalWorkflow */
+function apiToWorkflow(api: ApiWorkflow): ApprovalWorkflow {
+  return {
+    id: api.id,
+    name: api.name,
+    code: api.code,
+    description: api.description || '',
+    modules: (api.applicableTo || []).map((a) => apiToModule[a] || 'logistics').filter(Boolean),
+    steps: (api.steps || [])
+      .sort((a, b) => a.order - b.order)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        order: s.order,
+        mode: 'or' as const, // 后端暂未存储 mode，默认 or
+        description: s.description || null,
+        expanded: false,
+        approvers: (s.assignees || []).map((a) => ({
+          id: a.id,
+          type: a.userId ? ('user' as const) : ('role' as const),
+          targetId: a.userId || a.role || '',
+          targetName: a.userId ? resolveUserName(a.userId) : resolveRoleName(a.role || ''),
+        })),
+      })),
+    enabled: api.isActive,
+    createdAt: api.createdAt,
+    updatedAt: api.updatedAt,
+  };
+}
+
+/** 前端步骤 → 后端 steps 数组 */
+function stepsToApi(steps: ApprovalStep[]) {
+  return steps.map((s, i) => ({
+    order: i + 1,
+    name: s.name,
+    description: s.description || null,
+    assignees: s.approvers.map((a) => ({
+      userId: a.type === 'user' ? a.targetId || null : null,
+      role: a.type === 'role' ? a.targetId || null : null,
+    })),
+  }));
+}
 
 // ============================================================
 // 主页面组件
 // ============================================================
 
 export default function ApprovalWorkflowsPage() {
-  const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>(mockWorkflows);
+  const { toasts, removeToast, toast } = useToast();
+  const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<ApprovalWorkflow | null>(null);
   const [previewWorkflow, setPreviewWorkflow] = useState<ApprovalWorkflow | null>(null);
@@ -252,6 +259,32 @@ export default function ApprovalWorkflowsPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formModules, setFormModules] = useState<ModuleKey[]>([]);
   const [formSteps, setFormSteps] = useState<ApprovalStep[]>([]);
+
+  // ============================================================
+  // 加载审批流程列表
+  // ============================================================
+  const loadWorkflows = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/v1/approval-workflows');
+      if (!res.ok) {
+        throw new Error(`加载失败 (${res.status})`);
+      }
+      const json = await res.json();
+      // listResponse 返回 { data: { items, pagination } }
+      const list: ApiWorkflow[] = json.data?.items || json.data || [];
+      setWorkflows(list.map(apiToWorkflow));
+    } catch (err: any) {
+      console.error('加载审批流程失败:', err);
+      toast.error(err.message || '加载审批流程失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadWorkflows();
+  }, [loadWorkflows]);
 
   // ============================================================
   // 重置表单
@@ -287,64 +320,113 @@ export default function ApprovalWorkflowsPage() {
   };
 
   // ============================================================
-  // 保存（新建/编辑）
+  // 保存（新建/编辑）- 调用后端 API
   // ============================================================
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim() || !formCode.trim()) return;
-
-    const now = new Date().toISOString().slice(0, 10);
-
-    if (editingWorkflow) {
-      // 编辑模式
-      setWorkflows((prev) =>
-        prev.map((w) =>
-          w.id === editingWorkflow.id
-            ? {
-                ...w,
-                name: formName.trim(),
-                code: formCode.trim(),
-                description: formDescription.trim(),
-                modules: formModules,
-                steps: formSteps.map((s, i) => ({ ...s, order: i + 1 })),
-                updatedAt: now,
-              }
-            : w,
-        ),
-      );
-    } else {
-      // 新建模式
-      const newWorkflow: ApprovalWorkflow = {
-        id: generateWorkflowId(),
-        name: formName.trim(),
-        code: formCode.trim(),
-        description: formDescription.trim(),
-        modules: formModules,
-        steps: formSteps.map((s, i) => ({ ...s, order: i + 1 })),
-        enabled: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setWorkflows((prev) => [...prev, newWorkflow]);
+    if (formModules.length === 0) {
+      toast.warning('请至少选择一个适用模块');
+      return;
+    }
+    if (formSteps.length === 0) {
+      toast.warning('请至少添加一个审批步骤');
+      return;
     }
 
-    setDialogOpen(false);
+    setSaving(true);
+    try {
+      const body = {
+        name: formName.trim(),
+        code: formCode.trim().toUpperCase(),
+        description: formDescription.trim() || null,
+        applicableTo: formModules.map((m) => moduleToApi[m]),
+        isActive: editingWorkflow ? editingWorkflow.enabled : true,
+        steps: stepsToApi(formSteps),
+      };
+
+      if (editingWorkflow) {
+        // 编辑模式 — PUT
+        const res = await fetch(`/api/v1/approval-workflows/${editingWorkflow.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.message || `更新失败 (${res.status})`);
+        }
+        toast.success(`审批流程「${formName}」更新成功`);
+      } else {
+        // 新建模式 — POST
+        const res = await fetch('/api/v1/approval-workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.message || `创建失败 (${res.status})`);
+        }
+        toast.success(`审批流程「${formName}」创建成功`);
+      }
+
+      setDialogOpen(false);
+      await loadWorkflows();
+    } catch (err: any) {
+      console.error('保存审批流程失败:', err);
+      toast.error(err.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ============================================================
-  // 删除流程
+  // 删除流程 - 调用后端 API
   // ============================================================
-  const handleDelete = (workflow: ApprovalWorkflow) => {
+  const handleDelete = async (workflow: ApprovalWorkflow) => {
     if (!confirm(`确定删除审批流程「${workflow.name}」吗？此操作不可撤销。`)) return;
-    setWorkflows((prev) => prev.filter((w) => w.id !== workflow.id));
+
+    try {
+      const res = await fetch(`/api/v1/approval-workflows/${workflow.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `删除失败 (${res.status})`);
+      }
+      toast.success(`审批流程「${workflow.name}」已删除`);
+      await loadWorkflows();
+    } catch (err: any) {
+      console.error('删除审批流程失败:', err);
+      toast.error(err.message || '删除失败');
+    }
   };
 
   // ============================================================
-  // 切换启用/禁用
+  // 切换启用/禁用 - 调用后端 API
   // ============================================================
-  const handleToggleEnabled = (workflow: ApprovalWorkflow, checked: boolean) => {
-    setWorkflows((prev) =>
-      prev.map((w) => (w.id === workflow.id ? { ...w, enabled: checked } : w)),
-    );
+  const handleToggleEnabled = async (workflow: ApprovalWorkflow, checked: boolean) => {
+    try {
+      const res = await fetch(`/api/v1/approval-workflows/${workflow.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: checked }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `切换状态失败 (${res.status})`);
+      }
+      // 乐观更新
+      setWorkflows((prev) =>
+        prev.map((w) => (w.id === workflow.id ? { ...w, enabled: checked } : w)),
+      );
+      toast.success(checked ? '审批流程已启用' : '审批流程已禁用');
+    } catch (err: any) {
+      console.error('切换审批流程状态失败:', err);
+      toast.error(err.message || '切换状态失败');
+      // 回滚乐观更新
+      await loadWorkflows();
+    }
   };
 
   // ============================================================
@@ -452,6 +534,9 @@ export default function ApprovalWorkflowsPage() {
   // ============================================================
   return (
     <div className="p-6 space-y-6 w-full">
+      {/* Toast 通知容器 */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
@@ -463,7 +548,7 @@ export default function ApprovalWorkflowsPage() {
             配置业务审批流程，定义审批步骤和审批人
           </p>
         </div>
-        <Button onClick={handleCreate}>
+        <Button onClick={handleCreate} disabled={loading}>
           <Plus className="h-4 w-4 mr-2" />
           新建流程
         </Button>
@@ -483,7 +568,12 @@ export default function ApprovalWorkflowsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {workflows.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-zinc-400">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>加载中...</span>
+            </div>
+          ) : workflows.length === 0 ? (
             <div className="text-center py-12 text-zinc-400">
               <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">暂无审批流程</p>
@@ -707,14 +797,21 @@ export default function ApprovalWorkflowsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               取消
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!formName.trim() || !formCode.trim()}
+              disabled={!formName.trim() || !formCode.trim() || saving}
             >
-              保存
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                '保存'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

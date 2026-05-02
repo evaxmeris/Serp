@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   successResponse,
   errorResponse,
@@ -66,34 +66,74 @@ export async function POST(
     const financeNote = v.data.comment
       ? `[财务确认: ${v.data.comment}]`
       : '[财务确认通过]';
-    const order = await prisma.logisticsOrder.update({
-      where: { id },
-      data: {
-        status: 'APPROVED',
-        approvalStep: 'APPROVED',
-        financeConfirmedById: session.id,
-        financeConfirmedAt: new Date(),
-        notes: existing.notes
-          ? `${existing.notes}\n${financeNote}`
-          : financeNote,
-      },
-      include: {
-        provider: {
-          select: {
-            id: true,
-            companyName: true,
-            contactName: true,
-            contactPhone: true,
+
+    const order = await prisma.$transaction(async (tx) => {
+      const updated = await tx.logisticsOrder.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          approvalStep: 'APPROVED',
+          financeConfirmedById: session.id,
+          financeConfirmedAt: new Date(),
+          notes: existing.notes
+            ? `${existing.notes}\n${financeNote}`
+            : financeNote,
+        },
+        include: {
+          provider: {
+            select: {
+              id: true,
+              companyName: true,
+              contactName: true,
+              contactPhone: true,
+            },
+          },
+          submitter: { select: { id: true, name: true, email: true } },
+          reviewer: { select: { id: true, name: true, email: true } },
+          approver: { select: { id: true, name: true, email: true } },
+          finance: { select: { id: true, name: true, email: true } },
+          reviewedBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, email: true } },
+          financeConfirmedBy: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      // 查找并更新审批实例
+      const approvalInstance = await tx.approvalInstance.findUnique({
+        where: {
+          targetType_targetId: {
+            targetType: 'LOGISTICS_ORDER',
+            targetId: id,
           },
         },
-        submitter: { select: { id: true, name: true, email: true } },
-        reviewer: { select: { id: true, name: true, email: true } },
-        approver: { select: { id: true, name: true, email: true } },
-        finance: { select: { id: true, name: true, email: true } },
-        reviewedBy: { select: { id: true, name: true, email: true } },
-        approvedBy: { select: { id: true, name: true, email: true } },
-        financeConfirmedBy: { select: { id: true, name: true, email: true } },
-      },
+        select: { id: true },
+      });
+
+      if (approvalInstance) {
+        // 更新审批实例：标记为已完成
+        await tx.approvalInstance.update({
+          where: { id: approvalInstance.id },
+          data: {
+            currentStep: 4,
+            status: 'APPROVED',
+            completedAt: new Date(),
+          },
+        });
+
+        // 创建审批动作记录
+        await tx.approvalActionRecord.create({
+          data: {
+            instanceId: approvalInstance.id,
+            stepOrder: 4,
+            stepName: '财务确认',
+            action: 'APPROVED',
+            userId: session.id,
+            comment: v.data.comment || null,
+          },
+        });
+      }
+
+      return updated;
     });
 
     return successResponse(order, '财务确认通过，订单审批完成');

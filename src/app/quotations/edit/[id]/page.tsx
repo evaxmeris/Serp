@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
 
 interface Customer {
@@ -45,6 +47,9 @@ export default function EditQuotationPage() {
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [formData, setFormData] = useState({
     customerId: '',
@@ -147,22 +152,22 @@ export default function EditQuotationPage() {
 
   const handleSubmit = async () => {
     if (!formData.customerId) {
-      alert('请选择客户');
+      toast.warning('请选择客户');
       return;
     }
 
     // 验证 items
     for (let i = 0; i < items.length; i++) {
       if (!items[i].productName) {
-        alert(`第 ${i + 1} 项产品名称必填`);
+        toast.error(`第 ${i + 1} 项产品名称必填`);
         return;
       }
       if (!items[i].quantity || parseFloat(items[i].quantity) <= 0) {
-        alert(`第 ${i + 1} 项数量必须为正数`);
+        toast.error(`第 ${i + 1} 项数量必须为正数`);
         return;
       }
       if (!items[i].unitPrice || parseFloat(items[i].unitPrice) < 0) {
-        alert(`第 ${i + 1} 项单价不能为负数`);
+        toast.error(`第 ${i + 1} 项单价不能为负数`);
         return;
       }
     }
@@ -186,15 +191,15 @@ export default function EditQuotationPage() {
       });
 
       if (res.ok) {
-        alert('报价单更新成功');
+        toast.error('报价单更新成功');
         router.push(`/quotations/${params.id}`);
       } else {
         const data = await res.json();
-        alert(`更新失败：${data.error}`);
+        toast.error(`更新失败：${data.error}`);
       }
     } catch (error) {
       console.error('Failed to update quotation:', error);
-      alert('更新失败');
+      toast.error('更新失败');
     } finally {
       setSubmitting(false);
     }
@@ -220,7 +225,7 @@ export default function EditQuotationPage() {
     );
   }
 
-  return (
+  return (<>
     <div className="container mx-auto py-8 space-y-6">
       {/* 头部 */}
       <div className="flex items-center gap-4">
@@ -435,5 +440,8 @@ export default function EditQuotationPage() {
         </Button>
       </div>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

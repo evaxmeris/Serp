@@ -7,9 +7,8 @@
  * @method DELETE - 删除品类
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { successResponse, createdResponse, notFoundResponse, errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -63,29 +62,13 @@ export async function GET(
     });
 
     if (!category) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '品类不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('品类');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: category,
-    });
+    return successResponse(category);
   } catch (error) {
     console.error('Error fetching category:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取品类详情失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取品类详情失败');
   }
 }
 
@@ -110,13 +93,7 @@ export async function PUT(
     });
 
     if (!existingCategory) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '品类不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('品类');
     }
 
     // 如果修改了编码，检查新编码是否已被使用
@@ -126,13 +103,7 @@ export async function PUT(
       });
 
       if (codeExists) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: '品类编码已存在' 
-          },
-          { status: 400 }
-        );
+        return errorResponse('品类编码已存在', 'CONFLICT', 400);
       }
     }
 
@@ -160,24 +131,12 @@ export async function PUT(
         });
 
         if (!parentCategory) {
-          return NextResponse.json(
-            { 
-              success: false, 
-              error: '父品类不存在' 
-            },
-            { status: 400 }
-          );
+          return errorResponse('父品类不存在', 'NOT_FOUND', 400);
         }
 
         // 不能将自己设为父品类
         if (normalizedParentId === id) {
-          return NextResponse.json(
-          { 
-            success: false, 
-            error: '不能将自己设为父品类' 
-          },
-          { status: 400 }
-        );
+          return errorResponse('不能将自己设为父品类', 'BAD_REQUEST', 400);
         }
 
         updateData.level = parentCategory.level + 1;
@@ -208,21 +167,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: category,
-      message: '品类更新成功',
-    });
+    return successResponse(category, '品类更新成功');
   } catch (error) {
     console.error('Error updating category:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '更新品类失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('更新品类失败');
   }
 }
 
@@ -257,46 +205,22 @@ export async function DELETE(
     });
 
     if (!category) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '品类不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('品类');
     }
 
     // 检查是否有子品类
     if (category._count.children > 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '该品类下有子品类，无法删除' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('该品类下有子品类，无法删除', 'CONFLICT', 400);
     }
 
     // 检查是否有属性模板
     if (category._count.templates > 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '该品类下有属性模板，无法删除' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('该品类下有属性模板，无法删除', 'CONFLICT', 400);
     }
 
     // 检查是否有产品
     if (category._count.products > 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '该品类下有产品，无法删除' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('该品类下有产品，无法删除', 'CONFLICT', 400);
     }
 
     // 删除品类
@@ -304,19 +228,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: '品类删除成功',
-    });
+    return successResponse(null, '品类删除成功');
   } catch (error) {
     console.error('Error deleting category:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '删除品类失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('删除品类失败');
   }
 }

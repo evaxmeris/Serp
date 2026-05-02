@@ -24,6 +24,9 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Search, Edit, Trash2, Swords, Eye } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Competitor {
   id: string;
@@ -49,6 +52,8 @@ const TYPE_LABELS: Record<string, string> = { DOMESTIC: '国内竞品', OVERSEAS
 const TYPE_COLORS: Record<string, string> = { DOMESTIC: 'bg-blue-100 text-blue-800', OVERSEAS: 'bg-purple-100 text-purple-800' };
 
 export default function CompetitorsPage() {
+  const { confirm, ConfirmDialog } = useConfirm();
+  const { toast, toasts, removeToast } = useToast();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -123,9 +128,10 @@ export default function CompetitorsPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定删除竞品「${name}」？`)) return;
+    if (!await confirm({ title: '确认删除', description: `确定删除竞品「${name}」？` })) return;
     try {
       await fetch(`/api/v1/competitors/${id}`, { method: 'DELETE' });
+      toast.success('删除成功');
       fetchCompetitors();
     } catch (e) { console.error('删除失败:', e); }
   };
@@ -166,10 +172,10 @@ export default function CompetitorsPage() {
           {loading ? (
             <div className="text-center py-8 text-gray-500">加载中...</div>
           ) : competitors.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Swords className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>暂无竞品分析数据</p>
-            </div>
+            <EmptyState
+              title="暂无竞品分析数据"
+              description="还没有任何竞品分析记录，创建一份竞品分析开始使用"
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -263,6 +269,8 @@ export default function CompetitorsPage() {
           )}
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

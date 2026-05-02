@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,6 +81,8 @@ interface OrderItem {
 export default function EditOutboundOrderPage() {
   const router = useRouter();
   const params = useParams();
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<OutboundOrder | null>(null);
@@ -97,7 +101,7 @@ export default function EditOutboundOrderPage() {
           
           // 验证状态
           if (result.data.status !== 'PENDING') {
-            alert('只有待处理状态的出库单可以编辑');
+            toast.error('只有待处理状态的出库单可以编辑');
             router.push(`/outbound-orders/${params.id}`);
             return;
           }
@@ -119,12 +123,12 @@ export default function EditOutboundOrderPage() {
             setItems(orderItems);
           }
         } else {
-          alert('出库单不存在');
+          toast.error('出库单不存在');
           router.push('/outbound-orders');
         }
       } catch (error) {
         console.error('Failed to fetch outbound order:', error);
-        alert('加载失败，请重试');
+        toast.warning('加载失败，请重试');
       } finally {
         setLoading(false);
       }
@@ -171,14 +175,13 @@ export default function EditOutboundOrderPage() {
   };
 
   // 删除商品行
-  const removeItem = (index: number) => {
+  const removeItem = async (index: number) => {
     const newItems = [...items];
     if (newItems[index].id) {
       // 已存在的商品，标记为待删除（实际删除需要 API 支持）
-      if (confirm('确定要删除这个商品吗？')) {
-        newItems.splice(index, 1);
-        setItems(newItems);
-      }
+      if (!await confirm({ title: '确认删除', description: '确定要删除这个商品吗？' })) return;
+      newItems.splice(index, 1);
+      setItems(newItems);
     } else {
       // 新增的商品，直接删除
       newItems.splice(index, 1);
@@ -188,7 +191,7 @@ export default function EditOutboundOrderPage() {
 
   // 添加商品行（简化版，实际需要产品选择器）
   const addItem = () => {
-    alert('添加商品功能待实现：需要从产品列表选择');
+    toast.warning('添加商品功能待实现：需要从产品列表选择');
     // TODO: 实现产品选择器
   };
 
@@ -200,7 +203,7 @@ export default function EditOutboundOrderPage() {
   // 保存修改
   const handleSave = async () => {
     if (items.length === 0) {
-      alert('出库单至少需要一项商品');
+      toast.error('出库单至少需要一项商品');
       return;
     }
 
@@ -226,14 +229,14 @@ export default function EditOutboundOrderPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单已更新');
+        toast.error('出库单已更新');
         router.push(`/outbound-orders/${params.id}`);
       } else {
-        alert(`更新失败：${result.message}`);
+        toast.error(`更新失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to update outbound order:', error);
-      alert('更新失败，请重试');
+      toast.warning('更新失败，请重试');
     } finally {
       setSubmitting(false);
     }
@@ -426,6 +429,8 @@ export default function EditOutboundOrderPage() {
           </CardContent>
         </Card>
       </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

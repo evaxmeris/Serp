@@ -7,6 +7,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Subscription {
   id: string;
@@ -27,6 +29,8 @@ interface Subscription {
 }
 
 export default function SubscriptionsPage() {
+  const { confirm, ConfirmDialog } = useConfirm();
+  const { toast, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
@@ -66,7 +70,7 @@ export default function SubscriptionsPage() {
   }
 
   async function deleteSubscription(id: string) {
-    if (!confirm('确定要删除此订阅吗？')) return;
+    if (!await confirm({ title: '确认删除', description: '确定要删除此订阅吗？' })) return;
 
     try {
       const response = await fetch(`/api/v1/reports/subscribe/${id}`, {
@@ -74,6 +78,7 @@ export default function SubscriptionsPage() {
       });
 
       if (response.ok) {
+        toast.success('删除成功');
         await loadSubscriptions();
       }
     } catch (error) {
@@ -210,6 +215,8 @@ export default function SubscriptionsPage() {
           </table>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

@@ -12,8 +12,7 @@
  * - 导入前二次校验 1000 条上限
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { BatchImportSchema } from '@/lib/api-schemas';
@@ -47,10 +46,7 @@ export async function POST(request: Request) {
     // ────────────── 认证检查 ──────────────
     const user = await getCurrentUser();
     if (!user || !['ADMIN', 'SALES'].includes(user.role)) {
-      return NextResponse.json(
-        { error: '需要客户管理权限' },
-        { status: 403 },
-      );
+      return forbiddenResponse('需要客户管理权限');
     }
 
     // ────────────── 解析请求 ──────────────
@@ -64,12 +60,7 @@ export async function POST(request: Request) {
 
     // ────────────── VAL-001: 数量限制二次校验 ──────────────
     if (customers.length > MAX_BATCH_SIZE) {
-      return NextResponse.json(
-        {
-          error: `单次最多导入 ${MAX_BATCH_SIZE} 条，当前 ${customers.length} 条`,
-        },
-        { status: 400 },
-      );
+      return errorResponse(`单次最多导入 ${MAX_BATCH_SIZE} 条，当前 ${customers.length} 条`, 'VALIDATION_ERROR', 400);
     }
 
     // ══════════════════════════════════════════════════════
@@ -202,22 +193,9 @@ export async function POST(request: Request) {
     // ────────────── 返回结果 ──────────────
     const successCount = createdCount + updatedCount;
 
-    return NextResponse.json({
-      success: true,
-      message: `导入完成：成功 ${successCount} 条（新增 ${createdCount}，更新 ${updatedCount}），失败 ${errors.length} 条`,
-      results: {
-        success: successCount,
-        failed: errors.length,
-        created: createdCount,
-        updated: updatedCount,
-        errors,
-      },
-    });
+    return successResponse({ success: successCount, failed: errors.length, created: createdCount, updated: updatedCount, errors }, `导入完成：成功 ${successCount} 条（新增 ${createdCount}，更新 ${updatedCount}），失败 ${errors.length} 条`);
   } catch (error: any) {
     console.error('批量导入错误:', error);
-    return NextResponse.json(
-      { error: '导入失败：' + error.message },
-      { status: 500 },
-    );
+    return errorResponse('导入失败：' + error.message, 'INTERNAL_ERROR', 500);
   }
 }

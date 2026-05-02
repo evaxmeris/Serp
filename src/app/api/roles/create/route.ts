@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession, requirePermission } from '@/middleware/auth';
+import { errorResponse, successResponse, forbiddenResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -16,6 +16,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
+    // 权限检查：只有拥有 settings:roles 权限的用户才能创建角色
+    const authSession = await getSession(request);
+    if (!authSession) {
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
+    }
+    const permError = requirePermission(authSession, 'settings:roles');
+    if (permError) return permError;
+
     const body = await request.json();
     const v = validateOrReturn(CreateRoleSchema, body);
     if (!v.success) return v.response;
@@ -27,10 +35,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingRole) {
-      return NextResponse.json(
-        { error: 'Role with this name already exists' },
-        { status: 400 }
-      );
+      return errorResponse('Role with this name already exists', 'CONFLICT', 409);
     }
 
     // 创建角色
@@ -54,12 +59,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ data: role }, { status: 201 });
+    return createdResponse(role, 'Role created successfully');
   } catch (error) {
     console.error('Error creating role:', error);
-    return NextResponse.json(
-      { error: 'Failed to create role' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to create role', 'INTERNAL_ERROR', 500);
   }
 }

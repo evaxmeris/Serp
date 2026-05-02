@@ -3,8 +3,8 @@
  * 支持 Excel/CSV 格式导入
  */
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
+import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateProductSchema } from '@/lib/api-schemas';
@@ -19,10 +19,7 @@ export async function POST(request: Request) {
     // 认证检查
     const user = await getCurrentUser();
     if (!user || !['ADMIN', 'SALES'].includes(user.role)) {
-      return NextResponse.json(
-        { error: '需要产品管理权限' },
-        { status: 403 }
-      );
+      return errorResponse('需要产品管理权限', 'FORBIDDEN', 403);
     }
 
     // 解析请求数据

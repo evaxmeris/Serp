@@ -17,9 +17,8 @@ model User {
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
   isApproved                   Boolean             @default(false)
-  approvalHistory              ApprovalHistory[]   @relation("ApprovalHistoryApprover")
-  approvalApprovals            ApprovalRecord[]    @relation("ApprovalApprover")
-  approvalInitiations          ApprovalRecord[]    @relation("ApprovalInitiator")
+  phone                        String?
+  department                   String?
   approvedCommissions          Commission[]        @relation("CommissionApprovedBy")
   userCommissions              Commission[]        @relation("CommissionUser")
   customers                    Customer[]          @relation("Owner")
@@ -43,6 +42,8 @@ model User {
   logisticsReviewActions       LogisticsOrder[]    @relation("LogisticsOrderReviewedBy")
   logisticsApproveActions      LogisticsOrder[]    @relation("LogisticsOrderApprovedBy")
   logisticsFinanceActions      LogisticsOrder[]    @relation("LogisticsOrderFinanceConfirmedBy")
+
+  auditLogs                    AuditLog[]
 
   @@map("users")
 }
@@ -69,6 +70,7 @@ model Customer {
   inquiries   Inquiry[]
   orders      Order[]
   quotations  Quotation[]
+  invoices    Invoice[]
 
   @@index([email])
   @@index([status, createdAt])
@@ -253,6 +255,7 @@ model Order {
   purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
   qualityChecks     QualityCheck[]
   shipments         Shipment[]
+  invoices          Invoice[]
 
   @@index([customerId, status])
   @@index([salesRepId, createdAt])
@@ -1447,71 +1450,6 @@ model OverseasInventory {
   @@map("overseas_inventory")
 }
 
-model ApprovalFlow {
-  id          String             @id @default(cuid())
-  name        String
-  type        ApprovalType
-  description String?
-  config      Json               @default("{}")
-  isActive    ApprovalFlowStatus @default(ACTIVE)
-  isSystem    Boolean            @default(false)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  records     ApprovalRecord[]
-
-  @@index([type, isActive])
-  @@map("approval_flows")
-}
-
-model ApprovalRecord {
-  id           String               @id @default(cuid())
-  flowId       String
-  flowCode     String?
-  title        String
-  type         ApprovalType
-  businessId   String
-  businessType String
-  status       ApprovalRecordStatus @default(PENDING)
-  currentStep  Int                  @default(1)
-  totalSteps   Int                  @default(1)
-  initiatorId  String
-  approverId   String?
-  initiatedAt  DateTime             @default(now())
-  approvedAt   DateTime?
-  updatedAt    DateTime             @updatedAt
-  data         Json                 @default("{}")
-  comments     String?
-  history      ApprovalHistory[]
-  approver     User?                @relation("ApprovalApprover", fields: [approverId], references: [id])
-  flow         ApprovalFlow         @relation(fields: [flowId], references: [id])
-  initiator    User                 @relation("ApprovalInitiator", fields: [initiatorId], references: [id])
-
-  @@index([flowId])
-  @@index([status])
-  @@index([initiatorId])
-  @@index([approverId])
-  @@index([businessId, businessType])
-  @@index([initiatedAt])
-  @@map("approval_records")
-}
-
-model ApprovalHistory {
-  id         String         @id @default(cuid())
-  recordId   String
-  step       Int
-  approverId String
-  action     ApprovalAction
-  comments   String?
-  actionAt   DateTime       @default(now())
-  approver   User           @relation("ApprovalHistoryApprover", fields: [approverId], references: [id])
-  record     ApprovalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-
-  @@index([recordId])
-  @@index([approverId])
-  @@index([actionAt])
-  @@map("approval_history")
-}
-
 model Account {
   id             String          @id @default(cuid())
   name           String
@@ -2323,40 +2261,6 @@ enum OverseasWarehouseType {
   THIRD_PARTY
 }
 
-enum ApprovalType {
-  USER_REGISTRATION
-  ORDER_APPROVAL
-  PURCHASE_APPROVAL
-  PAYMENT_APPROVAL
-  EXPENSE_APPROVAL
-  PRICE_CHANGE
-  DISCOUNT_APPROVAL
-  CUSTOM
-}
-
-enum ApprovalFlowStatus {
-  DRAFT
-  ACTIVE
-  INACTIVE
-}
-
-enum ApprovalRecordStatus {
-  PENDING
-  APPROVING
-  APPROVED
-  REJECTED
-  CANCELLED
-  WITHDRAWN
-}
-
-enum ApprovalAction {
-  APPROVE
-  REJECT
-  TRANSFER
-  RETURN
-  CANCEL
-}
-
 enum AccountType {
   CASH
   BANK
@@ -2471,6 +2375,80 @@ model PlatformSyncConfig {
   @@map("platform_sync_configs")
 }
 
+// ============================================
+// 发票管理模块 (v1.0)
+// 形式发票(PI)、商业发票(CI)、税务发票
+// ============================================
+
+enum InvoiceType {
+  PROFORMA      // 形式发票(PI)
+  COMMERCIAL    // 商业发票(CI)
+  TAX           // 税务发票
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  PAID
+  CANCELLED
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNo       String        @unique  // PI-20260501-001
+  type            InvoiceType   @default(PROFORMA)
+  status          InvoiceStatus @default(DRAFT)
+
+  // 关联
+  orderId         String?
+  order           Order?        @relation(fields: [orderId], references: [id])
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+
+  // 票据信息
+  invoiceDate     DateTime      @default(now())
+  dueDate         DateTime?
+  currency        String        @default("USD")
+  exchangeRate    Float         @default(1.0)
+
+  // 金额
+  subtotal        Decimal       @default(0) @db.Decimal(12, 2)
+  taxRate         Decimal       @default(0) @db.Decimal(5, 2)
+  taxAmount       Decimal       @default(0) @db.Decimal(12, 2)
+  discountRate    Decimal       @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  amountPaid      Decimal?      @default(0) @db.Decimal(12, 2)
+  balanceDue      Decimal?      @default(0) @db.Decimal(12, 2)
+
+  // 开票方/收票方
+  issuerName      String        // 公司名称
+  issuerAddress   String?
+  issuerTaxId     String?
+  issuerPhone     String?
+  recipientName   String?       // 客户公司名称
+  recipientAddress String?
+  recipientTaxId  String?
+
+  // 商品明细 (JSON)
+  items           Json          @default("[]")  // [{productName, sku, quantity, unitPrice, totalPrice}]
+
+  // 备注
+  notes           String?
+  terms           String?       // 付款条款
+
+  // 审计
+  createdById     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@map("invoices")
+}
+
 model PlatformSyncLog {
   id          String   @id @default(cuid())
   platformCode String  // 来源平台
@@ -2487,4 +2465,41 @@ model PlatformSyncLog {
 
   @@map("platform_sync_logs")
   @@index([platformCode, startedAt])
+}
+
+// ============================================
+// 审计日志
+// ============================================
+model AuditLog {
+  id         String    @id @default(cuid())
+  action     String    // 操作类型: LOGIN, CREATE, UPDATE, DELETE, EXPORT 等
+  entityType String    // 操作对象类型: User, Order, Product 等
+  entityId   String    // 操作对象 ID
+  userId     String?   // 操作人 ID
+  details    Json?     // 操作详情（变更前后的数据）
+  ipAddress  String?   // 操作时的 IP 地址
+  userAgent  String?   // 操作时的 User-Agent
+  createdAt  DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// 系统配置（键值存储）
+// ============================================
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   // JSON 字符串
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
 }

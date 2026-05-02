@@ -60,6 +60,8 @@ import {
   Filter,
   ArrowLeft,
 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import PermissionTree, { Permission } from '@/components/permission-tree/PermissionTree';
 
 // 类型定义
@@ -92,6 +94,9 @@ export default function RolesPage() {
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   const [formData, setFormData] = useState({
     name: '',
     displayName: '',
@@ -252,17 +257,17 @@ export default function RolesPage() {
       } else {
         const error = await res.json();
         console.error('保存权限失败:', error);
-        alert('保存权限失败：' + (error.error || '未知错误'));
+        toast.error('保存权限失败：' + (error.error || '未知错误'));
       }
     } catch (error) {
       console.error('保存权限失败:', error);
-      alert('保存权限失败，请重试');
+      toast.warning('保存权限失败，请重试');
     }
   };
 
   // 删除角色
   const handleDelete = async (roleId: string, displayName: string) => {
-    if (!window.confirm(`确定要删除角色 "${displayName}" 吗？此操作不可恢复。`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除角色 "${displayName}" 吗？此操作不可恢复。` })) {
       return;
     }
 
@@ -286,7 +291,7 @@ export default function RolesPage() {
   const handleBatchDelete = async () => {
     if (selectedRoleIds.length === 0) return;
     
-    if (!window.confirm(`确定要删除选中的 ${selectedRoleIds.length} 个角色吗？此操作不可恢复。`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除选中的 ${selectedRoleIds.length} 个角色吗？此操作不可恢复。` })) {
       return;
     }
 
@@ -366,7 +371,7 @@ export default function RolesPage() {
     return true;
   });
 
-  return (
+  return (<>
     <div className="flex h-[calc(100vh-4rem)] flex-col md:flex-row">
       {/* 左侧：角色列表 */}
       <div className="w-full md:w-96 border-b md:border-b-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col h-1/2 md:h-full">
@@ -750,5 +755,8 @@ export default function RolesPage() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

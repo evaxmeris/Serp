@@ -6,6 +6,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 export default function InventoryReportPage() {
   const [warehouseId, setWarehouseId] = useState('');
@@ -16,44 +20,47 @@ export default function InventoryReportPage() {
   const [data, setData] = useState<any>(null);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
-
-  // 示例库存数据
-  const sampleData = {
-    summary: {
-      totalItems: 2500,
-      totalQuantity: 15800,
-      totalValue: 4580000,
-      lowStockItems: 45,
-      outOfStockItems: 12,
-      overstockItems: 28
-    },
-    items: [
-      { sku: 'PROD-001', name: '产品 A', quantity: 500, value: 125000, status: 'normal' },
-      { sku: 'PROD-002', name: '产品 B', quantity: 50, value: 15000, status: 'low' },
-      { sku: 'PROD-003', name: '产品 C', quantity: 0, value: 0, status: 'out' },
-      { sku: 'PROD-004', name: '产品 D', quantity: 2000, value: 480000, status: 'over' }
-    ],
-    byCategory: [
-      { name: '电子产品', items: 800, value: 1850000 },
-      { name: '服装服饰', items: 650, value: 980000 },
-      { name: '家居用品', items: 520, value: 750000 },
-      { name: '其他', items: 530, value: 1000000 }
-    ]
-  };
+  const { toasts, removeToast, toast } = useToast();
 
   async function loadReport() {
     setLoading(true);
     try {
-      // TODO: 调用 API 获取实际数据
-      // const params = new URLSearchParams();
-      // if (warehouseId) params.set('warehouseId', warehouseId);
-      // if (lowStock) params.set('lowStock', 'true');
-      // if (startDate) params.set('startDate', startDate);
-      // if (endDate) params.set('endDate', endDate);
-      // const response = await fetch(`/api/v1/reports/inventory?${params}`);
-      // const result = await response.json();
-      // setData(result.data);
-      setData(sampleData);
+      const params = new URLSearchParams();
+      if (warehouseId) params.set('warehouseId', warehouseId);
+      if (lowStock) params.set('lowStock', 'true');
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      const response = await fetch(`/api/v1/reports/inventory?${params}`);
+      if (!response.ok) {
+        throw new Error('请求失败');
+      }
+      const result = await response.json();
+      const apiData = result.data;
+
+      // 将 API 数据映射为前端展示格式
+      const mappedData = {
+        summary: {
+          totalItems: apiData.summary.totalItems,
+          totalQuantity: apiData.summary.totalQuantity,
+          totalValue: apiData.summary.totalValue,
+          lowStockItems: apiData.summary.lowStockItems,
+          outOfStockItems: apiData.summary.outOfStockItems,
+          overstockItems: apiData.summary.overstockItems
+        },
+        items: (apiData.items || []).map((item: any) => ({
+          sku: item.product?.sku || item.product?.productNo || '-',
+          name: item.product?.name || '未知产品',
+          quantity: item.quantity,
+          value: Number(item.quantity) * Number(item.product?.costPrice || 0),
+          status: item.quantity <= 0 ? 'out' : item.quantity <= 10 ? 'low' : item.quantity > 999999 ? 'over' : 'normal'
+        })),
+        byCategory: (apiData.byCategory || []).map((cat: any) => ({
+          name: cat.categoryName || cat.categoryId || '未知品类',
+          items: cat.totalItems,
+          value: Number(cat.totalValue)
+        }))
+      };
+      setData(mappedData);
     } catch (error) {
       console.error('加载库存报表失败:', error);
     } finally {
@@ -63,19 +70,47 @@ export default function InventoryReportPage() {
 
   async function handleExport() {
     if (!data) {
-      alert('请先加载报表数据');
+      toast.error('请先加载报表数据');
       return;
     }
     setExporting(true);
     setExportSuccess(false);
     try {
-      // TODO: 调用 API 导出报表
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 调用真实导出 API
+      const response = await fetch('/api/v1/reports/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportType: 'inventory',
+          data,
+          startDate,
+          endDate,
+          warehouseId,
+          format: 'excel',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('导出请求失败');
+      }
+
+      // 尝试下载文件
+      const contentType = response.headers.get('Content-Type');
+      if (contentType && contentType.includes('spreadsheetml')) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `库存报表_${startDate || 'all'}_${endDate || 'all'}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (error) {
       console.error('导出失败:', error);
-      alert('导出失败，请重试');
+      toast.error('导出失败，请重试');
     } finally {
       setExporting(false);
     }
@@ -277,7 +312,33 @@ export default function InventoryReportPage() {
             </div>
           </div>
 
-          {/* 按品类统计 */}
+          {/* 按品类统计图表 */}
+          {data.byCategory && data.byCategory.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">按品类分布图表</h2>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.byCategory}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'value') return [formatCurrency(value), '库存价值'];
+                        return [value, name === 'items' ? '库存项数' : name];
+                      }}
+                    />
+                    <Legend />
+                    <Bar dataKey="value" fill="#3b82f6" name="value" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="items" fill="#22c55e" name="items" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* 按品类统计明细 */}
           <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">按品类统计</h2>
             <div className="overflow-x-auto">
@@ -314,6 +375,7 @@ export default function InventoryReportPage() {
           <p className="text-gray-500 text-lg">设置筛选条件后点击"查询"按钮加载库存报表数据</p>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

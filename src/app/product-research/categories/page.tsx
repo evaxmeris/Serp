@@ -11,6 +11,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { EmptyState } from '@/components/ui/empty-state';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // 品类类型定义
 interface ProductCategory {
@@ -47,6 +50,9 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [selectedParentId, setSelectedParentId] = useState<string>('');
   const [showIconPicker, setShowIconPicker] = useState(false);
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // 品类图标库
   const iconOptions = [
@@ -174,21 +180,21 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert(editingCategory ? '品类更新成功' : '品类创建成功');
+        toast.error(editingCategory ? '品类更新成功' : '品类创建成功');
         setShowModal(false);
         loadCategories();
       } else {
-        alert(result.error || '操作失败');
+        toast.error(result.error || '操作失败');
       }
     } catch (error) {
       console.error('保存品类失败:', error);
-      alert('保存失败');
+      toast.error('保存失败');
     }
   };
 
   // 删除品类
   const handleDelete = async (category: ProductCategory) => {
-    if (!confirm(`确定要删除品类"${category.name}"吗？`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除品类 "${category.name}" 吗？` })) {
       return;
     }
 
@@ -200,14 +206,14 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('品类删除成功');
+        toast.error('品类删除成功');
         loadCategories();
       } else {
-        alert(result.error || '删除失败');
+        toast.error(result.error || '删除失败');
       }
     } catch (error) {
       console.error('删除品类失败:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
@@ -259,7 +265,7 @@ export default function CategoriesPage() {
     ));
   };
 
-  return (
+  return (<>
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">品类管理</h1>
@@ -278,7 +284,7 @@ export default function CategoriesPage() {
       {loading ? (
         <div className="text-center py-8">加载中...</div>
       ) : categories.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">暂无品类</div>
+        <EmptyState title="暂无品类" description="还没有任何品类记录，创建一个品类开始使用" />
       ) : (
         <div>{renderCategoryTree(categories)}</div>
       )}
@@ -443,5 +449,8 @@ export default function CategoriesPage() {
         </div>
       )}
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

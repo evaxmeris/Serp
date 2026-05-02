@@ -7,9 +7,8 @@
  * @method DELETE - 删除属性模板
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse, createdResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -49,29 +48,13 @@ export async function GET(
     });
 
     if (!template) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '属性模板不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('属性模板');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: template,
-    });
+    return successResponse(template);
   } catch (error) {
     console.error('Error fetching template:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取属性模板详情失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取属性模板详情失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -95,13 +78,7 @@ export async function PUT(
     });
 
     if (!existingTemplate) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '属性模板不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('属性模板');
     }
 
     // 如果修改了编码，检查新编码是否已被使用
@@ -111,13 +88,7 @@ export async function PUT(
       });
 
       if (codeExists) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: '属性编码已存在' 
-          },
-          { status: 400 }
-        );
+        return errorResponse('属性编码已存在', 'VALIDATION_ERROR', 400);
       }
     }
 
@@ -127,13 +98,7 @@ export async function PUT(
     const options = body.options !== undefined ? body.options : existingTemplate.options;
     
     if (selectTypes.includes(type) && (!options || options.length === 0)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '选择类型属性必须提供选项' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('选择类型属性必须提供选项', 'VALIDATION_ERROR', 400);
     }
 
     // 更新属性模板
@@ -151,21 +116,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: template,
-      message: '属性模板更新成功',
-    });
+    return successResponse(template, '属性模板更新成功');
   } catch (error) {
     console.error('Error updating template:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '更新属性模板失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('更新属性模板失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -199,25 +153,13 @@ export async function DELETE(
     });
 
     if (!template) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '属性模板不存在' 
-        },
-        { status: 404 }
-      );
+      return notFoundResponse('属性模板');
     }
 
     // 检查是否有产品使用该模板
     const totalUsage = template._count.productValues + template._count.researchValues;
     if (totalUsage > 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: `该属性已被 ${totalUsage} 个产品/调研记录使用，无法删除` 
-        },
-        { status: 400 }
-      );
+      return errorResponse(`该属性已被 ${totalUsage} 个产品/调研记录使用，无法删除`, 'CONFLICT', 409);
     }
 
     // 删除属性模板
@@ -225,19 +167,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: '属性模板删除成功',
-    });
+    return successResponse(null, '属性模板删除成功');
   } catch (error) {
     console.error('Error deleting template:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '删除属性模板失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('删除属性模板失败', 'INTERNAL_ERROR', 500);
   }
 }

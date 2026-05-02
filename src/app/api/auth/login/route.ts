@@ -6,12 +6,11 @@
  * @创建日期 2026-03-23
  */
 
-import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { LoginSchema, validateBody } from '@/lib/api-schemas';
-import { validationErrorResponse } from '@/lib/api-response';
+import { validationErrorResponse, errorResponse } from '@/lib/api-response';
 import { rateLimit } from '@/lib/rate-limit';
 
 // 失败登录计数 Map（只记录失败登录）
@@ -40,7 +39,16 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email } });
     
     if (!user || !user.passwordHash) {
-      // 登录失败，计数
+      // 登录失败，计数 + 审计日志
+      const { ipAddress, userAgent } = getClientInfo(request);
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'User',
+        entityId: email,
+        details: { email, reason: 'user_not_found' },
+        ipAddress,
+        userAgent,
+      });
       const failedResponse = handleFailedLogin(request);
       if (failedResponse) {
         return NextResponse.json(
@@ -48,15 +56,21 @@ export async function POST(request: Request) {
           { status: failedResponse.status, headers: failedResponse.headers }
         );
       }
-      return NextResponse.json(
-        { error: '账号或密码错误' },
-        { status: 401 }
-      );
+      return errorResponse('账号或密码错误', 'UNAUTHORIZED', 401);
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
-      // 登录失败，计数
+      // 登录失败，计数 + 审计日志
+      const { ipAddress, userAgent } = getClientInfo(request);
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'User',
+        entityId: email,
+        details: { email, reason: 'invalid_password' },
+        ipAddress,
+        userAgent,
+      });
       const failedResponse = handleFailedLogin(request);
       if (failedResponse) {
         return NextResponse.json(
@@ -64,13 +78,21 @@ export async function POST(request: Request) {
           { status: failedResponse.status, headers: failedResponse.headers }
         );
       }
-      return NextResponse.json(
-        { error: '账号或密码错误' },
-        { status: 401 }
-      );
+      return errorResponse('账号或密码错误', 'UNAUTHORIZED', 401);
     }
 
     if (!user.isApproved) {
+      // 登录失败：账号未批准，记录审计日志
+      const { ipAddress, userAgent } = getClientInfo(request);
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'User',
+        entityId: user.id,
+        userId: user.id,
+        details: { email: user.email, reason: 'not_approved' },
+        ipAddress,
+        userAgent,
+      });
       return NextResponse.json(
         { error: '账号尚未批准，请联系管理员审批。' },
         { status: 403 }
@@ -89,6 +111,18 @@ export async function POST(request: Request) {
       .setExpirationTime('7d')
       .sign(secret);
 
+    // 登录成功，记录审计日志
+    const { ipAddress, userAgent } = getClientInfo(request);
+    await writeAuditLog({
+      action: 'LOGIN',
+      entityType: 'User',
+      entityId: user.id,
+      userId: user.id,
+      details: { email: user.email },
+      ipAddress,
+      userAgent,
+    });
+
     // 创建响应并设置 cookie
     const response = NextResponse.json({
       success: true,
@@ -104,7 +138,7 @@ export async function POST(request: Request) {
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60, // 7 天
       path: '/',
     });
@@ -117,6 +151,38 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * 获取客户端 IP 和 User-Agent
+ */
+function getClientInfo(request: Request) {
+  const ipAddress = request.headers.get('x-forwarded-for') ||
+                    request.headers.get('x-real-ip') ||
+                    'unknown';
+  const userAgent = request.headers.get('user-agent') || undefined;
+  return { ipAddress, userAgent };
+}
+
+/**
+ * 写入审计日志
+ */
+async function writeAuditLog(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const { userId, ...rest } = params;
+  await prisma.auditLog.create({
+    data: {
+      ...rest,
+      ...(userId ? { userId } : {}),
+    } as any,
+  });
 }
 
 // 失败登录计数辅助函数

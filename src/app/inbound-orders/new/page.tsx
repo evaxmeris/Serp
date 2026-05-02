@@ -22,6 +22,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Product {
   id: string;
@@ -50,6 +52,8 @@ interface OrderItem {
 
 export default function NewInboundOrderPage() {
   const router = useRouter();
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog: ConfirmDlg } = useConfirm();
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -153,14 +157,14 @@ export default function NewInboundOrderPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert('入库单创建成功');
+        toast.success('入库单创建成功');
         router.push(`/inbound-orders/${data.data.id}`);
       } else {
-        alert(data.message || '创建失败');
+        toast.error(data.message || '创建失败');
       }
     } catch (error) {
       console.error('Failed to create order:', error);
-      alert('创建失败');
+      toast.error('创建失败');
     } finally {
       setLoading(false);
     }
@@ -363,6 +367,8 @@ export default function NewInboundOrderPage() {
           </form>
         </CardContent>
       </Card>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDlg />
     </div>
   );
 }

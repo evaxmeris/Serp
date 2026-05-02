@@ -21,7 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Plus, Search, Eye, CheckCircle, XCircle, AlertCircle, Download, MoreHorizontal } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 
 interface OutboundOrder {
   id: string;
@@ -95,6 +100,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function OutboundOrdersPage() {
   const router = useRouter();
+  const { toasts, removeToast, toast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [orders, setOrders] = useState<OutboundOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -157,7 +164,8 @@ export default function OutboundOrdersPage() {
   };
 
   const handleConfirm = async (id: string) => {
-    if (!confirm('确认要发货此出库单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确认要发货此出库单吗？' });
+    if (!confirmed) return;
 
     try {
       const response = await fetch(`/api/v1/outbound-orders/${id}/confirm`, {
@@ -168,19 +176,20 @@ export default function OutboundOrdersPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单已确认发货');
+        toast.success('出库单已确认发货');
         fetchOrders();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to confirm outbound order:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     }
   };
 
   const handleCancel = async (id: string) => {
-    if (!confirm('确认要取消此出库单吗？')) return;
+    const confirmed = await confirm({ title: '确认操作', description: '确认要取消此出库单吗？' });
+    if (!confirmed) return;
 
     try {
       const response = await fetch(`/api/v1/outbound-orders/${id}/cancel`, {
@@ -191,14 +200,14 @@ export default function OutboundOrdersPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('出库单已取消');
+        toast.success('出库单已取消');
         fetchOrders();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to cancel outbound order:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     }
   };
 
@@ -228,11 +237,12 @@ export default function OutboundOrdersPage() {
 
   const handleBatchConfirm = async () => {
     if (selectedIds.size === 0) {
-      alert('请选择要操作的出库单');
+      toast.error('请选择要操作的出库单');
       return;
     }
 
-    if (!confirm(`确认要批量发货选中的 ${selectedIds.size} 个出库单吗？`)) return;
+    const confirmed = await confirm({ title: '确认操作', description: `确认要批量发货选中的 ${selectedIds.size} 个出库单吗？` });
+    if (!confirmed) return;
 
     setBatchProcessing(true);
     try {
@@ -248,18 +258,18 @@ export default function OutboundOrdersPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert(`批量确认完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
+        toast.success(`批量确认完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
         if (result.data.failed.length > 0) {
           console.error('失败的出库单:', result.data.failed);
         }
         setSelectedIds(new Set());
         fetchOrders();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to batch confirm:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     } finally {
       setBatchProcessing(false);
     }
@@ -267,11 +277,12 @@ export default function OutboundOrdersPage() {
 
   const handleBatchCancel = async () => {
     if (selectedIds.size === 0) {
-      alert('请选择要操作的出库单');
+      toast.error('请选择要操作的出库单');
       return;
     }
 
-    if (!confirm(`确认要批量取消选中的 ${selectedIds.size} 个出库单吗？`)) return;
+    const confirmed = await confirm({ title: '确认操作', description: `确认要批量取消选中的 ${selectedIds.size} 个出库单吗？` });
+    if (!confirmed) return;
 
     setBatchProcessing(true);
     try {
@@ -287,18 +298,18 @@ export default function OutboundOrdersPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert(`批量取消完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
+        toast.success(`批量取消完成：成功 ${result.data.successCount}，失败 ${result.data.failedCount}`);
         if (result.data.failed.length > 0) {
           console.error('失败的出库单:', result.data.failed);
         }
         setSelectedIds(new Set());
         fetchOrders();
       } else {
-        alert(`操作失败：${result.message}`);
+        toast.error(`操作失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to batch cancel:', error);
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     } finally {
       setBatchProcessing(false);
     }
@@ -306,7 +317,7 @@ export default function OutboundOrdersPage() {
 
   const handleBatchExport = async () => {
     if (selectedIds.size === 0) {
-      alert('请选择要导出的出库单');
+      toast.error('请选择要导出的出库单');
       return;
     }
 
@@ -332,17 +343,20 @@ export default function OutboundOrdersPage() {
         link.download = `出库单导出_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
         URL.revokeObjectURL(url);
-        alert(`成功导出 ${result.data.count} 条记录`);
+        toast.success(`成功导出 ${result.data.count} 条记录`);
       } else {
-        alert(`导出失败：${result.message}`);
+        toast.error(`导出失败：${result.message}`);
       }
     } catch (error) {
       console.error('Failed to batch export:', error);
-      alert('导出失败，请重试');
+      toast.error('导出失败，请重试');
     } finally {
       setBatchProcessing(false);
     }
   };
+
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(orders, 'createdAt');
 
   return (
     <div className="container mx-auto py-6">
@@ -444,35 +458,94 @@ export default function OutboundOrdersPage() {
                     <input
                       type="checkbox"
                       checked={orders.length > 0 && orders.every(o => selectedIds.has(o.id))}
-                      onChange={() => toggleSelectAll(orders.map(o => o.id))}
+                      onChange={() => {
+                        if (orders.every(o => selectedIds.has(o.id))) {
+                          setSelectedIds(new Set());
+                        } else {
+                          setSelectedIds(new Set(orders.map(o => o.id)));
+                        }
+                      }}
                       className="rounded border-gray-300"
                     />
                   </TableHead>
-                  <TableHead>出库单号</TableHead>
-                  <TableHead>销售订单</TableHead>
-                  <TableHead>仓库</TableHead>
-                  <TableHead>商品数</TableHead>
-                  <TableHead>总金额</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>创建时间</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('outboundNo')}
+                  >
+                    出库单号
+                    <SortIndicator field="outboundNo" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('saleOrderNo')}
+                  >
+                    销售订单
+                    <SortIndicator field="saleOrderNo" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('warehouseName')}
+                  >
+                    仓库
+                    <SortIndicator field="warehouseName" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('_count.items')}
+                  >
+                    商品数
+                    <SortIndicator field="_count.items" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('totalAmount')}
+                  >
+                    总金额
+                    <SortIndicator field="totalAmount" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('status')}
+                  >
+                    状态
+                    <SortIndicator field="status" sortConfig={sortConfig} />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => requestSort('createdAt')}
+                  >
+                    创建时间
+                    <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                  </TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {loading ? <>
+                  {[1, 2, 3, 4, 5].map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))}
+                </> : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
-                      加载中...
-                    </TableCell>
-                  </TableRow>
-                ) : orders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      暂无出库单
+                    <TableCell colSpan={9}>
+                      <EmptyState
+                        title="暂无出库单"
+                        description="还没有任何出库记录，创建一笔出库单开始使用"
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (
-                  orders.map((order) => (
+                  sorted.map((order) => (
                     <TableRow key={order.id} className={selectedIds.has(order.id) ? 'bg-muted' : ''}>
                       <TableCell>
                         <input

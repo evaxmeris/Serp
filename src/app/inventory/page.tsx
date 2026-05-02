@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 
 interface Inventory {
   id: string;
@@ -79,6 +83,7 @@ interface Product {
 }
 
 export default function InventoryPage() {
+  const { toasts, removeToast, toast } = useToast();
   const [inventories, setInventories] = useState<Inventory[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -101,6 +106,9 @@ export default function InventoryPage() {
 
   // 仓库筛选
   const [warehouseFilter, setWarehouseFilter] = useState('ALL');
+
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(inventories, 'product.name');
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -174,7 +182,7 @@ export default function InventoryPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert('库存调整成功');
+        toast.success('库存调整成功');
         setAdjustDialogOpen(false);
         fetchInventory();
         setAdjustForm({
@@ -185,11 +193,11 @@ export default function InventoryPage() {
           note: '',
         });
       } else {
-        alert(data.message || '调整失败');
+        toast.error(data.message || '调整失败');
       }
     } catch (error) {
       console.error('Failed to adjust:', error);
-      alert('调整失败');
+      toast.error('调整失败');
     }
   };
 
@@ -338,31 +346,95 @@ export default function InventoryPage() {
 
           {/* 数据表格 */}
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0 ml-auto" />
+                  <Skeleton className="h-5 w-16 shrink-0 ml-auto" />
+                  <Skeleton className="h-5 w-16 shrink-0 ml-auto" />
+                  <Skeleton className="h-5 w-12 shrink-0 ml-auto" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>产品名称</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>仓库</TableHead>
-                    <TableHead className="text-right">库存数量</TableHead>
-                    <TableHead className="text-right">可用数量</TableHead>
-                    <TableHead className="text-right">锁定数量</TableHead>
-                    <TableHead className="text-right">单位</TableHead>
-                    <TableHead>最后入库</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('product.name')}
+                    >
+                      产品名称
+                      <SortIndicator field="product.name" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('product.sku')}
+                    >
+                      SKU
+                      <SortIndicator field="product.sku" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('warehouse.name')}
+                    >
+                      仓库
+                      <SortIndicator field="warehouse.name" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('quantity')}
+                    >
+                      库存数量
+                      <SortIndicator field="quantity" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('availableQuantity')}
+                    >
+                      可用数量
+                      <SortIndicator field="availableQuantity" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('lockedQuantity')}
+                    >
+                      锁定数量
+                      <SortIndicator field="lockedQuantity" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('product.unit')}
+                    >
+                      单位
+                      <SortIndicator field="product.unit" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('lastInboundDate')}
+                    >
+                      最后入库
+                      <SortIndicator field="lastInboundDate" sortConfig={sortConfig} />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {inventories.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        暂无数据
+                      <TableCell colSpan={8}>
+                        <EmptyState
+                          title="暂无库存数据"
+                          description="还没有任何库存记录，入库后将自动生成库存数据"
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
-                    inventories.map((inv) => (
+                    sorted.map((inv) => (
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">
                           {inv.product.name}
@@ -432,6 +504,7 @@ export default function InventoryPage() {
           )}
         </CardContent>
       </Card>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

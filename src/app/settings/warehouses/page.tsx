@@ -30,6 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 interface Warehouse {
   id: string;
@@ -74,6 +76,9 @@ export default function WarehouseSettingsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const fetchWarehouses = async () => {
     setLoading(true);
@@ -129,11 +134,11 @@ export default function WarehouseSettingsPage() {
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      alert('请输入仓库名称');
+      toast.warning('请输入仓库名称');
       return;
     }
     if (!formData.code.trim()) {
-      alert('请输入仓库编码');
+      toast.warning('请输入仓库编码');
       return;
     }
 
@@ -154,15 +159,15 @@ export default function WarehouseSettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert(editingWarehouse ? '仓库更新成功' : '仓库创建成功');
+        toast.error(editingWarehouse ? '仓库更新成功' : '仓库创建成功');
         setDialogOpen(false);
         fetchWarehouses();
       } else {
-        alert(data.message || '操作失败');
+        toast.error(data.message || '操作失败');
       }
     } catch (error) {
       console.error('Failed to submit:', error);
-      alert('操作失败');
+      toast.error('操作失败');
     } finally {
       setSubmitting(false);
     }
@@ -177,19 +182,19 @@ export default function WarehouseSettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        alert('仓库删除成功');
+        toast.error('仓库删除成功');
         setDeleteConfirm(null);
         fetchWarehouses();
       } else {
-        alert(data.message || '删除失败');
+        toast.error(data.message || '删除失败');
       }
     } catch (error) {
       console.error('Failed to delete:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
-  return (
+  return (<>
     <div className="container mx-auto py-6 px-4">
       <Card>
         <CardHeader>
@@ -435,5 +440,8 @@ export default function WarehouseSettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

@@ -6,9 +6,8 @@
  * @method POST - 创建新产品调研
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse, notFoundResponse, validationErrorResponse, createdResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { ResearchStatus, Priority } from '@prisma/client';
@@ -51,14 +50,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!queryValidation.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '查询参数验证失败',
-          details: formatValidationError(queryValidation.error)
-        },
-        { status: 400 }
-      );
+      return errorResponse('查询参数验证失败: ' + formatValidationError(queryValidation.error), 'VALIDATION_ERROR', 400);
     }
 
     const { 
@@ -206,26 +198,10 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
-      success: true,
-      data: productsWithConversion,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
+    return listResponse(productsWithConversion, { page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error fetching products:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取产品调研列表失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取产品调研列表失败', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -253,13 +229,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!category) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '所属品类不存在' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('所属品类不存在', 'VALIDATION_ERROR', 400);
     }
 
     // 创建产品调研（使用事务确保数据一致性）
@@ -325,23 +295,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: product,
-        message: '产品调研创建成功',
-      },
-      { status: 201 }
-    );
+    return createdResponse(product, '产品调研创建成功');
   } catch (error) {
     console.error('Error creating product:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '创建产品调研失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('创建产品调研失败', 'INTERNAL_ERROR', 500);
   }
 }

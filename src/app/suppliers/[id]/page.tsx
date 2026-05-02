@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -301,8 +302,11 @@ export default function SupplierDetailPage() {
             <TableBody>
               {purchaseOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    暂无采购订单
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      title="暂无采购订单"
+                      description="还没有任何采购订单记录"
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

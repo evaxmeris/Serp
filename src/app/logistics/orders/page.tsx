@@ -14,7 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Plus, Search, Truck, X, Check, Ban, Eye, Edit, Trash2, Send, UserCheck, ShieldCheck, Wallet } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   DRAFT: { label: '草稿', color: 'bg-gray-100 text-gray-700' },
@@ -78,6 +81,8 @@ export default function LogisticsOrdersPage() {
   const [showView, setShowView] = useState<any>(null);
   const [showSubmit, setShowSubmit] = useState<any>(null);
   const [showDelete, setShowDelete] = useState<any>(null);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [form, setForm] = useState({
     providerId: '', destination: '', transportMethod: 'SEA_FREIGHT', origin: '',
@@ -136,11 +141,11 @@ export default function LogisticsOrdersPage() {
   };
 
   const handleCreate = async () => {
-    if (!form.providerId || !form.destination) { alert('请选择物流服务商和填写目的地'); return; }
+    if (!form.providerId || !form.destination) { toast.warning('请选择物流服务商和填写目的地'); return; }
     setSaving(true);
     const body = { ...form, items: itemList, amountBreakdown: feeItems };
     const res = await fetch('/api/v1/logistics/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowCreate(false); resetForm(); fetchData(); } else { alert('创建失败'); }
+    if (res.ok) { setShowCreate(false); resetForm(); fetchData(); } else { toast.error('创建失败'); }
     setSaving(false);
   };
 
@@ -148,20 +153,20 @@ export default function LogisticsOrdersPage() {
     if (!showEdit) return; setSaving(true);
     const body = { ...form, items: itemList, amountBreakdown: feeItems };
     const res = await fetch(`/api/v1/logistics/orders/${showEdit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowEdit(null); fetchData(); } else { alert('更新失败'); }
+    if (res.ok) { setShowEdit(null); fetchData(); } else { toast.error('更新失败'); }
     setSaving(false);
   };
 
   const handleSubmit = async () => {
     if (!showSubmit || !submitForm.reviewerId || !submitForm.approverId || !submitForm.financeId) {
-      alert('请选择校对人、审批人和财务人员'); return;
+      toast.warning('请选择校对人、审批人和财务人员'); return;
     }
     setSaving(true);
     const res = await fetch(`/api/v1/logistics/orders/${showSubmit.id}/submit`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(submitForm),
     });
-    if (res.ok) { setShowSubmit(null); fetchData(); } else { const d = await res.json(); alert(d.error || '提交失败'); }
+    if (res.ok) { setShowSubmit(null); fetchData(); } else { const d = await res.json(); toast.error(d.error || '提交失败'); }
     setSaving(false);
   };
 
@@ -170,7 +175,7 @@ export default function LogisticsOrdersPage() {
     const res = await fetch(`/api/v1/logistics/orders/${id}/review`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment }),
     });
-    if (res.ok) fetchData(); else alert('操作失败');
+    if (res.ok) fetchData(); else toast.error('操作失败');
   };
 
   const handleApprove = async (id: string) => {
@@ -178,7 +183,7 @@ export default function LogisticsOrdersPage() {
     const res = await fetch(`/api/v1/logistics/orders/${id}/approve`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment }),
     });
-    if (res.ok) fetchData(); else alert('操作失败');
+    if (res.ok) fetchData(); else toast.error('操作失败');
   };
 
   const handleFinanceConfirm = async (id: string) => {
@@ -186,7 +191,7 @@ export default function LogisticsOrdersPage() {
     const res = await fetch(`/api/v1/logistics/orders/${id}/finance-confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment }),
     });
-    if (res.ok) fetchData(); else alert('操作失败');
+    if (res.ok) fetchData(); else toast.error('操作失败');
   };
 
   const handleReject = async (id: string) => {
@@ -195,20 +200,20 @@ export default function LogisticsOrdersPage() {
     const res = await fetch(`/api/v1/logistics/orders/${id}/reject`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }),
     });
-    if (res.ok) fetchData(); else alert('操作失败');
+    if (res.ok) fetchData(); else toast.error('操作失败');
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     const res = await fetch(`/api/v1/logistics/orders/${id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) fetchData(); else alert('操作失败');
+    if (res.ok) fetchData(); else toast.error('操作失败');
   };
 
   const handleDelete = async () => {
     if (!showDelete) return;
     const res = await fetch(`/api/v1/logistics/orders/${showDelete.id}`, { method: 'DELETE' });
-    if (res.ok) { setShowDelete(null); fetchData(); } else { alert('删除失败'); }
+    if (res.ok) { setShowDelete(null); fetchData(); } else { toast.error('删除失败'); }
   };
 
   const addFeeItem = () => setFeeItems([...feeItems, { feeType: '', description: '', amount: 0 }]);
@@ -368,7 +373,8 @@ export default function LogisticsOrdersPage() {
             </Select>
           </div>
 
-          {loading ? <div className="text-center py-8 text-gray-500">加载中...</div> : orders.length === 0 ? <div className="text-center py-8 text-gray-500">暂无物流订单</div> : (
+          {loading ? <div className="text-center py-8 text-gray-500">加载中...</div> : orders.length === 0 ?
+            <EmptyState title="暂无物流订单" description="还没有任何物流订单记录，创建一笔物流订单开始使用" /> : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -527,6 +533,8 @@ export default function LogisticsOrdersPage() {
           <DialogFooter><Button variant="outline" onClick={() => setShowDelete(null)}>取消</Button><Button variant="destructive" onClick={handleDelete}>删除</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

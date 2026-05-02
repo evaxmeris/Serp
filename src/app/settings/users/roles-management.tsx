@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Shield, Plus, Edit, Trash2, Search, Check, Eye } from 'lucide-react';
 import PermissionTree, { Permission } from '@/components/permission-tree/PermissionTree';
 
@@ -21,6 +23,8 @@ type Role = {
 
 export default function RolesManagementTab() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,15 +79,15 @@ export default function RolesManagementTab() {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.displayName.trim()) { alert('名称不能为空'); return; }
+    if (!formData.name.trim() || !formData.displayName.trim()) { toast.warning('名称不能为空'); return; }
     const url = editingRole ? `/api/roles/${editingRole.id}` : '/api/roles';
     const method = editingRole ? 'PUT' : 'POST';
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-    if (res.ok) { setOpenDialog(false); loadRoles(); } else { alert('保存失败'); }
+    if (res.ok) { setOpenDialog(false); loadRoles(); } else { toast.error('保存失败'); }
   };
 
   const handleDelete = async (role: Role) => {
-    if (!confirm(`确定要删除角色 "${role.displayName}" 吗？`)) return;
+    if (!await confirm({ title: '确认删除', description: `确定要删除角色 "${role.displayName}" 吗？` })) return;
     await fetch(`/api/roles/${role.id}`, { method: 'DELETE' });
     loadRoles();
   };
@@ -105,6 +109,7 @@ export default function RolesManagementTab() {
   });
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="relative w-64">
@@ -229,5 +234,8 @@ export default function RolesManagementTab() {
         </DialogContent>
       </Dialog>
     </div>
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    <ConfirmDialog />
+    </>
   );
 }

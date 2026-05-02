@@ -107,6 +107,7 @@ export default function LogisticsProvidersPage() {
   const [providers, setProviders] = useState<LogisticsProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -123,9 +124,15 @@ export default function LogisticsProvidersPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // 加载数据
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchProviders();
-  }, [page, search, statusFilter]);
+  }, [page, debouncedSearch, statusFilter]);
 
   const fetchProviders = async () => {
     setLoading(true);
@@ -134,7 +141,7 @@ export default function LogisticsProvidersPage() {
         page: page.toString(),
         limit: '20',
       });
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
       if (statusFilter !== 'all') params.append('status', statusFilter);
 
       const res = await fetch(`/api/v1/logistics/providers?${params}`);

@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -233,19 +232,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      message: 'Initialization completed',
-      createdPermissions,
-      createdRoles,
-      totalPermissions: defaultPermissions.length,
-      totalRoles: defaultRoles.length,
-    });
+    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length });
   } catch (error) {
     console.error('Error initializing permissions:', error);
-    return NextResponse.json(
-      { error: 'Failed to initialize permissions', details: String(error) },
-      { status: 500 }
-    );
+    return errorResponse('Failed to initialize permissions', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -264,18 +254,9 @@ export async function GET(request: NextRequest) {
       prisma.role.count(),
     ]);
 
-    return NextResponse.json({
-      initialized: permissionCount > 0 && roleCount > 0,
-      permissionCount,
-      roleCount,
-      defaultPermissionsCount: defaultPermissions.length,
-      defaultRolesCount: defaultRoles.length,
-    });
+    return successResponse({ initialized: permissionCount > 0 && roleCount > 0, permissionCount, roleCount, defaultPermissionsCount: defaultPermissions.length, defaultRolesCount: defaultRoles.length });
   } catch (error) {
     console.error('Error checking initialization status:', error);
-    return NextResponse.json(
-      { error: 'Failed to check status' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to check status', 'INTERNAL_ERROR', 500);
   }
 }

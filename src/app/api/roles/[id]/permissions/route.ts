@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession, requirePermission } from '@/middleware/auth';
 import { errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -20,6 +20,14 @@ export async function POST(
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
+    // 权限检查：只有拥有 settings:roles 权限的用户才能分配角色权限
+    const authSession = await getSession(request);
+    if (!authSession) {
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
+    }
+    const permError = requirePermission(authSession, 'settings:roles');
+    if (permError) return permError;
+
     const { id } = await params;
     const body = await request.json();
     const v = validateOrReturn(AssignPermissionsSchema, body);
@@ -32,7 +40,7 @@ export async function POST(
     });
 
     if (!role) {
-      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return notFoundResponse('Role');
     }
 
     // 删除现有的权限关联
@@ -97,7 +105,7 @@ export async function GET(
     });
 
     if (!role) {
-      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return notFoundResponse('Role');
     }
 
     // 获取角色权限
@@ -108,12 +116,9 @@ export async function GET(
 
     const permissions = rolePermissions.map(rp => rp.permission);
 
-    return NextResponse.json({ data: permissions });
+    return successResponse({ data: permissions });
   } catch (error) {
     console.error('Error fetching role permissions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch permissions' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch permissions', 'INTERNAL_ERROR', 500);
   }
 }

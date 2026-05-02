@@ -6,6 +6,8 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +43,8 @@ const PLATFORM_TYPES: Record<string, { label: string; color: string }> = {
 
 export default function PlatformsPage() {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PlatformAccount | null>(null);
@@ -90,7 +94,7 @@ export default function PlatformsPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定删除平台账号「${name}」？`)) return;
+    if (!await confirm({ title: '确认删除', description: `确定删除平台账号「${name}」？` })) return;
     try { await fetch(`/api/sync/config/${id}`, { method: 'DELETE' }); fetchAccounts(); }
     catch (e) { console.error('删除失败:', e); }
   };

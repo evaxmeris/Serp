@@ -34,8 +34,11 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ArrowLeft, Plus, Trash2, Calculator } from 'lucide-react';
-import { useState } from 'react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
+import { useState, useEffect } from 'react';
 import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
+import { useFormDraft, useLeaveConfirmation } from '@/lib/use-form-draft';
 
 export default function CreateOrderPage() {
   const router = useRouter();
@@ -45,6 +48,9 @@ export default function CreateOrderPage() {
 
   const incotermOptions = getIncotermOptions();
   const paymentTermOptions = getPaymentTermOptions();
+
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
@@ -76,6 +82,20 @@ export default function CreateOrderPage() {
       ],
     },
   });
+
+  // 草稿自动保存 & 离开确认
+  const formValues = form.watch();
+  const { loadDraft, clearDraft } = useFormDraft('order-new', formValues, form.formState.isDirty, createOrder.isPending);
+  useLeaveConfirmation(form.formState.isDirty);
+
+  // 页面加载时恢复草稿
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) {
+      form.reset(draft);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -123,16 +143,17 @@ export default function CreateOrderPage() {
 
     createOrder.mutate(orderData as any, {
       onSuccess: () => {
-        alert('订单创建成功');
+        clearDraft();
+        toast.success('订单创建成功');
         router.push('/orders');
       },
       onError: (err: any) => {
-        alert(err.message);
+        toast.error(err.message);
       },
     });
   };
 
-  return (
+  return (<>
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push('/orders')}>
@@ -567,5 +588,8 @@ export default function CreateOrderPage() {
         </form>
       </Form>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

@@ -204,17 +204,20 @@ export async function executePlatformSync(
     
     // 4. 获取上次同步时间
     const lastSyncAt = platformConfig.lastSyncAt;
-    
-    // 5. 拉取订单
+
+    // 5. 拉取订单（基于时间的增量同步）
     const fetchParams = {
       page: 1,
       pageSize: 50,
       createdAtStart: lastSyncAt || undefined,
+      createdAtEnd: new Date(), // 以当前时间作为结束时间，确保增量同步
     };
-    
+
     let allOrders: UnifiedOrder[] = [];
     let hasMore = true;
-    
+    // 放宽页数限制以避免意外死循环（500 页 = 25000 条，远大于实际场景）
+    const MAX_PAGES = 500;
+
     while (hasMore) {
       // 使用重试机制拉取订单（指数退避，最多 3 次）
       const { orders, retryCount } = await fetchWithRetry(
@@ -224,20 +227,21 @@ export async function executePlatformSync(
         platformCode,
       );
       totalRetryCount += retryCount;
-      
+
       if (orders.length > 0) {
         allOrders = allOrders.concat(orders);
       }
-      
+
       // 检查是否有更多页
       if (orders.length < fetchParams.pageSize) {
         hasMore = false;
       } else {
         fetchParams.page = (fetchParams.page || 1) + 1;
       }
-      
-      // 安全限制：防止死循环，最多拉取 5 页
-      if (fetchParams.page > 5) {
+
+      // 安全限制：防止死循环，最多拉取 MAX_PAGES 页
+      if (fetchParams.page > MAX_PAGES) {
+        console.warn(`[Sync ${platformCode}] 已达最大分页限制 (${MAX_PAGES})，停止拉取（共 ${allOrders.length} 条）`);
         hasMore = false;
       }
     }
@@ -434,8 +438,28 @@ async function findOrCreateCustomer(order: UnifiedOrder): Promise<string> {
  * @param orders 新订单列表
  */
 async function notifySalesRep(platformCode: string, orders: UnifiedOrder[]): Promise<void> {
-  // TODO: 实现通知逻辑
-  // 目前先记录日志
-  const orderList = orders.map(o => `订单号：${o.orderNo}，金额：${o.totalAmount} ${o.currency}`).join('\n');
-  console.log(`[Sync ${platformCode}] 📢 新订单通知:\n${orderList}`);
+  // 创建审计日志记录作为通知
+  for (const order of orders) {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'SYNC_NOTIFICATION',
+          entityType: 'Order',
+          entityId: order.platformOrderId,
+          details: {
+            platformCode,
+            orderNo: order.orderNo,
+            totalAmount: order.totalAmount,
+            currency: order.currency,
+            customerName: order.customer.contactName || order.customer.companyName || '未知',
+            message: `新订单同步：${order.orderNo}，金额：${order.totalAmount} ${order.currency}`,
+          },
+        },
+      });
+    } catch (error) {
+      console.error(`[Sync ${platformCode}] 创建通知审计日志失败：`, error);
+    }
+  }
+
+  console.log(`[Sync ${platformCode}] 📢 已创建 ${orders.length} 条同步通知审计日志`);
 }

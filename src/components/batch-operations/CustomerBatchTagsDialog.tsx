@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 interface CustomerItem {
   id: string;
@@ -48,6 +49,7 @@ export function CustomerBatchTagsDialog({
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<BatchResult | null>(null);
+  const { toast } = useToast();
 
   const toggleTag = (tag: string) => {
     const newSelected = new Set(selectedTags);
@@ -69,7 +71,7 @@ export function CustomerBatchTagsDialog({
 
   const handleConfirm = async () => {
     if (selectedTags.size === 0) {
-      alert(`请至少选择一个标签要${action === 'add' ? '添加' : '移除'}`);
+      toast.error(`请至少选择一个标签要${action === 'add' ? '添加' : '移除'}`);
       return;
     }
 

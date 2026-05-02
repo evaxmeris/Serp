@@ -21,7 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Search, Eye } from 'lucide-react';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 
 interface PurchaseOrder {
   id: string;
@@ -159,6 +161,9 @@ export default function PurchaseOrdersPage() {
     setPage(1);
   };
 
+  // 列排序
+  const { sorted, requestSort, sortConfig } = useSortable(purchaseOrders, 'createdAt');
+
   return (
     <div className="container mx-auto py-8">
       <Card>
@@ -225,25 +230,87 @@ export default function PurchaseOrdersPage() {
 
           {/* Table */}
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-28 shrink-0" />
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                  <Skeleton className="h-5 w-12 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-20 shrink-0" />
+                  <Skeleton className="h-5 w-16 shrink-0" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>订单编号</TableHead>
-                    <TableHead>供应商</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>审批状态</TableHead>
-                    <TableHead>商品数</TableHead>
-                    <TableHead>总金额</TableHead>
-                    <TableHead>交货日期</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('poNo')}
+                    >
+                      订单编号
+                      <SortIndicator field="poNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('supplier.companyName')}
+                    >
+                      供应商
+                      <SortIndicator field="supplier.companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('approvalStatus')}
+                    >
+                      审批状态
+                      <SortIndicator field="approvalStatus" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('_count.items')}
+                    >
+                      商品数
+                      <SortIndicator field="_count.items" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('totalAmount')}
+                    >
+                      总金额
+                      <SortIndicator field="totalAmount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('deliveryDate')}
+                    >
+                      交货日期
+                      <SortIndicator field="deliveryDate" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {purchaseOrders.map((po) => (
+                  {sorted.map((po) => (
                     <TableRow key={po.id}>
                       <TableCell className="font-medium">{po.poNo}</TableCell>
                       <TableCell>

@@ -6,9 +6,8 @@
  * @method POST - 创建新品类
  */
 
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { successResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -75,20 +74,10 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({
-      success: true,
-      data: categories,
-    });
+    return successResponse(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '获取品类列表失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('获取品类列表失败');
   }
 }
 
@@ -124,13 +113,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingCategory) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: '品类编码已存在' 
-        },
-        { status: 400 }
-      );
+      return errorResponse('品类编码已存在', 'CONFLICT', 400);
     }
 
     // 如果指定了父品类，验证父品类是否存在
@@ -143,13 +126,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (!parentCategory) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: '父品类不存在' 
-          },
-          { status: 400 }
-        );
+        return errorResponse('父品类不存在', 'NOT_FOUND', 400);
       }
 
       calculatedLevel = parentCategory.level + 1;
@@ -181,23 +158,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: category,
-        message: '品类创建成功',
-      },
-      { status: 201 }
-    );
+    return createdResponse(category, '品类创建成功');
   } catch (error) {
     console.error('Error creating category:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: '创建品类失败',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse('创建品类失败');
   }
 }

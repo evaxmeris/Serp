@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { CheckCircle, XCircle, Clock, User, Mail, Phone, Calendar } from 'lucide-react';
 
 
@@ -51,6 +53,8 @@ const statusConfig = {
 
 export default function ApprovalsPage() {
   const [registrations, setRegistrations] = useState<UserRegistration[]>([]);
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('PENDING');
@@ -83,7 +87,7 @@ export default function ApprovalsPage() {
 
   // 批准申请
   const handleApprove = async (registration: UserRegistration) => {
-    if (!confirm(`确认批准 ${registration.email} 的注册申请吗？`)) {
+    if (!await confirm({ title: '确认批准', description: `确认批准 ${registration.email} 的注册申请吗？` })) {
       return;
     }
 
@@ -96,13 +100,13 @@ export default function ApprovalsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        toast.success(data.message);
         fetchRegistrations();
       } else {
-        alert(data.error || '批准失败');
+        toast.error(data.error || '批准失败');
       }
     } catch (error) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     } finally {
       setProcessing(false);
     }
@@ -119,7 +123,7 @@ export default function ApprovalsPage() {
   const handleReject = async () => {
     if (!selectedRegistration) return;
     if (!rejectReason.trim()) {
-      alert('请填写拒绝原因');
+      toast.warning('请填写拒绝原因');
       return;
     }
 
@@ -132,14 +136,14 @@ export default function ApprovalsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        toast.success(data.message);
         setRejectDialogOpen(false);
         fetchRegistrations();
       } else {
-        alert(data.error || '拒绝失败');
+        toast.error(data.error || '拒绝失败');
       }
     } catch (error) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     } finally {
       setProcessing(false);
     }
@@ -308,6 +312,8 @@ export default function ApprovalsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

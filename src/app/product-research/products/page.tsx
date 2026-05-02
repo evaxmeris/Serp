@@ -46,6 +46,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 // ============================================
 // 类型定义
@@ -137,8 +139,12 @@ export default function ProductResearchPage() {
     totalPages: 0,
   });
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   // 搜索和筛选状态
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryId, setCategoryId] = useState('all');
   const [status, setStatus] = useState('all');
   const [conclusion, setConclusion] = useState('');
@@ -178,10 +184,16 @@ export default function ProductResearchPage() {
     loadCategories();
   }, []);
 
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // 加载产品列表（当筛选条件变化时）
   useEffect(() => {
     fetchProducts();
-  }, [pagination.page, search, categoryId, status, conclusion, dateFrom, dateTo]);
+  }, [pagination.page, debouncedSearch, categoryId, status, conclusion, dateFrom, dateTo]);
 
   // 加载品类列表
   const loadCategories = async () => {
@@ -203,7 +215,7 @@ export default function ProductResearchPage() {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
-        ...(search && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
         ...(categoryId && { categoryId }),
         ...(status && { status }),
         ...(conclusion && { conclusion }),
@@ -229,7 +241,7 @@ export default function ProductResearchPage() {
   // 搜索和筛选处理
   // ============================================
 
-  // 处理搜索（防抖）
+  // 处理搜索
   const handleSearch = (value: string) => {
     setSearch(value);
     setPagination(prev => ({ ...prev, page: 1 }));
@@ -273,11 +285,11 @@ export default function ProductResearchPage() {
   // 批量删除
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) {
-      alert('请选择要删除的产品');
+      toast.warning('请选择要删除的产品');
       return;
     }
 
-    if (!confirm(`确定要删除选中的 ${selectedIds.size} 个产品吗？此操作不可恢复。`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除选中的 ${selectedIds.size} 个产品吗？此操作不可恢复。` })) {
       return;
     }
 
@@ -291,15 +303,15 @@ export default function ProductResearchPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('批量删除成功');
+        toast.error('批量删除成功');
         setSelectedIds(new Set());
         fetchProducts();
       } else {
-        alert(result.error || '批量删除失败');
+        toast.error(result.error || '批量删除失败');
       }
     } catch (error) {
       console.error('批量删除失败:', error);
-      alert('批量删除失败');
+      toast.error('批量删除失败');
     }
 
     setIsDeleteDialogOpen(false);
@@ -308,7 +320,7 @@ export default function ProductResearchPage() {
   // 批量转化为正式产品
   const handleBatchConvert = async () => {
     if (selectedIds.size === 0) {
-      alert('请选择要转化的产品');
+      toast.warning('请选择要转化的产品');
       return;
     }
 
@@ -318,7 +330,7 @@ export default function ProductResearchPage() {
     );
 
     if (approvedProducts.length === 0) {
-      alert('选中的产品中没有可转化的产品（需状态为"已完成"且未转化过）');
+      toast.error('选中的产品中没有可转化的产品（需状态为"已完成"且未转化过）');
       return;
     }
 
@@ -351,12 +363,12 @@ export default function ProductResearchPage() {
         message += '\n\n失败原因可能是产品已被转化或状态不符合要求。';
       }
 
-      alert(message);
+      toast.error(message);
       setSelectedIds(new Set());
       fetchProducts(); // 重新加载列表
     } catch (error) {
       console.error('批量转化失败:', error);
-      alert('批量转化失败');
+      toast.error('批量转化失败');
     } finally {
       setConverting(false);
       setIsConvertDialogOpen(false);
@@ -369,7 +381,7 @@ export default function ProductResearchPage() {
 
   // 删除单个产品
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定要删除产品"${name}"吗？此操作不可恢复。`)) {
+    if (!await confirm({ title: '确认删除', description: `确定要删除产品 "${name}" 吗？此操作不可恢复。` })) {
       return;
     }
 
@@ -381,21 +393,21 @@ export default function ProductResearchPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('删除成功');
+        toast.error('删除成功');
         fetchProducts();
       } else {
-        alert(result.error || '删除失败');
+        toast.error(result.error || '删除失败');
       }
     } catch (error) {
       console.error('删除失败:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
   // 创建新产品
   const handleCreate = async () => {
     if (!newProduct.name || !newProduct.categoryId) {
-      alert('产品名称和所属品类为必填项');
+      toast.error('产品名称和所属品类为必填项');
       return;
     }
 
@@ -413,7 +425,7 @@ export default function ProductResearchPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('产品创建成功');
+        toast.error('产品创建成功');
         setIsCreateDialogOpen(false);
         setNewProduct({
           name: '',
@@ -431,11 +443,11 @@ export default function ProductResearchPage() {
         });
         fetchProducts();
       } else {
-        alert(result.error || '创建失败');
+        toast.error(result.error || '创建失败');
       }
     } catch (error) {
       console.error('创建失败:', error);
-      alert('创建失败');
+      toast.error('创建失败');
     }
   };
 
@@ -490,7 +502,7 @@ export default function ProductResearchPage() {
   // 页面渲染
   // ============================================
 
-  return (
+  return (<>
     <div className="container mx-auto py-8 px-4">
       <Card>
         <CardHeader>
@@ -977,5 +989,8 @@ export default function ProductResearchPage() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth-api';
-import { errorResponse } from '@/lib/api-response';
+import { successResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
@@ -38,16 +37,10 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<string, typeof permissions>);
 
-    return NextResponse.json({
-      data: permissions,
-      grouped: groupedPermissions,
-    });
+    return successResponse({ items: permissions, grouped: groupedPermissions });
   } catch (error) {
     console.error('Error fetching permissions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch permissions' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch permissions');
   }
 }
 
@@ -74,10 +67,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingName) {
-      return NextResponse.json(
-        { error: 'Permission with this name already exists' },
-        { status: 400 }
-      );
+      return errorResponse('Permission with this name already exists', 'CONFLICT', 400);
     }
 
     // code = name (for backward compatibility)
@@ -92,12 +82,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ data: permission }, { status: 201 });
+    return createdResponse(permission);
   } catch (error) {
     console.error('Error creating permission:', error);
-    return NextResponse.json(
-      { error: 'Failed to create permission' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to create permission');
   }
 }

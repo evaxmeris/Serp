@@ -11,7 +11,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://trade_erp:trade_erp_password@host.docker.internal:5432/trade_erp?schema=public
+      - HOSTNAME=0.0.0.0
+      - DATABASE_URL=postgresql://trade_erp:***@host.docker.internal:5432/trade_erp?schema=public
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -24,6 +25,27 @@ services:
       retries: 3
       start_period: 40s
 
+  gbrain-db:
+    image: pgvector/pgvector:pg16
+    container_name: gbrain-db
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: gbrain
+      POSTGRES_USER: gbrain
+      POSTGRES_PASSWORD: gbrain2026
+    volumes:
+      - gbrain_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gbrain -d gbrain"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 networks:
   trade-erp-network:
     driver: bridge
+
+volumes:
+  gbrain_data:

@@ -16,6 +16,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Plus, Search, Edit, Trash2, Ship } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 /** 发货记录类型（对齐 Prisma Shipment 模型） */
 interface Shipment {
@@ -71,6 +74,9 @@ export default function ShipmentsPage() {
   const [showDelete, setShowDelete] = useState<Shipment | null>(null);
 
   // 表单（新建/编辑共用）
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
+
   const [form, setForm] = useState({
     orderId: '', carrier: '', trackingNo: '', etd: '', eta: '',
     portOfLoading: '', portOfDischarge: '', containerNo: '', sealNo: '',
@@ -128,14 +134,14 @@ export default function ShipmentsPage() {
 
   /** 创建 */
   const handleCreate = async () => {
-    if (!form.orderId) { alert('请选择关联订单'); return; }
+    if (!form.orderId) { toast.warning('请选择关联订单'); return; }
     setSaving(true);
     const res = await fetch('/api/v1/shipments', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     const data = await res.json();
     if (data.success) { setShowCreate(false); resetForm(); fetchShipments(); }
-    else { alert(data.message || data.error || '创建失败'); }
+    else { toast.error(data.message || data.error || '创建失败'); }
     setSaving(false);
   };
 
@@ -149,7 +155,7 @@ export default function ShipmentsPage() {
     });
     const data = await res.json();
     if (data.success) { setEditingShipment(null); fetchShipments(); }
-    else { alert(data.message || data.error || '更新失败'); }
+    else { toast.error(data.message || data.error || '更新失败'); }
     setSaving(false);
   };
 
@@ -159,7 +165,7 @@ export default function ShipmentsPage() {
     const res = await fetch(`/api/v1/shipments?id=${showDelete.id}`, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) { setShowDelete(null); fetchShipments(); }
-    else { alert(data.message || data.error || '删除失败'); }
+    else { toast.error(data.message || data.error || '删除失败'); }
   };
 
   const renderForm = () => (
@@ -201,7 +207,7 @@ export default function ShipmentsPage() {
     </div>
   );
 
-  return (
+  return (<>
     <div className="w-full px-4 md:px-6 lg:px-8 py-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -234,7 +240,12 @@ export default function ShipmentsPage() {
                 </TableHeader>
                 <TableBody>
                   {shipments.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8">暂无发货记录</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8}>
+                      <EmptyState
+                        title="暂无发货记录"
+                        description="还没有任何发货记录，创建一笔发货开始使用"
+                      />
+                    </TableCell></TableRow>
                   ) : shipments.map(s => (
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-sm">{s.shipmentNo}</TableCell>
@@ -305,5 +316,8 @@ export default function ShipmentsPage() {
         </DialogContent>
       </Dialog>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

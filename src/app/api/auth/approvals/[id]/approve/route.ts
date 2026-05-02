@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth-simple';
+import { getCurrentUser } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { validateOrReturn } from '@/lib/api-validation';
 import { z } from 'zod';

@@ -34,6 +34,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ArrowLeft, Plus, Trash2, Calculator, Save } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 import { useEffect } from 'react';
 import { getIncotermOptions, getPaymentTermOptions } from '@/lib/trade-terms';
 
@@ -50,6 +52,8 @@ export default function EditOrderPage() {
 
   const form = useForm<OrderFormValues>();
 
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   // 加载订单数据时填充表单
   useEffect(() => {
     if (order) {
@@ -113,11 +117,11 @@ export default function EditOrderPage() {
       { id, data: orderData },
       {
         onSuccess: () => {
-          alert('订单更新成功');
+          toast.error('订单更新成功');
           router.push(`/orders/${id}`);
         },
         onError: (err: any) => {
-          alert(err.message);
+          toast.error(err.message);
         },
       }
     );
@@ -149,7 +153,7 @@ export default function EditOrderPage() {
   // 已确认或更高级状态的订单只能编辑部分字段
   const isReadOnly = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status);
 
-  return (
+  return (<>
     <div className="container mx-auto py-8">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" onClick={() => router.push(`/orders/${id}`)}>
@@ -541,5 +545,8 @@ export default function EditOrderPage() {
         </form>
       </Form>
     </div>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
+    </>
   );
 }

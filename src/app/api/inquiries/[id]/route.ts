@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { successResponse, errorResponse, notFoundResponse, conflictResponse } from '@/lib/api-response';
@@ -68,7 +67,7 @@ export async function PUT(
     // 行级权限：非 ADMIN 用户只能更新分配给自己的询盘
     const existingInquiry = await prisma.inquiry.findUnique({
       where: { id },
-      select: { assignedTo: true },
+      select: { assignedTo: true, status: true },
     });
     if (!existingInquiry) {
       return notFoundResponse('询盘');
@@ -80,6 +79,28 @@ export async function PUT(
     const body = await request.json();
     const v = validateOrReturn(UpdateInquirySchema, body);
     if (!v.success) return v.response;
+
+    // 状态机验证：防止跳过中间状态或逆向流转
+    const currentStatus = existingInquiry.status;
+    const newStatus = v.data.status;
+    const VALID_TRANSITIONS: Record<string, string[]> = {
+      NEW:         ['CONTACTED', 'QUOTED', 'WON', 'LOST'],
+      CONTACTED:   ['QUOTED', 'NEGOTIATING', 'WON', 'LOST'],
+      QUOTED:      ['NEGOTIATING', 'WON', 'LOST'],
+      NEGOTIATING: ['WON', 'LOST'],
+      WON:         [],
+      LOST:        [],
+    };
+    if (newStatus && newStatus !== currentStatus) {
+      const allowed = VALID_TRANSITIONS[currentStatus] || [];
+      if (!allowed.includes(newStatus)) {
+        return errorResponse(
+          `无效的状态变更：${currentStatus} → ${newStatus}。允许的目标状态：${allowed.join(', ') || '无（终态不可变更）'}`,
+          'INVALID_TRANSITION',
+          422
+        );
+      }
+    }
 
     const {
       source,
@@ -158,8 +179,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.inquiry.delete({
+    await prisma.inquiry.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     return successResponse(null, '询盘删除成功');

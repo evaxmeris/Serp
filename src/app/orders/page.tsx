@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Select,
   SelectContent,
@@ -34,6 +35,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 import { Plus, Search, Eye, Edit, XCircle, Trash2, ChevronLeft, ChevronRight, CheckCheck, Truck, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/types/order';
 import { OrderBatchConfirmDialog } from '@/components/batch-operations/OrderBatchConfirmDialog';
@@ -62,18 +67,31 @@ const ORDER_STATUS_OPTIONS = [
 
 export default function OrdersPage() {
   const router = useRouter();
+  const { toast, toasts, removeToast } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchConfirmDialogOpen, setBatchConfirmDialogOpen] = useState(false);
   const [batchShipDialogOpen, setBatchShipDialogOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  // 服务端排序状态
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // 同步平台订单
   const handleSyncOrders = async () => {
@@ -100,16 +118,27 @@ export default function OrdersPage() {
     }
   };
 
-  const { data, isLoading, error } = useOrders({ 
+  const { data, isLoading, error, refetch } = useOrders({ 
     page, 
     limit, 
     status: (statusFilter === 'ALL' ? undefined : statusFilter) as OrderStatus | undefined, 
-    search: search || undefined 
+    search: debouncedSearch || undefined,
+    sortBy,
+    sortOrder,
   });
   const deleteOrder = useDeleteOrder();
 
   const orders = data?.items || [];
   const pagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 };
+
+  // 列排序 - 服务端排序模式
+  const { sorted, requestSort, sortConfig } = useSortable(orders, sortBy, sortOrder, {
+    onSort: (key, dir) => {
+      setSortBy(key);
+      setSortOrder(dir);
+      setPage(1);
+    },
+  });
 
   // 键盘快捷键
   useEffect(() => {
@@ -138,23 +167,43 @@ export default function OrdersPage() {
     setCancelDialogOpen(true);
   };
 
-  const confirmCancel = () => {
+  const confirmCancel = async () => {
     if (!selectedOrderId) return;
-    setCancelDialogOpen(false);
-    setSelectedOrderId(null);
-    setCancelReason('');
+    if (!cancelReason.trim()) {
+      toast.warning('请填写取消原因');
+      return;
+    }
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${selectedOrderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CANCELLED', cancelReason: cancelReason.trim() }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || result.message || '取消失败');
+      toast.success('订单已取消');
+      setCancelDialogOpen(false);
+      setSelectedOrderId(null);
+      setCancelReason('');
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || '取消失败');
+    } finally {
+      setCancelLoading(false);
+    }
   };
 
-  const handleDelete = (orderId: string) => {
-    if (!confirm('确定要删除此订单吗？此操作不可恢复。')) {
+  const handleDelete = async (orderId: string) => {
+    if (!await confirm({ title: '确认删除', description: '确定要删除此订单吗？此操作不可恢复。' })) {
       return;
     }
     deleteOrder.mutate(orderId, {
       onSuccess: () => {
-        alert('订单已删除');
+        toast.success('订单已删除');
       },
       onError: (err: any) => {
-        alert(err.message);
+        toast.error(err.message);
       },
     });
   };
@@ -249,9 +298,39 @@ export default function OrdersPage() {
 
           {/* 加载状态 */}
           {isLoading && (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-              <p className="mt-2 text-gray-500">加载中...</p>
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/50 px-4 py-3 flex gap-4">
+                <Skeleton className="h-4 w-5" />
+                <Skeleton className="h-4 w-1/6" />
+                <Skeleton className="h-4 w-1/6" />
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-4 w-16 ml-auto" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <div className="divide-y">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 px-4 py-3">
+                    <Skeleton className="h-4 w-5" />
+                    <Skeleton className="h-4 w-1/6" />
+                    <Skeleton className="h-4 w-1/6" />
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-4 w-16 ml-auto" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-10" />
+                    <Skeleton className="h-4 w-10" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -277,21 +356,75 @@ export default function OrdersPage() {
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>订单号</TableHead>
-                    <TableHead>客户</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead className="text-right">金额</TableHead>
-                    <TableHead className="text-right">已付</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('orderNo')}
+                    >
+                      订单号
+                      <SortIndicator field="orderNo" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('customer.companyName')}
+                    >
+                      客户
+                      <SortIndicator field="customer.companyName" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('status')}
+                    >
+                      状态
+                      <SortIndicator field="status" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('totalAmount')}
+                    >
+                      金额
+                      <SortIndicator field="totalAmount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('paidAmount')}
+                    >
+                      已付
+                      <SortIndicator field="paidAmount" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead className="text-right">余额</TableHead>
-                    <TableHead>交货日期</TableHead>
-                    <TableHead className="text-center">收款</TableHead>
-                    <TableHead className="text-center">发货</TableHead>
-                    <TableHead>创建时间</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('deliveryDate')}
+                    >
+                      交货日期
+                      <SortIndicator field="deliveryDate" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-center cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('paymentCount')}
+                    >
+                      收款
+                      <SortIndicator field="paymentCount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="text-center cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('shipmentCount')}
+                    >
+                      发货
+                      <SortIndicator field="shipmentCount" sortConfig={sortConfig} />
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => requestSort('createdAt')}
+                    >
+                      创建时间
+                      <SortIndicator field="createdAt" sortConfig={sortConfig} />
+                    </TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => {
+                  {sorted.map((order) => {
                     const statusConfig = ORDER_STATUS_CONFIG[order.status];
                     return (
                       <TableRow key={order.id} className={selectedIds.has(order.id) ? 'bg-muted' : ''}>
@@ -377,9 +510,10 @@ export default function OrdersPage() {
               </Table>
 
               {orders.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  暂无订单数据
-                </div>
+                <EmptyState
+                  title="暂无订单数据"
+                  description="还没有任何订单记录，创建一笔订单开始使用"
+                />
               )}
 
               {/* 分页 */}
@@ -476,8 +610,8 @@ export default function OrdersPage() {
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
               取消
             </Button>
-            <Button variant="destructive" onClick={confirmCancel}>
-              确认取消
+            <Button variant="destructive" onClick={confirmCancel} disabled={cancelLoading}>
+              {cancelLoading ? '取消中...' : '确认取消'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -516,6 +650,8 @@ export default function OrdersPage() {
         })}
         onShipComplete={handleBatchShipComplete}
       />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

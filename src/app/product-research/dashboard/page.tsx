@@ -25,6 +25,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 } from 'recharts';
 import { Package, TrendingUp, CheckCircle, Clock, DollarSign, ArrowLeft } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 
 // ============================================
 // 类型定义
@@ -228,13 +229,17 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold">产品调研看板</h1>
         </div>
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="text-6xl mb-4">📊</div>
-            <h3 className="text-xl font-semibold mb-2">暂无数据</h3>
-            <p className="text-gray-500 mb-4">先添加一些产品数据吧</p>
-            <Button onClick={() => router.push('/product-research/import')}>
-              导入产品数据
-            </Button>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={<div className="text-6xl mb-4">📊</div>}
+              title="暂无数据"
+              description="先添加一些产品数据吧"
+              action={
+                <Button onClick={() => router.push('/product-research/import')}>
+                  导入产品数据
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       </div>

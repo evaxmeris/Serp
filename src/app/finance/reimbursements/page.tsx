@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Plus, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { useToast, ToastContainer } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   PENDING: { label: '待审批', color: 'bg-yellow-100 text-yellow-800' },
@@ -24,6 +26,8 @@ const CAT_LABELS: Record<string, string> = { TRAVEL: '差旅', OFFICE: '办公',
 
 export default function ReimbursementsPage() {
   const router = useRouter();
+  const { confirm, ConfirmDialog } = useConfirm();
+  const { toast, toasts, removeToast } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,7 +62,7 @@ export default function ReimbursementsPage() {
     } catch (e) { console.error(e); } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string) => { if (!confirm('确定删除？')) return; await fetch(`/api/v1/reimbursements/${id}`, { method: 'DELETE' }); fetchItems(); };
+  const handleDelete = async (id: string) => { if (!await confirm({ title: '确认删除', description: '确定删除此报销记录吗？' })) return; await fetch(`/api/v1/reimbursements/${id}`, { method: 'DELETE' }); toast.success('删除成功'); fetchItems(); };
   const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }));
 
   return (
@@ -91,6 +95,8 @@ export default function ReimbursementsPage() {
         </div>
         <DialogFooter><Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button><Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button></DialogFooter>
       </DialogContent></Dialog>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmDialog />
     </div>
   );
 }

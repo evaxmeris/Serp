@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
+import { getSession, requirePermission } from '@/middleware/auth';
 import { errorResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -38,16 +38,13 @@ export async function GET(
     });
 
     if (!role) {
-      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return notFoundResponse('Role');
     }
 
-    return NextResponse.json({ data: role });
+    return successResponse({ data: role });
   } catch (error) {
     console.error('Error fetching role:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch role' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch role', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -59,6 +56,19 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
+    // 权限检查：只有拥有 settings:roles 权限的用户才能更新角色
+    const authSession = await getSession(request);
+    if (!authSession) {
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
+    }
+    const permError = requirePermission(authSession, 'settings:roles');
+    if (permError) return permError;
+
     const { id } = await params;
     const body = await request.json();
     const v = validateOrReturn(UpdateRoleSchema, body);
@@ -71,7 +81,7 @@ export async function PUT(
     });
 
     if (!existingRole) {
-      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return notFoundResponse('Role');
     }
 
     // 如果系统角色，不允许修改名称
@@ -114,10 +124,7 @@ export async function PUT(
     return NextResponse.json({ data: updatedRole });
   } catch (error) {
     console.error('Error updating role:', error);
-    return NextResponse.json(
-      { error: 'Failed to update role' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to update role', 'INTERNAL_ERROR', 500);
   }
 }
 
@@ -129,10 +136,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const session = await getUserFromRequest(request);
-      if (!session) {
-        return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
-      }
+    const session = await getUserFromRequest(request);
+    if (!session) {
+      return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
+    }
+
+    // 权限检查：只有拥有 settings:roles 权限的用户才能删除角色
+    const authSession = await getSession(request);
+    if (!authSession) {
+      return errorResponse('未认证', 'UNAUTHORIZED', 401);
+    }
+    const permError = requirePermission(authSession, 'settings:roles');
+    if (permError) return permError;
 
     const { id } = await params;
     // 检查角色是否存在
@@ -144,7 +159,7 @@ export async function DELETE(
     });
 
     if (!role) {
-      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return notFoundResponse('Role');
     }
 
     // 系统角色不允许删除
@@ -171,12 +186,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse(null, 'Role deleted');
   } catch (error) {
     console.error('Error deleting role:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete role' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to delete role', 'INTERNAL_ERROR', 500);
   }
 }

@@ -1,6 +1,6 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth-api';
+import { getUserFromRequest } from '@/lib/auth-unified';
 import { listResponse, createdResponse, errorResponse } from '@/lib/api-response';
 import type { InquiryStatus, Priority } from '@prisma/client';
 import { validateOrReturn } from '@/lib/api-validation';
