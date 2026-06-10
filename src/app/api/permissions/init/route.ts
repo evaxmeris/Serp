@@ -40,6 +40,12 @@ const defaultPermissions = [
   { name: 'supplier:edit', code: 'supplier:edit', displayName: '编辑供应商', module: 'supplier' },
   { name: 'supplier:delete', code: 'supplier:delete', displayName: '删除供应商', module: 'supplier' },
 
+  // 供应商-产品关联模块
+  { name: 'supplier_product:list', code: 'supplier_product:list', displayName: '查看产品关联', module: 'supplier_product' },
+  { name: 'supplier_product:create', code: 'supplier_product:create', displayName: '创建产品关联', module: 'supplier_product' },
+  { name: 'supplier_product:edit', code: 'supplier_product:edit', displayName: '编辑产品关联', module: 'supplier_product' },
+  { name: 'supplier_product:delete', code: 'supplier_product:delete', displayName: '删除产品关联', module: 'supplier_product' },
+
   // 产品管理模块
   { name: 'product:list', code: 'product:list', displayName: '查看产品列表', module: 'product' },
   { name: 'product:create', code: 'product:create', displayName: '创建产品', module: 'product' },

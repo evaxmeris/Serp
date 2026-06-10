@@ -128,6 +128,7 @@ model Product {
   profitDetails      ProfitDetail[]
   purchaseOrderItems PurchaseOrderItem[]
   quotationItems     QuotationItem[]
+  productSuppliers   ProductSupplier[]
 
   @@map("products")
 }
@@ -450,6 +451,7 @@ model Supplier {
   purchaseOrders  PurchaseOrder[]
   contacts        SupplierContact[]
   evaluations     SupplierEvaluation[]
+  productSuppliers ProductSupplier[]
   owner           User?                @relation("Owner", fields: [ownerId], references: [id])
 
   @@index([status])
@@ -614,6 +616,34 @@ model PurchaseReceiptItem {
 
   @@index([receiptId])
   @@map("purchase_receipt_items")
+}
+
+// ============================================
+// 产品-供应商关联（多对多）
+// 记录每个供应商对特定产品的报价、交期等信息
+// ============================================
+model ProductSupplier {
+  id           String   @id @default(cuid())
+  productId    String
+  supplierId   String
+  supplierSKU  String?                          // 供应商自己的SKU/料号
+  unitPrice    Decimal?  @db.Decimal(10, 2)     // 供应商报价
+  currency     String    @default("CNY")
+  moq          Int?                              // 最小起订量
+  leadTime     Int?                              // 交期（天）
+  isPreferred  Boolean   @default(false)         // 是否首选供应商
+  rating       Int?                              // 评分1-5
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([supplierId])
+  @@index([productId])
+  @@map("product_suppliers")
 }
 
 model SupplierPayment {

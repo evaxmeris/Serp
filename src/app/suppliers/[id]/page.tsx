@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Edit, Package, User } from 'lucide-react';
+import ProductSupplierSection from '@/components/suppliers/ProductSupplierSection';
 
 interface Supplier {
   id: string;
@@ -250,8 +251,8 @@ export default function SupplierDetailPage() {
               </div>
             )}
             <div>
-              <label className="text-sm text-gray-500">供应产品</label>
-              <p className="font-medium">{supplier.products || '-'}</p>
+              <label className="text-sm text-gray-500">结算货币</label>
+              <p className="font-medium">{supplier.currency || 'CNY'}</p>
             </div>
             {supplier.creditTerms && (
               <div>
@@ -259,10 +260,6 @@ export default function SupplierDetailPage() {
                 <p className="font-medium">{supplier.creditTerms}</p>
               </div>
             )}
-            <div>
-              <label className="text-sm text-gray-500">结算货币</label>
-              <p className="font-medium">{supplier.currency || 'CNY'}</p>
-            </div>
           </div>
           {supplier.notes && (
             <>
@@ -275,6 +272,14 @@ export default function SupplierDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 供应产品 */}
+      {supplier.id && (
+        <ProductSupplierSection
+          supplierId={supplier.id}
+          onProductClick={(id) => router.push(`/products`)}
+        />
+      )}
 
       {/* Purchase Orders History */}
       <Card>

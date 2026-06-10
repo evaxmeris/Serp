@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Package } from 'lucide-react';
+import ProductSupplierSection from '@/components/suppliers/ProductSupplierSection';
 
 interface Supplier {
   id: string;
@@ -462,6 +463,14 @@ export default function SupplierEditPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* 供应产品管理 */}
+      {supplierId && (
+        <ProductSupplierSection
+          supplierId={supplierId}
+          onProductClick={(id) => router.push(`/products`)}
+        />
+      )}
 
       {/* Toast 通知容器 */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />

@@ -14,6 +14,7 @@ import {
   Edit,
   Eye,
   AlertCircle,
+  Building2,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -47,6 +48,7 @@ import { ProductBatchImportDialog } from '@/components/batch-operations/ProductB
 import { ProductBatchExportDialog } from '@/components/batch-operations/ProductBatchExportDialog';
 import { ProductBatchDeleteDialog } from '@/components/batch-operations/ProductBatchDeleteDialog';
 import type { BatchResult } from '@/components/batch-operations/ProductBatchImportDialog';
+import ProductSupplierSection from '@/components/suppliers/ProductSupplierSection';
 
 interface ProductCategory {
   id: string;
@@ -98,6 +100,7 @@ interface Product {
   status: string;
   supplier?: string;
   supplierName?: string;
+  images?: string[];
 }
 
 interface EditFormData {
@@ -131,6 +134,9 @@ export default function ProductsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // 供应商管理弹窗
+  const [supplierDialogProductId, setSupplierDialogProductId] = useState<string | null>(null);
+  const [supplierDialogProductName, setSupplierDialogProductName] = useState('');
   const { toast, toasts, removeToast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -145,6 +151,9 @@ export default function ProductsPage() {
     salePrice: '',
     status: 'active',
   });
+  // 产品图片管理
+  const [editImages, setEditImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // 品类列表和属性相关状态
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
@@ -326,6 +335,7 @@ export default function ProductsPage() {
       setSelectedCategoryId(product.categoryId || '');
       setAttributeValues({});
       setAttributeTemplates([]);
+      setEditImages(product.images || []);
       
       if (product.categoryId) {
         await loadAttributeTemplates(product.categoryId);
@@ -347,6 +357,7 @@ export default function ProductsPage() {
       setSelectedCategoryId('');
       setAttributeValues({});
       setAttributeTemplates([]);
+      setEditImages([]);
     }
     
     setEditDialogOpen(true);
@@ -551,6 +562,7 @@ export default function ProductsPage() {
           costPrice: editFormData.costPrice ? parseFloat(editFormData.costPrice) : undefined,
           salePrice: editFormData.salePrice ? parseFloat(editFormData.salePrice) : undefined,
           status: editFormData.status,
+          images: editImages,
           attributes: attributes,
         }),
       });
@@ -766,6 +778,7 @@ export default function ProductsPage() {
                             onCheckedChange={toggleSelectAll}
                           />
                         </TableHead>
+                        <TableHead className="w-14">图片</TableHead>
                         <TableHead
                           className="cursor-pointer select-none"
                           onClick={() => requestSort('sku')}
@@ -820,6 +833,20 @@ export default function ProductsPage() {
                               onCheckedChange={() => toggleSelection(product.id)}
                             />
                           </TableCell>
+                          <TableCell>
+                            {product.images && product.images.length > 0 ? (
+                              <img
+                                src={product.images[0]}
+                                alt={product.name}
+                                className="w-10 h-10 object-cover rounded border"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-300 text-xs">
+                                📷
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                           <TableCell className="font-medium">{product.name}</TableCell>
                           <TableCell>
@@ -849,6 +876,9 @@ export default function ProductsPage() {
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
+                              <Button variant="ghost" size="sm" className="text-blue-400" onClick={() => { setSupplierDialogProductId(product.id); setSupplierDialogProductName(product.name); }} title="供应商">
+                                <Building2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -923,12 +953,65 @@ export default function ProductsPage() {
       {/* 编辑产品弹窗 */}
       {editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>编辑产品</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
+              {/* 产品图片 */}
+              <div>
+                <Label>产品图片</Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {editImages.map((img, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={img} alt={`产品图 ${idx + 1}`} className="w-20 h-20 object-cover rounded border" />
+                      <button
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setEditImages(editImages.filter((_, i) => i !== idx))}
+                      >×</button>
+                    </div>
+                  ))}
+                  <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                    {uploadingImage ? (
+                      <span className="text-xs text-gray-400">上传中...</span>
+                    ) : (
+                      <span className="text-2xl text-gray-400">+</span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={uploadingImage}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingImage(true);
+                        try {
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          const res = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (data.success && data.data?.url) {
+                            setEditImages([...editImages, data.data.url]);
+                          } else {
+                            toast.error(data.message || '上传失败');
+                          }
+                        } catch {
+                          toast.error('图片上传失败');
+                        } finally {
+                          setUploadingImage(false);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>SKU *</Label>
@@ -983,7 +1066,7 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>成本价</Label>
+                  <Label>成本价（元）</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -994,7 +1077,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div>
-                  <Label>销售价</Label>
+                  <Label>销售价（元）</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1025,10 +1108,16 @@ export default function ProductsPage() {
 
               {/* 品类属性区域 */}
               {selectedCategoryId && (
-                <div className="border-t pt-4 mt-4">
-                  <h4 className="font-medium mb-4">品类属性</h4>
+                <div className="border-t pt-5 mt-5">
+                  <h4 className="text-base font-semibold mb-4 flex items-center gap-2">
+                    <div className="w-1 h-4 bg-blue-500 rounded-full" />
+                    品类属性
+                    <span className="text-xs text-gray-400 font-normal ml-1">
+                      {attributeTemplates.length} 项
+                    </span>
+                  </h4>
                   {loadingAttributes ? (
-                    <div className="text-center py-4 text-muted-foreground">
+                    <div className="text-center py-6 text-gray-400 text-sm">
                       加载属性模板中...
                     </div>
                   ) : attributeTemplates.length === 0 ? (
@@ -1039,29 +1128,100 @@ export default function ProductsPage() {
                       </AlertDescription>
                     </Alert>
                   ) : (
-                    <div className="space-y-4">
-                      {attributeTemplates
-                        .sort((a, b) => a.sortOrder - b.sortOrder)
-                        .map((template) => (
-                          <div key={template.id} className="p-4 border rounded-lg space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label className="font-medium">
-                                {template.name}
-                                {template.isRequired && <span className="text-destructive ml-1">*</span>}
-                              </Label>
-                              <Badge variant="outline">{template.type}</Badge>
-                            </div>
+                    <div className="space-y-5">
+                      {(() => {
+                        const groups = [
+                          // 皂基 (S012)
+                          { title: '基础信息', codes: ['S012_brand', 'S012_model', 'S012_origin', 'S012_color'] },
+                          { title: '物理规格', codes: ['S012_form', 'S012_size_type', 'S012_style', 'S012_regular_size', 'S012_regular_weight', 'S012_shelf_life'] },
+                          { title: '产品特性', codes: ['S012_function', 'S012_handmade', 'S012_transparent', 'S012_medicinal', 'S012_skin_type'] },
+                          { title: '成分与描述', codes: ['S012_ingredients', 'S012_fragrance', 'S012_fragrance_type', 'S012_use', 'S012_effect'] },
+                          { title: '定制与包装', codes: ['S012_customizable', 'S012_customization', 'S012_packaging'] },
+                          { title: '认证标准', codes: ['S012_certifications'] },
+                          // 成品皂 (S011)
+                          { title: '基础信息', codes: ['S011_type', 'S011_brand', 'S011_model', 'S011_origin', 'S011_color', 'S011_keywords'] },
+                          { title: '物理规格', codes: ['S011_form', 'S011_size_type', 'S011_style', 'S011_regular_size', 'S011_pkg_size', 'S011_regular_weight', 'S011_gross_weight', 'S011_shelf_life'] },
+                          { title: '产品特性', codes: ['S011_function', 'S011_body_part', 'S011_skin_type', 'S011_age_group', 'S011_handmade', 'S011_transparent', 'S011_medicinal'] },
+                          { title: '成分与描述', codes: ['S011_ingredients', 'S011_material', 'S011_fragrance', 'S011_fragrance_type', 'S011_usage', 'S011_effect'] },
+                          { title: '定制与服务', codes: ['S011_customization', 'S011_customizable', 'S011_service', 'S011_packaging'] },
+                          { title: '认证标准', codes: ['S011_certifications'] },
+                        ];
+                        const groupedCodes = new Set(groups.flatMap(g => g.codes));
+                        const sorted = [...attributeTemplates].sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+                        const ungrouped = sorted.filter((t: any) => !groupedCodes.has(t.code));
 
-                            {template.description && (
-                              <p className="text-sm text-muted-foreground">
-                                {template.description}
-                              </p>
+                        const renderAttrField = (template: any, fullWidth = false) => (
+                          <div key={template.id} className={fullWidth ? 'col-span-full' : ''}>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                              {template.name}
+                              {template.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                            </label>
+                            {template.code === 'S012_regular_size' || template.code === 'S011_regular_size' || template.code === 'S011_pkg_size' ? (
+                              <Input
+                                value={attributeValues[template.id] ?? ''}
+                                onChange={(e) => setAttributeValues({...attributeValues, [template.id]: e.target.value})}
+                                placeholder={template.code === 'S011_pkg_size' ? '8 × 7 × 3 cm' : '长 × 宽 × 高 (mm)'}
+                                className="h-8 text-sm"
+                              />
+                            ) : template.code === 'S012_regular_weight' || template.code === 'S011_regular_weight' || template.code === 'S011_gross_weight' ? (
+                              <div className="relative">
+                                <Input
+                                  type="number" step="0.01" min="0"
+                                  value={attributeValues[template.id] ?? ''}
+                                  onChange={(e) => setAttributeValues({...attributeValues, [template.id]: e.target.value})}
+                                  placeholder="0.00"
+                                  className="h-8 text-sm pr-8"
+                                />
+                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">kg</span>
+                              </div>
+                            ) : (
+                              (() => {
+                                // 把 renderAttributeInput 的 label 替换掉
+                                const el = renderAttributeInput(template);
+                                // BOOLEAN 类型不需要额外的 label
+                                return el;
+                              })()
                             )}
-
-                            {renderAttributeInput(template)}
                           </div>
-                        ))
-                      }
+                        );
+
+                        return (
+                          <>
+                            {groups.map(group => {
+                              const tpls = group.codes.map(c => sorted.find((t: any) => t.code === c)).filter(Boolean);
+                              if (tpls.length === 0) return null;
+                              const isFourCol = group.title === '产品特性';
+                              return (
+                                <div key={group.title}>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="h-px flex-1 bg-gray-100" />
+                                    <span className="text-xs font-medium text-gray-400 px-2">{group.title}</span>
+                                    <div className="h-px flex-1 bg-gray-100" />
+                                  </div>
+                                  <div className={`grid grid-cols-1 sm:grid-cols-2 ${isFourCol ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-x-4 gap-y-3`}>
+                                    {tpls.map((t: any) => {
+                                      const wide = ['S012_ingredients', 'S012_use', 'S012_effect'].includes(t.code);
+                                      return renderAttrField(t, wide);
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {ungrouped.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="h-px flex-1 bg-gray-100" />
+                                  <span className="text-xs font-medium text-gray-400 px-2">其他</span>
+                                  <div className="h-px flex-1 bg-gray-100" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                                  {ungrouped.map((t: any) => renderAttrField(t))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1075,6 +1235,29 @@ export default function ProductsPage() {
               <Button onClick={handleSaveEdit} className="bg-blue-500 hover:bg-blue-600">
                 保存
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 供应商管理弹窗 */}
+      {supplierDialogProductId && (
+        <Dialog open={!!supplierDialogProductId} onOpenChange={(open) => { if (!open) setSupplierDialogProductId(null); }}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-blue-600" />
+                供应商管理 — {supplierDialogProductName}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <ProductSupplierSection
+                productId={supplierDialogProductId}
+                onSupplierClick={(id) => window.open(`/suppliers/${id}`, '_blank')}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSupplierDialogProductId(null)}>关闭</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
