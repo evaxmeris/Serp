@@ -54,6 +54,8 @@ interface ProductCategory {
   id: string;
   name: string;
   code: string;
+  parentId?: string;
+  level: number;
 }
 
 interface AttributeTemplate {
@@ -162,6 +164,14 @@ export default function ProductsPage() {
   const [loadingAttributes, setLoadingAttributes] = useState(false);
   const [attributeValues, setAttributeValues] = useState<AttributeValueState>({});
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  // 级联品类选择状态（三级：主品类level1 → 子品类level2 → 三级品类level3）
+  const [parentCategories, setParentCategories] = useState<ProductCategory[]>([]);
+  const [subCategories, setSubCategories] = useState<ProductCategory[]>([]);
+  const [childCategories, setChildCategories] = useState<ProductCategory[]>([]);
+  const [selectedParentCategoryId, setSelectedParentCategoryId] = useState<string>('');
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('');
+  const [loadingSubCategories, setLoadingSubCategories] = useState(false);
+  const [loadingChildCategories, setLoadingChildCategories] = useState(false);
 
   // 搜索防抖
   useEffect(() => {
@@ -197,19 +207,64 @@ export default function ProductsPage() {
     loadCategories();
   }, [debouncedSearch]);
 
-  // 加载品类列表
+  // 加载品类列表（全量用于筛选栏 + level=1 用于主品类下拉）
   const loadCategories = async () => {
     setLoadingCategories(true);
     try {
-      const res = await fetch('/api/product-research/categories?isActive=true');
-      const data = await res.json();
-      if (data.success) {
-        setProductCategories(data.data?.items ?? data.data ?? []);
+      const allRes = await fetch('/api/product-research/categories?isActive=true');
+      const allData = await allRes.json();
+      if (allData.success) {
+        const all = allData.data?.items ?? allData.data ?? [];
+        setProductCategories(all);
+        // 主品类下拉显示一级品类（B01 美妆类, C01 个护类）
+        setParentCategories(all.filter((c: ProductCategory) => c.level === 1));
       }
     } catch (error) {
       console.error('加载品类失败:', error);
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  // 加载子品类（根据主品类ID，加载level=2）
+  const loadSubCategories = async (parentId: string): Promise<ProductCategory[]> => {
+    setLoadingSubCategories(true);
+    setSubCategories([]);
+    try {
+      const res = await fetch(`/api/product-research/categories?parentId=${parentId}&isActive=true`);
+      const data = await res.json();
+      if (data.success) {
+        const children = data.data?.items ?? data.data ?? [];
+        setSubCategories(children);
+        return children;
+      }
+      return [];
+    } catch (error) {
+      console.error('加载子品类失败:', error);
+      return [];
+    } finally {
+      setLoadingSubCategories(false);
+    }
+  };
+
+  // 加载三级品类（根据子品类ID，加载level=3）
+  const loadChildCategories = async (parentId: string): Promise<ProductCategory[]> => {
+    setLoadingChildCategories(true);
+    setChildCategories([]);
+    try {
+      const res = await fetch(`/api/product-research/categories?parentId=${parentId}&isActive=true`);
+      const data = await res.json();
+      if (data.success) {
+        const children = data.data?.items ?? data.data ?? [];
+        setChildCategories(children);
+        return children;
+      }
+      return [];
+    } catch (error) {
+      console.error('加载三级品类失败:', error);
+      return [];
+    } finally {
+      setLoadingChildCategories(false);
     }
   };
 
@@ -319,6 +374,15 @@ export default function ProductsPage() {
 
   // 打开编辑对话框（product 为 null 时表示新建产品）
   const openEditDialog = async (product: Product | null) => {
+    // 先重置所有品类相关状态
+    setSelectedCategoryId('');
+    setSelectedParentCategoryId('');
+    setSelectedSubCategoryId('');
+    setSubCategories([]);
+    setChildCategories([]);
+    setAttributeValues({});
+    setAttributeTemplates([]);
+
     if (product) {
       setEditingProduct(product);
       setEditFormData({
@@ -332,12 +396,39 @@ export default function ProductsPage() {
         salePrice: product.salePrice?.toString() || '',
         status: product.status,
       });
-      setSelectedCategoryId(product.categoryId || '');
-      setAttributeValues({});
-      setAttributeTemplates([]);
       setEditImages(product.images || []);
-      
+
+      // 三级级联回显
       if (product.categoryId) {
+        const category = productCategories.find(c => c.id === product.categoryId);
+        if (category) {
+          if (category.level === 3) {
+            // level 3 → 回显主品类(level1) + 子品类(level2) + 三级品类
+            const level2 = productCategories.find(c => c.id === category.parentId);
+            const level1Id = level2?.parentId || '';
+            setSelectedParentCategoryId(level1Id);
+            await loadSubCategories(level1Id);
+            setSelectedSubCategoryId(category.parentId || '');
+            await loadChildCategories(category.parentId || '');
+            setSelectedCategoryId(product.categoryId);
+          } else if (category.level === 2) {
+            // level 2 → 回显主品类(level1) + 子品类(level2)，三级无
+            const level1Id = category.parentId || '';
+            setSelectedParentCategoryId(level1Id);
+            await loadSubCategories(level1Id);
+            setSelectedSubCategoryId(product.categoryId);
+            // 尝试加载三级（会返回空，三级品类不出现）
+            await loadChildCategories(product.categoryId);
+            setSelectedCategoryId(product.categoryId);
+          } else {
+            // level 1（不应出现，兜底）
+            setSelectedParentCategoryId(product.categoryId);
+            await loadSubCategories(product.categoryId);
+          }
+        } else {
+          setSelectedCategoryId(product.categoryId);
+        }
+
         await loadAttributeTemplates(product.categoryId);
         await loadProductAttributeValues(product.id);
       }
@@ -354,18 +445,74 @@ export default function ProductsPage() {
         salePrice: '',
         status: 'active',
       });
-      setSelectedCategoryId('');
-      setAttributeValues({});
-      setAttributeTemplates([]);
       setEditImages([]);
     }
-    
+
     setEditDialogOpen(true);
   };
 
-  // 品类变更处理
-  const handleCategoryChange = async (categoryId: string) => {
+  // 主品类变更处理（选择level 1 → 加载level 2）
+  const handleParentCategoryChange = async (parentId: string) => {
+    setSelectedParentCategoryId(parentId);
+    setSelectedSubCategoryId('');
+    setSelectedCategoryId('');
+    setSubCategories([]);
+    setChildCategories([]);
+    setAttributeTemplates([]);
+    setAttributeValues({});
+
+    setEditFormData(prev => ({
+      ...prev,
+      categoryId: '',
+      category: '',
+      categoryName: '',
+    }));
+
+    if (parentId) {
+      await loadSubCategories(parentId);
+    }
+  };
+
+  // 子品类变更处理（选择level 2 → 加载level 3 或自动选中）
+  const handleSubCategoryChange = async (categoryId: string) => {
+    setSelectedSubCategoryId(categoryId);
+    setSelectedCategoryId('');
+    setChildCategories([]);
+    setAttributeTemplates([]);
+    setAttributeValues({});
+
+    setEditFormData(prev => ({
+      ...prev,
+      categoryId: '',
+      category: '',
+      categoryName: '',
+    }));
+
+    if (categoryId) {
+      const grandChildren = await loadChildCategories(categoryId);
+      // 无三级品类 → 自动使用当前子品类作为最终品类
+      if (grandChildren.length === 0) {
+        const category = productCategories.find(c => c.id === categoryId);
+        if (category) {
+          setSelectedCategoryId(categoryId);
+          setEditFormData(prev => ({
+            ...prev,
+            categoryId,
+            category: category.code,
+            categoryName: category.name,
+          }));
+          await loadAttributeTemplates(categoryId);
+        }
+      }
+    }
+  };
+
+  // 三级品类变更处理（选择level 3 → 加载属性模板）
+  const handleChildCategoryChange = async (categoryId: string) => {
     setSelectedCategoryId(categoryId);
+    setAttributeTemplates([]);
+    setAttributeValues({});
+
     const category = productCategories.find(c => c.id === categoryId);
     if (category) {
       setEditFormData(prev => ({
@@ -445,16 +592,16 @@ export default function ProductsPage() {
 
       case 'MULTI_SELECT':
         return (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
             {template.options.map((option) => {
               const selected = (value as string[]) || [];
               const isSelected = selected.includes(option);
               return (
-                <Badge
+                <label
                   key={option}
-                  variant={isSelected ? 'default' : 'outline'}
-                  className="cursor-pointer"
-                  onClick={() => {
+                  className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
                     const current = (value as string[]) || [];
                     if (isSelected) {
                       handleChange(current.filter(o => o !== option));
@@ -463,8 +610,20 @@ export default function ProductsPage() {
                     }
                   }}
                 >
-                  {option}
-                </Badge>
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => {
+                      const current = (value as string[]) || [];
+                      if (isSelected) {
+                        handleChange(current.filter(o => o !== option));
+                      } else {
+                        handleChange([...current, option]);
+                      }
+                    }}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-xs text-gray-700 leading-tight select-none">{option}</span>
+                </label>
               );
             })}
           </div>
@@ -1014,46 +1173,106 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>SKU *</Label>
+                  <Label className="text-xs font-medium text-gray-600">SKU *</Label>
                   <Input
                     value={editFormData.sku}
                     onChange={(e) => setEditFormData({ ...editFormData, sku: e.target.value })}
                     placeholder="产品 SKU"
+                    className="h-9"
                   />
                 </div>
                 <div>
-                  <Label>产品名称 *</Label>
+                  <Label className="text-xs font-medium text-gray-600">产品名称 *</Label>
                   <Input
                     value={editFormData.name}
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                     placeholder="产品名称"
+                    className="h-9"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>英文名称</Label>
+                  <Label className="text-xs font-medium text-gray-600">英文名称</Label>
                   <Input
                     value={editFormData.nameEn}
                     onChange={(e) => setEditFormData({ ...editFormData, nameEn: e.target.value })}
                     placeholder="产品英文名称"
+                    className="h-9"
                   />
                 </div>
+                <div></div>
+              </div>
+
+              {/* 品类选择 - 三级级联 */}
+              <div className="bg-gradient-to-br from-blue-50/40 to-slate-50/40 border border-blue-100/60 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-1 h-4 bg-blue-500 rounded-full" />
+                  <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">品类选择</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">主品类 *</Label>
+                    <Select
+                      value={selectedParentCategoryId}
+                      onValueChange={handleParentCategoryChange}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="请选择主品类" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loadingCategories ? (
+                          <SelectItem value="loading" disabled>加载中...</SelectItem>
+                        ) : (
+                          parentCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">子品类 *</Label>
+                    <Select
+                      value={selectedSubCategoryId}
+                      onValueChange={handleSubCategoryChange}
+                      disabled={!selectedParentCategoryId || loadingSubCategories}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder={loadingSubCategories ? '加载中...' : selectedParentCategoryId ? '请选择子品类' : '请先选择主品类'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subCategories.length === 0 ? (
+                          <SelectItem value="none" disabled>暂无子品类</SelectItem>
+                        ) : (
+                          subCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div>
-                  <Label>品类 *</Label>
+                  <Label className="text-xs font-medium text-gray-600">三级品类</Label>
                   <Select
-                    value={editFormData.categoryId}
-                    onValueChange={handleCategoryChange}
+                    value={childCategories.length > 0 ? editFormData.categoryId : ''}
+                    onValueChange={handleChildCategoryChange}
+                    disabled={childCategories.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="请选择品类" />
+                      <SelectValue placeholder={childCategories.length > 0 ? '请选择三级品类' : '无三级分类'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {loadingCategories ? (
-                        <SelectItem value="loading" disabled>加载中...</SelectItem>
+                      {childCategories.length === 0 ? (
+                        <SelectItem value="none" disabled>无可选项</SelectItem>
                       ) : (
-                        productCategories.map((category) => (
+                        childCategories.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
                           </SelectItem>
@@ -1066,7 +1285,7 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>成本价（元）</Label>
+                  <Label className="text-xs font-medium text-gray-600">成本价（元）</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1074,10 +1293,11 @@ export default function ProductsPage() {
                     value={editFormData.costPrice}
                     onChange={(e) => setEditFormData({ ...editFormData, costPrice: e.target.value })}
                     placeholder="0.00"
+                    className="h-9"
                   />
                 </div>
                 <div>
-                  <Label>销售价（元）</Label>
+                  <Label className="text-xs font-medium text-gray-600">销售价（元）</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1085,17 +1305,18 @@ export default function ProductsPage() {
                     value={editFormData.salePrice}
                     onChange={(e) => setEditFormData({ ...editFormData, salePrice: e.target.value })}
                     placeholder="0.00"
+                    className="h-9"
                   />
                 </div>
               </div>
 
               <div>
-                <Label>状态</Label>
+                <Label className="text-xs font-medium text-gray-600">状态</Label>
                 <Select
                   value={editFormData.status}
                   onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1108,14 +1329,16 @@ export default function ProductsPage() {
 
               {/* 品类属性区域 */}
               {selectedCategoryId && (
-                <div className="border-t pt-5 mt-5">
-                  <h4 className="text-base font-semibold mb-4 flex items-center gap-2">
-                    <div className="w-1 h-4 bg-blue-500 rounded-full" />
-                    品类属性
-                    <span className="text-xs text-gray-400 font-normal ml-1">
-                      {attributeTemplates.length} 项
-                    </span>
-                  </h4>
+                <div className="border-t border-gray-200 pt-6 mt-6">
+                  <div className="bg-gradient-to-r from-blue-50 to-blue-50/30 rounded-lg px-4 py-3 mb-5">
+                    <h4 className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                      <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                      品类属性
+                      <span className="text-xs font-normal text-blue-400 ml-1">
+                        {attributeTemplates.length} 项
+                      </span>
+                    </h4>
+                  </div>
                   {loadingAttributes ? (
                     <div className="text-center py-6 text-gray-400 text-sm">
                       加载属性模板中...
@@ -1135,44 +1358,264 @@ export default function ProductsPage() {
                           { title: '基础信息', codes: ['S012_brand', 'S012_model', 'S012_origin', 'S012_color'] },
                           { title: '物理规格', codes: ['S012_form', 'S012_size_type', 'S012_style', 'S012_regular_size', 'S012_regular_weight', 'S012_shelf_life'] },
                           { title: '产品特性', codes: ['S012_function', 'S012_handmade', 'S012_transparent', 'S012_medicinal', 'S012_skin_type'] },
-                          { title: '成分与描述', codes: ['S012_ingredients', 'S012_fragrance', 'S012_fragrance_type', 'S012_use', 'S012_effect'] },
+                          { title: '成分与描述', codes: ['S012_ingredients', 'S012_fragrance', 'S012_use', 'S012_effect'] },
                           { title: '定制与包装', codes: ['S012_customizable', 'S012_customization', 'S012_packaging'] },
                           { title: '认证标准', codes: ['S012_certifications'] },
                           // 成品皂 (S011)
                           { title: '基础信息', codes: ['S011_type', 'S011_brand', 'S011_model', 'S011_origin', 'S011_color', 'S011_keywords'] },
                           { title: '物理规格', codes: ['S011_form', 'S011_size_type', 'S011_style', 'S011_regular_size', 'S011_pkg_size', 'S011_regular_weight', 'S011_gross_weight', 'S011_shelf_life'] },
                           { title: '产品特性', codes: ['S011_function', 'S011_body_part', 'S011_skin_type', 'S011_age_group', 'S011_handmade', 'S011_transparent', 'S011_medicinal'] },
-                          { title: '成分与描述', codes: ['S011_ingredients', 'S011_material', 'S011_fragrance', 'S011_fragrance_type', 'S011_usage', 'S011_effect'] },
+                          { title: '成分与描述', codes: ['S011_ingredients', 'S011_material', 'S011_fragrance', 'S011_usage', 'S011_effect'] },
                           { title: '定制与服务', codes: ['S011_customization', 'S011_customizable', 'S011_service', 'S011_packaging'] },
                           { title: '认证标准', codes: ['S011_certifications'] },
+                          // 香水 (B015)
+                          {
+                            title: '基础信息',
+                            codes: ['B015_brand', 'B015_model', 'B015_origin', 'B015_color', 'B015_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '香型规格',
+                            codes: ['B015_product_type', 'B015_fragrance_family', 'B015_fragrance_notes', 'B015_fragrance_series', 'B015_concentration', 'B015_gender'],
+                          },
+                          { title: '物理规格', codes: ['B015_capacity', 'B015_form', 'B015_shelf_life'] },
+                          { title: '瓶器规格', codes: ['B015_bottle_material', 'B015_cap_material', 'B015_neck_finish', 'B015_spray_type'] },
+                          {
+                            title: '定制与包装',
+                            codes: ['B015_moq', 'B015_customizable', 'B015_customization', 'B015_sales_unit', 'B015_individual_pkg', 'B015_outer_pkg'],
+                          },
+                          { title: '包装与物流', codes: ['B015_pkg_size', 'B015_gross_weight'] },
+                          { title: '认证标准', codes: ['B015_certifications'] },
+                          // 眼影 (B011)
+                          {
+                            title: '基础信息',
+                            codes: ['B011_brand', 'B011_model', 'B011_origin', 'B011_color_family', 'B011_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['B011_product_type', 'B011_texture', 'B011_shade', 'B011_pan_count', 'B011_net_weight', 'B011_longevity', 'B011_waterproof', 'B011_sweatproof', 'B011_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['B011_ingredients'] },
+                          { title: '定制与包装', codes: ['B011_moq', 'B011_customizable', 'B011_customization', 'B011_sales_unit', 'B011_individual_pkg', 'B011_outer_pkg'] },
+                          { title: '包装与物流', codes: ['B011_pkg_size', 'B011_gross_weight'] },
+                          { title: '认证标准', codes: ['B011_certifications'] },
+                          // 腮红 (B012)
+                          {
+                            title: '基础信息',
+                            codes: ['B012_brand', 'B012_model', 'B012_origin', 'B012_color_family', 'B012_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['B012_product_type', 'B012_texture', 'B012_shade', 'B012_net_weight', 'B012_longevity', 'B012_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['B012_ingredients'] },
+                          { title: '定制与包装', codes: ['B012_moq', 'B012_customizable', 'B012_customization', 'B012_sales_unit', 'B012_individual_pkg', 'B012_outer_pkg'] },
+                          { title: '包装与物流', codes: ['B012_pkg_size', 'B012_gross_weight'] },
+                          { title: '认证标准', codes: ['B012_certifications'] },
+                          // 唇彩 (B013)
+                          {
+                            title: '基础信息',
+                            codes: ['B013_brand', 'B013_model', 'B013_origin', 'B013_color_family', 'B013_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['B013_product_type', 'B013_texture', 'B013_shade', 'B013_net_weight', 'B013_longevity', 'B013_staining', 'B013_moisturizing', 'B013_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['B013_ingredients'] },
+                          { title: '定制与包装', codes: ['B013_moq', 'B013_customizable', 'B013_customization', 'B013_sales_unit', 'B013_individual_pkg', 'B013_outer_pkg'] },
+                          { title: '包装与物流', codes: ['B013_pkg_size', 'B013_gross_weight'] },
+                          { title: '认证标准', codes: ['B013_certifications'] },
+                          // 粉底液 (B014)
+                          {
+                            title: '基础信息',
+                            codes: ['B014_brand', 'B014_model', 'B014_origin', 'B014_tone', 'B014_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['B014_product_type', 'B014_finish', 'B014_skin_type', 'B014_coverage', 'B014_shade', 'B014_net_weight', 'B014_spf', 'B014_longevity', 'B014_oil_control', 'B014_moisturizing', 'B014_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['B014_ingredients'] },
+                          { title: '定制与包装', codes: ['B014_moq', 'B014_customizable', 'B014_customization', 'B014_sales_unit', 'B014_individual_pkg', 'B014_outer_pkg'] },
+                          { title: '包装与物流', codes: ['B014_pkg_size', 'B014_gross_weight'] },
+                          { title: '认证标准', codes: ['B014_certifications'] },
+                          // 洗发产品 (C0111)
+                          {
+                            title: '基础信息',
+                            codes: ['C0111_brand', 'C0111_model', 'C0111_origin', 'C0111_hair_type', 'C0111_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C0111_product_type', 'C0111_form', 'C0111_net_weight', 'C0111_ph', 'C0111_sulfate_free', 'C0111_silicone_free', 'C0111_scalp_care', 'C0111_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C0111_ingredients'] },
+                          { title: '定制与包装', codes: ['C0111_moq', 'C0111_customizable', 'C0111_customization', 'C0111_sales_unit', 'C0111_individual_pkg', 'C0111_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C0111_pkg_size', 'C0111_gross_weight'] },
+                          { title: '认证标准', codes: ['C0111_certifications'] },
+                          // 护发/造型 (C0112)
+                          {
+                            title: '基础信息',
+                            codes: ['C0112_brand', 'C0112_model', 'C0112_origin', 'C0112_hair_type', 'C0112_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C0112_product_type', 'C0112_form', 'C0112_net_weight', 'C0112_leave_in', 'C0112_effect', 'C0112_hold_level', 'C0112_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C0112_ingredients'] },
+                          { title: '定制与包装', codes: ['C0112_moq', 'C0112_customizable', 'C0112_customization', 'C0112_sales_unit', 'C0112_individual_pkg', 'C0112_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C0112_pkg_size', 'C0112_gross_weight'] },
+                          { title: '认证标准', codes: ['C0112_certifications'] },
+                          // 洁面/卸妆 (C0121)
+                          {
+                            title: '基础信息',
+                            codes: ['C0121_brand', 'C0121_model', 'C0121_origin', 'C0121_skin_type', 'C0121_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C0121_product_type', 'C0121_foam_type', 'C0121_ph', 'C0121_net_weight', 'C0121_effect', 'C0121_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C0121_ingredients'] },
+                          { title: '定制与包装', codes: ['C0121_moq', 'C0121_customizable', 'C0121_customization', 'C0121_sales_unit', 'C0121_individual_pkg', 'C0121_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C0121_pkg_size', 'C0121_gross_weight'] },
+                          { title: '认证标准', codes: ['C0121_certifications'] },
+                          // 精华/面霜/乳液 (C0122)
+                          {
+                            title: '基础信息',
+                            codes: ['C0122_brand', 'C0122_model', 'C0122_origin', 'C0122_skin_type', 'C0122_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C0122_product_type', 'C0122_texture', 'C0122_net_weight', 'C0122_effect', 'C0122_active', 'C0122_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C0122_ingredients'] },
+                          { title: '定制与包装', codes: ['C0122_moq', 'C0122_customizable', 'C0122_customization', 'C0122_sales_unit', 'C0122_individual_pkg', 'C0122_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C0122_pkg_size', 'C0122_gross_weight'] },
+                          { title: '认证标准', codes: ['C0122_certifications'] },
+                          // 面膜/防晒 (C0123)
+                          {
+                            title: '基础信息',
+                            codes: ['C0123_brand', 'C0123_model', 'C0123_origin', 'C0123_skin_type', 'C0123_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C0123_product_type', 'C0123_mask_material', 'C0123_sheet_count', 'C0123_spf', 'C0123_pa', 'C0123_waterproof', 'C0123_net_weight', 'C0123_effect', 'C0123_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C0123_ingredients'] },
+                          { title: '定制与包装', codes: ['C0123_moq', 'C0123_customizable', 'C0123_customization', 'C0123_sales_unit', 'C0123_individual_pkg', 'C0123_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C0123_pkg_size', 'C0123_gross_weight'] },
+                          { title: '认证标准', codes: ['C0123_certifications'] },
+                          // 身体护理 (C013)
+                          {
+                            title: '基础信息',
+                            codes: ['C013_brand', 'C013_model', 'C013_origin', 'C013_skin_type', 'C013_keywords'],
+                            cols: 4,
+                          },
+                          {
+                            title: '产品规格',
+                            codes: ['C013_product_type', 'C013_form', 'C013_ph', 'C013_net_weight', 'C013_effect', 'C013_shelf_life'],
+                          },
+                          { title: '成分特性', codes: ['C013_ingredients'] },
+                          { title: '定制与包装', codes: ['C013_moq', 'C013_customizable', 'C013_customization', 'C013_sales_unit', 'C013_individual_pkg', 'C013_outer_pkg'] },
+                          { title: '包装与物流', codes: ['C013_pkg_size', 'C013_gross_weight'] },
+                          { title: '认证标准', codes: ['C013_certifications'] },
                         ];
                         const groupedCodes = new Set(groups.flatMap(g => g.codes));
                         const sorted = [...attributeTemplates].sort((a: any, b: any) => a.sortOrder - b.sortOrder);
                         const ungrouped = sorted.filter((t: any) => !groupedCodes.has(t.code));
 
-                        const renderAttrField = (template: any, fullWidth = false) => (
-                          <div key={template.id} className={fullWidth ? 'col-span-full' : ''}>
-                            <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                              {template.name}
-                              {template.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                            </label>
-                            {template.code === 'S012_regular_size' || template.code === 'S011_regular_size' || template.code === 'S011_pkg_size' ? (
+                        const renderAttrField = (template: any, fullWidth = false) => {
+                          // MULTI_SELECT 字段：占整行宽度，选项水平 flex wrap 排列
+                          if (template.type === 'MULTI_SELECT') {
+                            const value = attributeValues[template.id] ?? template.defaultValue ?? [];
+                            const selected = Array.isArray(value) ? value : [];
+                            return (
+                              <div key={template.id} className="col-span-full">
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  {template.name}
+                                  {template.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {template.options.map((option: string) => {
+                                    const isSelected = selected.includes(option);
+                                    return (
+                                      <label
+                                        key={option}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
+                                          isSelected
+                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          const current = [...selected];
+                                          if (isSelected) {
+                                            handleChange(current.filter((o: string) => o !== option));
+                                          } else {
+                                            handleChange([...current, option]);
+                                          }
+                                        }}
+                                      >
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={() => {
+                                            if (isSelected) {
+                                              handleChange(selected.filter((o: string) => o !== option));
+                                            } else {
+                                              handleChange([...selected, option]);
+                                            }
+                                          }}
+                                          className="h-3.5 w-3.5"
+                                        />
+                                        <span className="select-none">{option}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={template.id} className={fullWidth ? 'col-span-full' : ''}>
+                              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                                {template.name}
+                                {template.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                              </label>
+                            {template.code === 'S012_regular_size' || template.code === 'S011_regular_size' || template.code === 'S011_pkg_size' || template.code === 'B015_pkg_size' || template.code === 'B011_pkg_size' || template.code === 'B012_pkg_size' || template.code === 'B013_pkg_size' || template.code === 'B014_pkg_size' || template.code === 'C0111_pkg_size' || template.code === 'C0112_pkg_size' || template.code === 'C0121_pkg_size' || template.code === 'C0122_pkg_size' || template.code === 'C0123_pkg_size' || template.code === 'C013_pkg_size' ? (
                               <Input
                                 value={attributeValues[template.id] ?? ''}
                                 onChange={(e) => setAttributeValues({...attributeValues, [template.id]: e.target.value})}
-                                placeholder={template.code === 'S011_pkg_size' ? '8 × 7 × 3 cm' : '长 × 宽 × 高 (mm)'}
-                                className="h-8 text-sm"
+                                placeholder={template.code === 'S011_pkg_size' ? '8 × 7 × 3 cm' : template.code.startsWith('B015') ? '20×20×8 cm' : template.code.startsWith('B011') ? '12×8×2 cm' : template.code.startsWith('B012') ? '8×8×2 cm' : template.code.startsWith('B013') ? '12×3×2 cm' : template.code.startsWith('B014') ? '15×5×4 cm' : template.code.startsWith('C0111') ? '20×7×7 cm' : template.code.startsWith('C0112') ? '16×5×5 cm' : template.code.startsWith('C0121') ? '16×6×6 cm' : template.code.startsWith('C0122') ? '12×5×5 cm' : template.code.startsWith('C0123') ? '16×12×3 cm' : template.code.startsWith('C013') ? '20×8×8 cm' : '长 × 宽 × 高 (mm)'}
+                                className="h-9 text-sm"
                               />
-                            ) : template.code === 'S012_regular_weight' || template.code === 'S011_regular_weight' || template.code === 'S011_gross_weight' ? (
+                            ) : template.code === 'S012_regular_weight' || template.code === 'S011_regular_weight' || template.code === 'S011_gross_weight' || template.code === 'B015_gross_weight' || template.code === 'B011_gross_weight' || template.code === 'B012_gross_weight' || template.code === 'B013_gross_weight' || template.code === 'B014_gross_weight' || template.code === 'C0111_gross_weight' || template.code === 'C0112_gross_weight' || template.code === 'C0121_gross_weight' || template.code === 'C0122_gross_weight' || template.code === 'C0123_gross_weight' || template.code === 'C013_gross_weight' ? (
                               <div className="relative">
                                 <Input
                                   type="number" step="0.01" min="0"
                                   value={attributeValues[template.id] ?? ''}
                                   onChange={(e) => setAttributeValues({...attributeValues, [template.id]: e.target.value})}
                                   placeholder="0.00"
-                                  className="h-8 text-sm pr-8"
+                                  className="h-9 text-sm pr-8"
                                 />
                                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">kg</span>
+                              </div>
+                            ) : template.code === 'B015_capacity' ? (
+                              <div className="relative">
+                                <Input
+                                  type="number" step="0.1" min="0"
+                                  value={attributeValues[template.id] ?? ''}
+                                  onChange={(e) => setAttributeValues({...attributeValues, [template.id]: e.target.value})}
+                                  placeholder="100"
+                                  className="h-9 text-sm pr-8"
+                                />
+                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">ml</span>
                               </div>
                             ) : (
                               (() => {
@@ -1184,21 +1627,20 @@ export default function ProductsPage() {
                             )}
                           </div>
                         );
-
+                      };
                         return (
                           <>
                             {groups.map(group => {
                               const tpls = group.codes.map(c => sorted.find((t: any) => t.code === c)).filter(Boolean);
                               if (tpls.length === 0) return null;
-                              const isFourCol = group.title === '产品特性';
+                              const isFourCol = group.title === '产品特性' || group.cols === 4;
                               return (
-                                <div key={group.title}>
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <div className="h-px flex-1 bg-gray-100" />
-                                    <span className="text-xs font-medium text-gray-400 px-2">{group.title}</span>
-                                    <div className="h-px flex-1 bg-gray-100" />
+                                <div key={group.title} className="bg-white/60 border border-gray-100/80 rounded-lg p-4">
+                                  <div className="flex items-center gap-2.5 mb-4">
+                                    <div className="w-1 h-4 bg-blue-400 rounded-full" />
+                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{group.title}</span>
                                   </div>
-                                  <div className={`grid grid-cols-1 sm:grid-cols-2 ${isFourCol ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-x-4 gap-y-3`}>
+                                  <div className={`grid grid-cols-1 sm:grid-cols-2 ${isFourCol ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-x-5 gap-y-4`}>
                                     {tpls.map((t: any) => {
                                       const wide = ['S012_ingredients', 'S012_use', 'S012_effect'].includes(t.code);
                                       return renderAttrField(t, wide);
@@ -1209,12 +1651,11 @@ export default function ProductsPage() {
                             })}
                             {ungrouped.length > 0 && (
                               <div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="h-px flex-1 bg-gray-100" />
-                                  <span className="text-xs font-medium text-gray-400 px-2">其他</span>
-                                  <div className="h-px flex-1 bg-gray-100" />
+                                <div className="flex items-center gap-2.5 mb-4">
+                                  <div className="w-1 h-4 bg-gray-300 rounded-full" />
+                                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">其他</span>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
                                   {ungrouped.map((t: any) => renderAttrField(t))}
                                 </div>
                               </div>
