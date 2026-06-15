@@ -144,6 +144,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 保存属性值（ProductAttributeValue）
+    if (Array.isArray(_attributes) && _attributes.length > 0) {
+      await prisma.$transaction(
+        _attributes.map(attr => {
+          return prisma.productAttributeValue.create({
+            data: {
+              productId: product.id,
+              attributeId: attr.attributeId,
+              valueText: attr.valueText,
+              valueNumber: attr.valueNumber,
+              valueBoolean: attr.valueBoolean,
+              valueDate: attr.valueDate,
+              valueOptions: attr.valueOptions,
+              unit: attr.unit,
+            },
+          });
+        })
+      );
+    }
+
     // 记录创建产品审计日志
     const { ipAddress, userAgent } = getClientInfo(request);
     await writeAuditLog({
