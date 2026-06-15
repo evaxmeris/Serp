@@ -1555,22 +1555,23 @@ export default function ProductsPage() {
                                         }`}
                                         onClick={(e) => {
                                           e.preventDefault();
-                                          const current = [...selected];
-                                          if (isSelected) {
-                                            handleChange(current.filter((o: string) => o !== option));
-                                          } else {
-                                            handleChange([...current, option]);
-                                          }
+                                          setAttributeValues(prev => ({
+                                            ...prev,
+                                            [template.id]: isSelected
+                                              ? selected.filter((o: string) => o !== option)
+                                              : [...selected, option],
+                                          }));
                                         }}
                                       >
                                         <Checkbox
                                           checked={isSelected}
                                           onCheckedChange={() => {
-                                            if (isSelected) {
-                                              handleChange(selected.filter((o: string) => o !== option));
-                                            } else {
-                                              handleChange([...selected, option]);
-                                            }
+                                            setAttributeValues(prev => ({
+                                              ...prev,
+                                              [template.id]: isSelected
+                                                ? selected.filter((o: string) => o !== option)
+                                                : [...selected, option],
+                                            }));
                                           }}
                                           className="h-3.5 w-3.5"
                                         />
