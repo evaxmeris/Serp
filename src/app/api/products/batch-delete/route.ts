@@ -3,6 +3,7 @@
  */
 
 import { getCurrentUser } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';

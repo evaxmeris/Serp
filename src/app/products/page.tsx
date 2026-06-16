@@ -443,7 +443,7 @@ export default function ProductsPage() {
         categoryId: '',
         costPrice: '',
         salePrice: '',
-        status: 'active',
+        status: 'ACTIVE',
       });
       setEditImages([]);
     }
@@ -728,11 +728,11 @@ export default function ProductsPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.error(isNew ? '产品创建成功' : '产品更新成功');
+        toast.success(isNew ? '产品创建成功' : '产品更新成功');
         setEditDialogOpen(false);
         fetchProducts();
       } else {
-        toast.error(result.error || (isNew ? '创建失败' : '更新失败'));
+        toast.error(result.message || result.error || (isNew ? '创建失败' : '更新失败'));
       }
     } catch (error) {
       console.error('Failed to save product:', error);
@@ -1320,9 +1320,9 @@ export default function ProductsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">在售</SelectItem>
-                    <SelectItem value="inactive">下架</SelectItem>
-                    <SelectItem value="discontinued">停产</SelectItem>
+                    <SelectItem value="ACTIVE">在售</SelectItem>
+                    <SelectItem value="INACTIVE">下架</SelectItem>
+                    <SelectItem value="DISCONTINUED">停产</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
