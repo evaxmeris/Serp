@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
       costPrice,
       salePrice,
       currency,
+      status,
       description,
       descriptionEn,
       weight,
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
         costPrice: costPrice || 0,
         salePrice: salePrice || 0,
         currency: currency || 'USD',
+        status: status || 'ACTIVE',
         description,
         descriptionEn,
         weight: weight || null,
@@ -146,9 +148,9 @@ export async function POST(request: NextRequest) {
 
     // 保存属性值（ProductAttributeValue）
     if (Array.isArray(_attributes) && _attributes.length > 0) {
-      await prisma.$transaction(
-        _attributes.map(attr => {
-          return prisma.productAttributeValue.create({
+      for (const attr of _attributes) {
+        try {
+          await prisma.productAttributeValue.create({
             data: {
               productId: product.id,
               attributeId: attr.attributeId,
@@ -160,8 +162,11 @@ export async function POST(request: NextRequest) {
               unit: attr.unit,
             },
           });
-        })
-      );
+        } catch (attrErr) {
+          console.error(`[AttrSaveError] productId=${product.id}, attributeId=${attr.attributeId}, valueOptions=${JSON.stringify(attr.valueOptions)}:`, attrErr);
+          throw attrErr; // 重新抛出让外层 catch 处理
+        }
+      }
     }
 
     // 记录创建产品审计日志
