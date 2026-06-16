@@ -359,7 +359,7 @@ export default function ProductsPage() {
   };
   const currentUser = getCurrentUser();
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SALES';
-  const canDelete = currentUser?.role === 'ADMIN';
+  const canDelete = currentUser?.role === 'ADMIN' || currentUser?.role === 'SALES' || currentUser?.role === 'PURCHASING';
 
   // 单个删除
   const handleSingleDelete = async (product: Product) => {
@@ -799,7 +799,7 @@ export default function ProductsPage() {
   // 处理批量删除
   const handleDelete = async (cascade: boolean) => {
     try {
-      const response = await fetch('/api/products/batch/delete', {
+      const response = await fetch('/api/products/batch-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -810,11 +810,11 @@ export default function ProductsPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.error(`删除完成：成功 ${result.success} 个，失败 ${result.failed} 个`);
+        toast.success(`成功删除 ${result.deletedCount || 0} 个产品`);
         setSelectedIds(new Set());
         fetchProducts();
       } else {
-        toast.error('删除失败：' + (result.error || '未知错误'));
+        toast.error('删除失败：' + (result.message || result.error || '未知错误'));
       }
     } catch (error) {
       toast.error('删除失败');
