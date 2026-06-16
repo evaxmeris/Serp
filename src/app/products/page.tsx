@@ -1532,6 +1532,14 @@ export default function ProductsPage() {
                         const ungrouped = sorted.filter((t: any) => !groupedCodes.has(t.code));
 
                         const renderAttrField = (template: any, fullWidth = false) => {
+                          // 定义 handleChange 用于更新属性值
+                          const handleChange = (newValue: any) => {
+                            setAttributeValues(prev => ({
+                              ...prev,
+                              [template.id]: newValue,
+                            }));
+                          };
+
                           // MULTI_SELECT 字段：占整行宽度，选项水平 flex wrap 排列
                           if (template.type === 'MULTI_SELECT') {
                             const value = attributeValues[template.id] ?? template.defaultValue ?? [];
