@@ -129,6 +129,8 @@ export default function ProductsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [totalFiltered, setTotalFiltered] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   // 当前标签页：'active' = 产品管理, 'deleted' = 已删除产品
   const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
   
@@ -211,6 +213,11 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
     loadCategories();
+  }, [debouncedSearch, activeTab, currentPage, pageSize]);
+
+  // 搜索或切换标签时重置到第1页
+  useEffect(() => {
+    setCurrentPage(1);
   }, [debouncedSearch, activeTab]);
 
   // 加载品类列表（全量用于筛选栏 + level=1 用于主品类下拉）
@@ -335,10 +342,10 @@ export default function ProductsPage() {
     setLoading(true);
     try {
       const deletedParam = activeTab === 'deleted' ? '&deletedOnly=true' : '';
-      const res = await fetch(`/api/products?search=${search}${deletedParam}`);
+      const res = await fetch(`/api/products?search=${search}${deletedParam}&page=${currentPage}&limit=${pageSize}`);
       const data = await res.json();
       setProducts(data.data?.items ?? data.data ?? []);
-      setTotalFiltered(data.pagination?.total || data.data?.length || 0);
+      setTotalFiltered(data.data?.pagination?.total || data.pagination?.total || data.data?.length || 0);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -1332,6 +1339,68 @@ export default function ProductsPage() {
             )}
           </>)}
         </CardContent>
+
+        {/* 分页 */}
+        {!loading && totalFiltered > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t">
+            <div className="text-sm text-gray-500">
+              共 {totalFiltered} 条记录
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">每页</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  className="h-8 rounded border border-gray-300 px-2 text-sm"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-gray-600">条</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                >
+                  首页
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                >
+                  上一页
+                </Button>
+                <span className="px-3 text-sm">
+                  {currentPage} / {Math.ceil(totalFiltered / pageSize)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= Math.ceil(totalFiltered / pageSize)}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                >
+                  下一页
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= Math.ceil(totalFiltered / pageSize)}
+                  onClick={() => setCurrentPage(Math.ceil(totalFiltered / pageSize))}
+                >
+                  末页
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* 批量导入弹窗 */}
