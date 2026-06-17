@@ -70,6 +70,9 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
+    // 显式过滤已软删除的记录（Prisma 6 不再支持 $use 中间件）
+    where.deletedAt = null;
+
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
