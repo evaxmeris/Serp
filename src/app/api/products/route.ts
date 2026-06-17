@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { sku: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
