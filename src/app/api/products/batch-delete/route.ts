@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const v = validateOrReturn(BatchDeleteSchema, body);
     if (!v.success) return v.response;
-    const { ids } = v.data;
+    const { ids, permanent } = v.data;
 
     // 检查是否有关联数据
     const relatedData = await prisma.$transaction([
@@ -53,6 +53,18 @@ export async function POST(request: Request) {
         },
         { status: 400 }
       );
+    }
+
+    if (permanent) {
+      // 彻底删除：物理删除（关联的 ProductAttributeValue 通过级联自动删除）
+      const result = await prisma.product.deleteMany({
+        where: { id: { in: ids } },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `成功彻底删除 ${result.count} 条产品`,
+        deletedCount: result.count,
+      });
     }
 
     // 软删除：设置 deletedAt 字段

@@ -797,7 +797,7 @@ export default function ProductsPage() {
   };
 
   // 处理批量删除
-  const handleDelete = async (cascade: boolean) => {
+  const handleDelete = async (cascade: boolean, permanent?: boolean) => {
     try {
       const response = await fetch('/api/products/batch-delete', {
         method: 'POST',
@@ -805,12 +805,13 @@ export default function ProductsPage() {
         body: JSON.stringify({
           ids: Array.from(selectedIds),
           cascade,
+          permanent,
         }),
       });
 
       const result = await response.json();
       if (result.success) {
-        toast.success(`成功删除 ${result.deletedCount || 0} 个产品`);
+        toast.success(`成功${permanent ? '彻底删除' : '软删除'} ${result.deletedCount || 0} 个产品`);
         setSelectedIds(new Set());
         fetchProducts();
       } else {
