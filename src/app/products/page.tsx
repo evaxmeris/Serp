@@ -162,6 +162,10 @@ export default function ProductsPage() {
   // 品类列表和属性相关状态
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  // 分类筛选三级级联状态
+  const [filterParentId, setFilterParentId] = useState('all');
+  const [filterSubId, setFilterSubId] = useState('');
+  const [filterChildId, setFilterChildId] = useState('');
   const [attributeTemplates, setAttributeTemplates] = useState<AttributeTemplate[]>([]);
   const [loadingAttributes, setLoadingAttributes] = useState(false);
   const [attributeValues, setAttributeValues] = useState<AttributeValueState>({});
@@ -975,25 +979,69 @@ export default function ProductsPage() {
             </div>
             <div className="w-full sm:w-auto">
               <Label className="mb-2 block text-sm font-medium">分类筛选</Label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="全部分类" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部分类</SelectItem>
-                  {productCategories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.code})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {categoryFilter !== 'all' && (
-              <div className="w-full sm:w-auto">
-                <Button variant="outline" size="default" onClick={() => setCategoryFilter('all')} className="w-full sm:w-auto">
-                  清除筛选
-                </Button>
+              <div className="flex flex-wrap gap-2 items-end">
+                <Select value={filterParentId} onValueChange={(val) => {
+                  setFilterParentId(val);
+                  setFilterSubId('');
+                  setFilterChildId('');
+                  setCategoryFilter(val === 'all' ? 'all' : val);
+                }}>
+                  <SelectTrigger className="w-full sm:w-[160px]">
+                    <SelectValue placeholder="选择大类" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部分类</SelectItem>
+                    {productCategories.filter(c => c.level === 1).map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.code})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {filterParentId && filterParentId !== 'all' && (
+                  <Select value={filterSubId} onValueChange={(val) => {
+                    setFilterSubId(val);
+                    setFilterChildId('');
+                    setCategoryFilter(val);
+                  }}>
+                    <SelectTrigger className="w-full sm:w-[160px]">
+                      <SelectValue placeholder="选择子类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {productCategories.filter(c => c.level === 2 && c.parentId === filterParentId).map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.code})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterSubId && (
+                  <Select value={filterChildId} onValueChange={(val) => {
+                    setFilterChildId(val);
+                    setCategoryFilter(val);
+                  }}>
+                    <SelectTrigger className="w-full sm:w-[160px]">
+                      <SelectValue placeholder="选择三级" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {productCategories.filter(c => c.level === 3 && c.parentId === filterSubId).map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.code})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {categoryFilter !== 'all' && (
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setFilterParentId('all');
+                    setFilterSubId('');
+                    setFilterChildId('');
+                    setCategoryFilter('all');
+                  }} className="text-xs h-9">
+                    清除
+                  </Button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* 加载状态 */}
