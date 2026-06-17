@@ -17,7 +17,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -887,8 +887,29 @@ export default function ProductsPage() {
     <div className="w-full px-4 md:px-6 lg:px-8 py-8">
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-2xl">产品管理</CardTitle>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-3">
+            <div className="flex gap-1">
+              <button
+                onClick={() => { setActiveTab('active'); setSelectedIds(new Set()); }}
+                className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${
+                  activeTab === 'active'
+                    ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                产品管理
+              </button>
+              <button
+                onClick={() => { setActiveTab('deleted'); setSelectedIds(new Set()); }}
+                className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${
+                  activeTab === 'deleted'
+                    ? 'bg-red-50 text-red-700 border-b-2 border-red-500'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                已删除产品
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {activeTab === 'active' && (<>
                 <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
@@ -939,29 +960,6 @@ export default function ProductsPage() {
                 </Button>
               )}
             </div>
-          </div>
-          {/* 标签页导航 */}
-          <div className="flex gap-1 mt-2 border-b border-gray-200">
-            <button
-              onClick={() => { setActiveTab('active'); setSelectedIds(new Set()); }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'active'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              产品管理
-            </button>
-            <button
-              onClick={() => { setActiveTab('deleted'); setSelectedIds(new Set()); }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'deleted'
-                  ? 'border-red-500 text-red-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              已删除产品
-            </button>
           </div>
         </CardHeader>
         <CardContent>
