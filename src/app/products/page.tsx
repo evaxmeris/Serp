@@ -129,6 +129,8 @@ export default function ProductsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [totalFiltered, setTotalFiltered] = useState(0);
+  // 当前标签页：'active' = 产品管理, 'deleted' = 已删除产品
+  const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
   
   // 弹窗状态
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -205,7 +207,7 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
     loadCategories();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, activeTab]);
 
   // 加载品类列表（全量用于筛选栏 + level=1 用于主品类下拉）
   const loadCategories = async () => {
@@ -328,7 +330,8 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/products?search=${search}`);
+      const deletedParam = activeTab === 'deleted' ? '&deletedOnly=true' : '';
+      const res = await fetch(`/api/products?search=${search}${deletedParam}`);
       const data = await res.json();
       setProducts(data.data?.items ?? data.data ?? []);
       setTotalFiltered(data.pagination?.total || data.data?.length || 0);
@@ -797,7 +800,7 @@ export default function ProductsPage() {
   };
 
   // 处理批量删除
-  const handleDelete = async (cascade: boolean, permanent?: boolean) => {
+  const handleDelete = async (cascade: boolean) => {
     try {
       const response = await fetch('/api/products/batch-delete', {
         method: 'POST',
@@ -805,13 +808,12 @@ export default function ProductsPage() {
         body: JSON.stringify({
           ids: Array.from(selectedIds),
           cascade,
-          permanent,
         }),
       });
 
       const result = await response.json();
       if (result.success) {
-        toast.success(`成功${permanent ? '彻底删除' : '软删除'} ${result.deletedCount || 0} 个产品`);
+        toast.success(`成功软删除 ${result.deletedCount || 0} 个产品`);
         setSelectedIds(new Set());
         fetchProducts();
       } else {
@@ -820,6 +822,54 @@ export default function ProductsPage() {
     } catch (error) {
       toast.error('删除失败');
       console.error('Delete failed:', error);
+    }
+  };
+
+  // 恢复选中的已删除产品
+  const handleRestore = async () => {
+    if (selectedIds.size === 0) return;
+    if (!await confirm({ title: '确认恢复', description: `确定要恢复选中的 ${selectedIds.size} 个产品吗？` })) return;
+    try {
+      const response = await fetch('/api/products/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`成功恢复 ${result.restoredCount || 0} 个产品`);
+        setSelectedIds(new Set());
+        fetchProducts();
+      } else {
+        toast.error('恢复失败：' + (result.error || '未知错误'));
+      }
+    } catch (error) {
+      toast.error('恢复失败');
+      console.error('Restore failed:', error);
+    }
+  };
+
+  // 永久删除选中的已删除产品
+  const handlePermanentDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!await confirm({ title: '确认永久删除', description: `确定要永久删除选中的 ${selectedIds.size} 个产品吗？此操作不可恢复！` })) return;
+    try {
+      const response = await fetch('/api/products/permanent-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`成功永久删除 ${result.deletedCount || 0} 个产品`);
+        setSelectedIds(new Set());
+        fetchProducts();
+      } else {
+        toast.error('永久删除失败：' + (result.error || '未知错误'));
+      }
+    } catch (error) {
+      toast.error('永久删除失败');
+      console.error('Permanent delete failed:', error);
     }
   };
 
@@ -836,36 +886,82 @@ export default function ProductsPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">产品管理</CardTitle>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
-                <Download className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">批量导出</span>
-                <span className="sm:hidden">导出</span>
-              </Button>
-              <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">批量导入</span>
-                <span className="sm:hidden">导入</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setDeleteDialogOpen(true)}
-                disabled={selectedCount === 0}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">批量删除</span>
-                <span className="sm:hidden">删除</span>
-              </Button>
-              <Button
-                onClick={() => openEditDialog(null)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">新建产品</span>
-                <span className="sm:hidden">新建</span>
-              </Button>
+              {activeTab === 'active' && (<>
+                <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">批量导出</span>
+                  <span className="sm:hidden">导出</span>
+                </Button>
+                <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">批量导入</span>
+                  <span className="sm:hidden">导入</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  disabled={selectedCount === 0}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">批量删除</span>
+                  <span className="sm:hidden">删除</span>
+                </Button>
+              </>)}
+              {activeTab === 'deleted' && canDelete && (<>
+                <Button
+                  variant="outline"
+                  onClick={handleRestore}
+                  disabled={selectedCount === 0}
+                >
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  恢复选中
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handlePermanentDelete}
+                  disabled={selectedCount === 0}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  永久删除选中
+                </Button>
+              </>)}
+              {activeTab === 'active' && (
+                <Button
+                  onClick={() => openEditDialog(null)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">新建产品</span>
+                  <span className="sm:hidden">新建</span>
+                </Button>
+              )}
             </div>
+          </div>
+          {/* 标签页导航 */}
+          <div className="flex gap-1 mt-2 border-b border-gray-200">
+            <button
+              onClick={() => { setActiveTab('active'); setSelectedIds(new Set()); }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'active'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              产品管理
+            </button>
+            <button
+              onClick={() => { setActiveTab('deleted'); setSelectedIds(new Set()); }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'deleted'
+                  ? 'border-red-500 text-red-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              已删除产品
+            </button>
           </div>
         </CardHeader>
         <CardContent>
+          {activeTab === 'active' && (<>
           {/* 分类筛选 - 读取品类管理数据 */}
           <div className="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-end">
             <div className="w-full sm:w-auto">
@@ -1083,6 +1179,146 @@ export default function ProductsPage() {
               </div>
             </div>
           )}
+          </>)}
+
+          {/* 已删除产品标签页 */}
+          {activeTab === 'deleted' && (<>
+            {/* 搜索 */}
+            <div className="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-end">
+              <div className="w-full sm:w-auto">
+                <Label className="mb-2 block text-sm font-medium">搜索</Label>
+                <Input
+                  placeholder="搜索 SKU / 产品名称..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full sm:w-[280px]"
+                />
+              </div>
+            </div>
+
+            {/* 加载状态 */}
+            {loading && (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-5 w-5 shrink-0" />
+                    <Skeleton className="h-5 w-20 shrink-0" />
+                    <Skeleton className="h-5 w-1/4" />
+                    <Skeleton className="h-5 w-16 shrink-0" />
+                    <Skeleton className="h-5 w-16 shrink-0" />
+                    <Skeleton className="h-5 w-20 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 已删除产品表格 */}
+            {!loading && (
+              <>
+                {filteredProducts.length === 0 ? (
+                  <EmptyState
+                    icon={<div className="text-4xl">🗑️</div>}
+                    title="暂无已删除产品"
+                    description="所有已删除的产品都会显示在这里"
+                  />
+                ) : (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">
+                            <Checkbox
+                              checked={filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id))}
+                              onCheckedChange={toggleSelectAll}
+                            />
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => requestSort('sku')}
+                          >
+                            SKU
+                            <SortIndicator field="sku" sortConfig={sortConfig} />
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => requestSort('name')}
+                          >
+                            产品名称
+                            <SortIndicator field="name" sortConfig={sortConfig} />
+                          </TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none"
+                            onClick={() => requestSort('categoryName')}
+                          >
+                            品类
+                            <SortIndicator field="categoryName" sortConfig={sortConfig} />
+                          </TableHead>
+                          <TableHead>状态</TableHead>
+                          <TableHead className="text-right w-40">操作</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sorted.map(product => (
+                          <TableRow key={product.id} className={selectedIds.has(product.id) ? 'bg-muted/50' : ''}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedIds.has(product.id)}
+                                onCheckedChange={() => toggleSelection(product.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell>
+                              {(product.categoryName || product.category) ? (
+                                <Badge variant="secondary">{product.categoryName || product.category}</Badge>
+                              ) : <span className="text-gray-400">-</span>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
+                                已删除
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                {canDelete && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700"
+                                    onClick={async () => {
+                                      setSelectedIds(new Set([product.id]));
+                                      await handleRestore();
+                                    }}
+                                    title="恢复"
+                                  >
+                                    恢复
+                                  </Button>
+                                )}
+                                {canDelete && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-600"
+                                    onClick={async () => {
+                                      setSelectedIds(new Set([product.id]));
+                                      await handlePermanentDelete();
+                                    }}
+                                    title="永久删除"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+          </>)}
         </CardContent>
       </Card>
 

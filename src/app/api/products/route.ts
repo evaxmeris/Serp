@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const status = searchParams.get('status') || '';
+    const includeDeleted = searchParams.get('includeDeleted') === 'true';
+    const deletedOnly = searchParams.get('deletedOnly') === 'true';
 
     const where: any = {};
     
@@ -70,8 +72,15 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
-    // 显式过滤已软删除的记录（Prisma 6 不再支持 $use 中间件）
-    where.deletedAt = null;
+    // 根据查询参数决定 deletedAt 过滤逻辑
+    if (deletedOnly) {
+      // 只显示已删除的产品
+      where.deletedAt = { not: null };
+    } else if (!includeDeleted) {
+      // 默认：过滤已软删除的记录
+      where.deletedAt = null;
+    }
+    // else: includeDeleted=true，不加 deletedAt 过滤条件
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
