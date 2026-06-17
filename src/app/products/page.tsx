@@ -1193,40 +1193,6 @@ export default function ProductsPage() {
               )}
             </>
           )}
-
-          {/* 底部悬浮批量操作栏 */}
-          {selectedCount > 0 && (
-            <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg p-4 z-50">
-              <div className="container mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {selectedCount === products.length ? (
-                    <CheckSquare className="h-5 w-5 text-primary" />
-                  ) : (
-                    <Square className="h-5 w-5 text-muted-foreground" />
-                  )}
-                  <span className="font-medium">
-                    已选择 {selectedCount} / {products.length} 项
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={() => setSelectedIds(new Set())}>
-                    取消选择 (Esc)
-                  </Button>
-                  <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
-                    <Download className="h-4 w-4 mr-2" />
-                    导出选中
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setDeleteDialogOpen(true)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    删除选中
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
           </>)}
 
           {/* 已删除产品标签页 */}
@@ -1998,8 +1964,6 @@ export default function ProductsPage() {
         </Dialog>
       )}
 
-      {/* 给底部操作栏留空间 */}
-      {selectedCount > 0 && <div className="h-20" />}
     </div>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <ConfirmDialog />
