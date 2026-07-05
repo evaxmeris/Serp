@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { validateOrReturn } from '@/lib/api-validation';
 import { BatchImportSchema } from '@/lib/api-schemas';
 import { CustomerStatus } from '@prisma/client';
+import { successResponse, errorResponse, forbiddenResponse } from '@/lib/api-response';
 
 /** 单次导入最大条数（与 schema 保持一致） */
 const MAX_BATCH_SIZE = 1000;

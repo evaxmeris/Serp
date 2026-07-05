@@ -153,7 +153,7 @@ export default function InventoryPage() {
 
     const fetchProducts = async () => {
       try {
-        const res = await fetch('/api/v1/products?limit=500');
+        const res = await fetch('/api/v1/products?limit=500&page=1');
         const data = await res.json();
         if (data.success) {
           setProducts(data.data.items || []);
@@ -173,7 +173,7 @@ export default function InventoryPage() {
 
   const handleAdjust = async () => {
     try {
-      const res = await fetch('/api/v1/inventory/adjust', {
+      const res = await fetch('/api/v1/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adjustForm),

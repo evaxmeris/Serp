@@ -79,7 +79,7 @@ export default function NewInboundOrderPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/v1/products?limit=100');
+      const res = await fetch('/api/v1/products?limit=100&page=1');
       const data = await res.json();
       if (data.success) {
         setProducts(data.data.items || []);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,8 @@ interface PaginationData {
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toasts, removeToast, toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -66,7 +69,9 @@ export default function CustomersPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [tagsDialogOpen, setTagsDialogOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  // 从 URL 参数读取初始页码，支持返回时保持页面
+  const initialPage = parseInt(searchParams.get('page') || '1');
+  const [page, setPage] = useState(initialPage > 0 ? initialPage : 1);
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
     limit: 20,
@@ -144,6 +149,19 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 页面变化时更新 URL，支持返回时保持页面
+  const changePage = (newPage: number) => {
+    if (newPage < 1 || newPage > (pagination?.totalPages || 1)) return;
+    setPage(newPage);
+    const params = new URLSearchParams(searchParams.toString());
+    if (newPage === 1) {
+      params.delete('page');
+    } else {
+      params.set('page', String(newPage));
+    }
+    router.replace(`/customers?${params.toString()}`, { scroll: false });
   };
 
   const fetchAvailableTags = async () => {
@@ -287,7 +305,7 @@ export default function CustomersPage() {
     onSort: (key, dir) => {
       setSortBy(key);
       setSortOrder(dir);
-      setPage(1);
+      changePage(1);
     },
   });
 
@@ -521,6 +539,7 @@ export default function CustomersPage() {
                             variant="ghost"
                             size="sm"
                             className="h-8 px-2"
+                            onClick={() => router.push(`/customers/${customer.id}`)}
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             查看
@@ -561,27 +580,91 @@ export default function CustomersPage() {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
               <div className="text-sm text-gray-500">
                 共 {pagination.total} 条记录，第 {pagination.page} / {pagination.totalPages} 页
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-center">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
+                  onClick={() => changePage(page - 1)}
                 >
                   上一页
                 </Button>
+
+                {/* 快速跳转页码 */}
+                {pagination.totalPages > 10 && (
+                  <>
+                    {[1, ...Array.from({ length: Math.min(9, Math.floor(pagination.totalPages / 100)) },
+                      (_, i) => (i + 1) * 100
+                    )].map(n => n <= pagination.totalPages && (
+                      <Button
+                        key={n}
+                        variant={page === n ? 'default' : 'outline'}
+                        size="sm"
+                        className="min-w-[36px]"
+                        onClick={() => changePage(n)}
+                      >
+                        {n}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-w-[36px]"
+                      onClick={() => changePage(pagination.totalPages)}
+                    >
+                      {pagination.totalPages}
+                    </Button>
+                  </>
+                )}
+
+                {/* 小页码时显示相邻页码 */}
+                {pagination.totalPages <= 10 && (
+                  Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(n => (
+                    <Button
+                      key={n}
+                      variant={page === n ? 'default' : 'outline'}
+                      size="sm"
+                      className="min-w-[36px]"
+                      onClick={() => changePage(n)}
+                    >
+                      {n}
+                    </Button>
+                  ))
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={page === pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => changePage(page + 1)}
                 >
                   下一页
                 </Button>
+
+                {/* 页码快速跳转输入框 */}
+                <div className="flex items-center gap-1 ml-2 text-sm">
+                  <span className="text-gray-400">跳至</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={pagination.totalPages}
+                    className="w-16 h-8 text-sm text-center"
+                    placeholder=""
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt((e.target as HTMLInputElement).value);
+                        if (val >= 1 && val <= pagination.totalPages) {
+                          changePage(val);
+                        }
+                      }
+                    }}
+                  />
+                  <span className="text-gray-400">页</span>
+                </div>
               </div>
             </div>
           )}

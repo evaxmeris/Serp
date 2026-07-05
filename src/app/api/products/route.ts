@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
     
     if (category) {
-      where.category = category;
+      where.categoryId = category;
     }
     
     if (status) {

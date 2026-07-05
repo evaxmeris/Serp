@@ -11,11 +11,11 @@ import { z } from 'zod';
 
 // 输入验证 schema
 const ProductListSchema = z.object({
-  page: z.coerce.number().int().positive().min(1).max(10000).default(1),
-  limit: z.coerce.number().int().positive().min(1).max(100).default(20),
-  search: z.string().max(100).optional(),
-  category: z.string().max(50).optional(),
-  status: z.string().max(20).optional(),
+  page: z.coerce.number().int().positive().max(10000).default(1).catch(1),
+  limit: z.coerce.number().int().positive().min(1).max(500).default(20).catch(20),
+  search: z.string().max(100).optional().nullable().default(''),
+  category: z.string().max(50).optional().nullable().default(''),
+  status: z.string().max(20).optional().nullable().default(''),
 });
 
 // 清理搜索字符串，防止 SQL 注入

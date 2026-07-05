@@ -71,6 +71,7 @@ model Customer {
   orders      Order[]
   quotations  Quotation[]
   invoices    Invoice[]
+  followUps   FollowUp[]
 
   @@index([email])
   @@index([status, createdAt])
@@ -161,14 +162,18 @@ model Inquiry {
 
 model FollowUp {
   id           String       @id @default(cuid())
-  inquiryId    String
+  inquiryId    String?
+  customerId   String?
   type         FollowUpType @default(CALL)
   content      String
   nextFollowUp DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
-  inquiry      Inquiry      @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  inquiry      Inquiry?     @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
+  @@index([customerId, createdAt])
+  @@index([inquiryId, createdAt])
   @@map("follow_ups")
 }
 

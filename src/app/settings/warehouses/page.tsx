@@ -80,8 +80,8 @@ export default function WarehouseSettingsPage() {
   const { toast, toasts, removeToast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
-  const fetchWarehouses = async () => {
-    setLoading(true);
+  const fetchWarehouses = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -106,11 +106,10 @@ export default function WarehouseSettingsPage() {
 
   useEffect(() => {
     fetchWarehouses();
-  }, [page, statusFilter]);
+  }, [page, statusFilter, search]);
 
   const handleSearch = () => {
     setPage(1);
-    fetchWarehouses();
   };
 
   const openCreateDialog = () => {
@@ -159,9 +158,9 @@ export default function WarehouseSettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.error(editingWarehouse ? '仓库更新成功' : '仓库创建成功');
+        toast.success(editingWarehouse ? '仓库更新成功' : '仓库创建成功');
         setDialogOpen(false);
-        fetchWarehouses();
+        fetchWarehouses(true);
       } else {
         toast.error(data.message || '操作失败');
       }
@@ -182,9 +181,9 @@ export default function WarehouseSettingsPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.error('仓库删除成功');
+        toast.success('仓库删除成功');
         setDeleteConfirm(null);
-        fetchWarehouses();
+        fetchWarehouses(true);
       } else {
         toast.error(data.message || '删除失败');
       }

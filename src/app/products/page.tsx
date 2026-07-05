@@ -213,12 +213,12 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
     loadCategories();
-  }, [debouncedSearch, activeTab, currentPage, pageSize]);
+  }, [debouncedSearch, categoryFilter, activeTab, currentPage, pageSize]);
 
-  // 搜索或切换标签时重置到第1页
+  // 搜索、切换标签或切换分类筛选时重置到第1页
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, activeTab]);
+  }, [debouncedSearch, categoryFilter, activeTab]);
 
   // 加载品类列表（全量用于筛选栏 + level=1 用于主品类下拉）
   const loadCategories = async () => {
@@ -342,7 +342,8 @@ export default function ProductsPage() {
     setLoading(true);
     try {
       const deletedParam = activeTab === 'deleted' ? '&deletedOnly=true' : '';
-      const res = await fetch(`/api/products?search=${search}${deletedParam}&page=${currentPage}&limit=${pageSize}`);
+      const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
+      const res = await fetch(`/api/products?search=${search}${deletedParam}${categoryParam}&page=${currentPage}&limit=${pageSize}`);
       const data = await res.json();
       setProducts(data.data?.items ?? data.data ?? []);
       setTotalFiltered(data.data?.pagination?.total || data.pagination?.total || data.data?.length || 0);

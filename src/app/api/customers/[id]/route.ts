@@ -60,13 +60,41 @@ export async function GET(
           },
         },
         contacts: true,
+        followUps: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
         inquiries: {
           orderBy: { createdAt: 'desc' },
           take: 10,
+          include: {
+            followUps: {
+              orderBy: { createdAt: 'desc' },
+              take: 3,
+            },
+            _count: { select: { followUps: true } },
+          },
         },
         orders: {
           orderBy: { createdAt: 'desc' },
           take: 10,
+        },
+        quotations: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        invoices: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        _count: {
+          select: {
+            contacts: true,
+            inquiries: true,
+            quotations: true,
+            orders: true,
+            invoices: true,
+          },
         },
       },
     });
