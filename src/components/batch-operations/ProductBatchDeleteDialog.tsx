@@ -18,7 +18,7 @@ interface ProductBatchDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedIds: string[];
-  onDelete: (cascade: boolean) => void;
+  onDelete: (cascade: boolean, permanent?: boolean) => void;
 }
 
 export function ProductBatchDeleteDialog({
@@ -28,10 +28,11 @@ export function ProductBatchDeleteDialog({
   onDelete,
 }: ProductBatchDeleteDialogProps) {
   const [cascade, setCascade] = useState(false);
+  const [permanent, setPermanent] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
   const handleDelete = () => {
-    onDelete(cascade);
+    onDelete(cascade, permanent);
     onOpenChange(false);
   };
 
@@ -70,6 +71,18 @@ export function ProductBatchDeleteDialog({
             />
             <Label htmlFor="cascade" className="font-normal">
               同时删除关联的库存和 SKU 记录（级联删除）
+            </Label>
+          </div>
+
+          <div className="flex items-center space-x-2 pt-2 border-t border-gray-100">
+            <Checkbox
+              id="permanent"
+              checked={permanent}
+              onCheckedChange={(checked) => setPermanent(checked as boolean)}
+              className="data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
+            />
+            <Label htmlFor="permanent" className="font-normal text-red-600">
+              彻底删除（直接从数据库中移除，不可恢复）
             </Label>
           </div>
 

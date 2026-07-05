@@ -431,6 +431,7 @@ export const CreateResearchTemplateSchema = z.object({
 /** 批量删除 */
 export const BatchDeleteSchema = z.object({
   ids: z.array(z.string()).min(1, '至少选择一项').max(100, '单次最多删除 100 项'),
+  permanent: z.boolean().optional(),
 });
 
 // ==================== 报表查询 ====================
