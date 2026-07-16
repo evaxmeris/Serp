@@ -15,7 +15,7 @@ export async function POST(
   try {
     // 验证管理员权限
     const currentUser = await getCurrentUser();
-    if (!currentUser || currentUser.role !== 'ADMIN') {
+    if (!currentUser || currentUser.role !== 'admin') {
       return NextResponse.json(
         { error: '无权限访问' },
         { status: 403 }

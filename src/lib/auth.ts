@@ -52,7 +52,7 @@ export { logout };
 /**
  * 用户角色枚举（保留用于向后兼容）
  */
-export type UserRole = 'ADMIN' | 'SALES' | 'PURCHASING' | 'WAREHOUSE' | 'VIEWER';
+export type UserRole = 'admin' | 'sales' | 'purchasing' | 'warehouse' | 'viewer';
 
 /**
  * Cookie 配置选项

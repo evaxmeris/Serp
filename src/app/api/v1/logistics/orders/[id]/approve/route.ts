@@ -58,7 +58,7 @@ export async function POST(
     }
 
     // 权限检查：只有指定的审批人或 ADMIN 可以操作
-    if (session.role !== 'ADMIN' && existing.approverId !== session.id) {
+    if (session.role !== 'admin' && existing.approverId !== session.id) {
       return forbiddenResponse('只有指定的审批人可以执行审批操作');
     }
 

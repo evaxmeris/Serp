@@ -40,11 +40,12 @@ import {
 } from 'lucide-react';
 
 export type UserRole =
-  | 'ADMIN'
-  | 'SALES'
-  | 'PURCHASING'
-  | 'WAREHOUSE'
-  | 'VIEWER';
+  | 'admin'
+  | 'sales'
+  | 'purchasing'
+  | 'warehouse'
+  | 'viewer'
+  | 'super-admin';
 
 export interface MenuItem {
   key: string;
@@ -72,7 +73,7 @@ const menuConfig: MenuGroup[] = [
         label: '数据仪表盘',
         icon: LayoutDashboard,
         href: '/dashboard',
-        roles: ['ADMIN', 'SALES', 'PURCHASING', 'WAREHOUSE', 'VIEWER'],
+        roles: ['admin', 'sales', 'purchasing', 'warehouse', 'viewer'],
       },
     ],
   },
@@ -84,56 +85,56 @@ const menuConfig: MenuGroup[] = [
         label: '产品列表',
         icon: Package,
         href: '/products',
-        roles: ['ADMIN', 'SALES', 'PURCHASING'],
+        roles: ['admin', 'sales', 'purchasing'],
       },
       {
         key: 'categories',
         label: '品类管理',
         icon: FileText,
         href: '/product-research/categories',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'templates',
         label: '属性模板',
         icon: FileText,
         href: '/product-research/templates',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'research-dashboard',
         label: '调研看板',
         icon: LayoutDashboard,
         href: '/product-research/dashboard',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'research-products',
         label: '产品调研',
         icon: Search,
         href: '/product-research/products',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'competitors',
         label: '竞品分析',
         icon: Swords,
         href: '/competitors',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'comparisons',
         label: '产品对比',
         icon: Scale,
         href: '/product-research/comparisons',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'research-import',
         label: '数据导入',
         icon: Upload,
         href: '/product-research/import',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
     ],
   },
@@ -145,21 +146,21 @@ const menuConfig: MenuGroup[] = [
         label: '客户列表',
         icon: Users,
         href: '/customers',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'quotations',
         label: '报价列表',
         icon: CircleDollarSign,
         href: '/quotations',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'orders',
         label: '订单列表',
         icon: ShoppingCart,
         href: '/orders',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
     ],
   },
@@ -171,35 +172,35 @@ const menuConfig: MenuGroup[] = [
         label: '供应商列表',
         icon: Building2,
         href: '/suppliers',
-        roles: ['ADMIN', 'PURCHASING'],
+        roles: ['admin', 'purchasing'],
       },
       {
         key: 'purchase-orders',
         label: '采购订单',
         icon: Receipt,
         href: '/purchase-orders',
-        roles: ['ADMIN', 'PURCHASING'],
+        roles: ['admin', 'purchasing'],
       },
       {
         key: 'inbound-orders',
         label: '采购入库',
         icon: Inbox,
         href: '/inbound-orders',
-        roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
+        roles: ['admin', 'purchasing', 'warehouse'],
       },
       {
         key: 'production-records',
         label: '生产管理',
         icon: Package,
         href: '/production',
-        roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
+        roles: ['admin', 'purchasing', 'warehouse'],
       },
       {
         key: 'quality-checks',
         label: '质检管理',
         icon: ShieldCheck,
         href: '/quality',
-        roles: ['ADMIN', 'WAREHOUSE'],
+        roles: ['admin', 'warehouse'],
       },
     ],
   },
@@ -211,35 +212,35 @@ const menuConfig: MenuGroup[] = [
         label: '库存管理',
         icon: Warehouse,
         href: '/inventory',
-        roles: ['ADMIN', 'WAREHOUSE'],
+        roles: ['admin', 'warehouse'],
       },
       {
         key: 'outbound-orders',
         label: '出库管理',
         icon: Truck,
         href: '/outbound-orders',
-        roles: ['ADMIN', 'WAREHOUSE'],
+        roles: ['admin', 'warehouse'],
       },
       {
         key: 'logistics-providers',
         label: '物流服务商',
         icon: Truck,
         href: '/logistics/providers',
-        roles: ['ADMIN', 'PURCHASING'],
+        roles: ['admin', 'purchasing'],
       },
       {
         key: 'logistics-orders',
         label: '物流订单',
         icon: Ship,
         href: '/logistics/orders',
-        roles: ['ADMIN', 'PURCHASING'],
+        roles: ['admin', 'purchasing'],
       },
       {
         key: 'shipments',
         label: '发货记录',
         icon: Globe,
         href: '/shipments',
-        roles: ['ADMIN', 'WAREHOUSE'],
+        roles: ['admin', 'warehouse'],
       },
     ],
   },
@@ -251,14 +252,14 @@ const menuConfig: MenuGroup[] = [
         label: '发票管理',
         icon: FileText,
         href: '/invoices',
-        roles: ['ADMIN', 'SALES'],
+        roles: ['admin', 'sales'],
       },
       {
         key: 'finance',
         label: '财务管理',
         icon: DollarSign,
         href: '/finance',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
     ],
   },
@@ -270,14 +271,14 @@ const menuConfig: MenuGroup[] = [
         label: '报表中心',
         icon: TrendingUp,
         href: '/reports',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'report-subscriptions',
         label: '订阅管理',
         icon: BarChart3,
         href: '/reports/subscriptions',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
     ],
   },
@@ -289,55 +290,56 @@ const menuConfig: MenuGroup[] = [
         label: '用户及权限',
         icon: User,
         href: '/settings/users',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'approval-workflows',
         label: '审批流程',
         icon: GitBranch,
         href: '/settings/approval-workflows',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'warehouses',
         label: '仓库配置',
         icon: Package,
         href: '/settings/warehouses',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'platforms',
         label: '平台账号',
         icon: Link,
         href: '/settings/platforms',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'sync',
         label: '数据同步',
         icon: RefreshCw,
         href: '/sync',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'audit-logs',
         label: '审计日志',
         icon: History,
         href: '/settings/audit-logs',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
       {
         key: 'settings',
         label: '系统配置',
         icon: Settings,
         href: '/settings',
-        roles: ['ADMIN'],
+        roles: ['admin'],
       },
     ],
   },
 ];
 
 const filterMenuByRole = (role: UserRole): MenuGroup[] => {
+  if (role === 'super-admin') return menuConfig.filter(g => g.items.length > 0);
   return menuConfig
     .map(group => ({
       ...group,
@@ -620,7 +622,7 @@ export default function Sidebar({
 }
 
 export const getCurrentUserRole = async (): Promise<UserRole> => {
-  if (typeof window === 'undefined') return 'ADMIN';
+  if (typeof window === 'undefined') return 'admin';
   try {
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -628,5 +630,5 @@ export const getCurrentUserRole = async (): Promise<UserRole> => {
       if (user?.role) return user.role as UserRole;
     }
   } catch {}
-  return 'ADMIN';
+  return 'admin';
 };

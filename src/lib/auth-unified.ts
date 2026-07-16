@@ -64,7 +64,7 @@ export function withAuth(
         );
       }
 
-      if (options?.requireAdmin && session.role !== 'ADMIN') {
+      if (options?.requireAdmin && session.role !== 'admin') {
         return NextResponse.json(
           { success: false, error: '权限不足', code: 'FORBIDDEN' },
           { status: 403 }
@@ -95,7 +95,7 @@ export function hasRowPermission(
   ownerField: string,
   ownerValue: string | undefined | null
 ): boolean {
-  if (session.role === 'ADMIN') return true;
+  if (session.role === 'admin') return true;
   return ownerValue === session.id;
 }
 
@@ -112,7 +112,7 @@ export function buildRowLevelFilter(
   session: UserSession,
   ownerField: string
 ): Record<string, string> | Record<string, never> {
-  if (session.role === 'ADMIN') return {};
+  if (session.role === 'admin') return {};
   return { [ownerField]: session.id };
 }
 

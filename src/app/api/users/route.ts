@@ -20,10 +20,15 @@ export async function GET(request: NextRequest) {
         id: true,
         email: true,
         name: true,
-        role: true,
+        isApproved: true,
         avatar: true,
         createdAt: true,
         updatedAt: true,
+        userRoles: {
+          where: { isPrimary: true },
+          include: { role: { select: { name: true, displayName: true } } },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -45,12 +50,12 @@ export async function POST(request: NextRequest) {
     }
     
     // 只有管理员可以创建用户
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'admin') {
       return forbiddenResponse('权限不足');
     }
 
     const body = await request.json();
-    const v = validateOrReturn(z.object({ email: z.string().email(), name: z.string(), password: z.string().min(6), role: z.enum(['ADMIN', 'SALES', 'PURCHASING', 'WAREHOUSE', 'VIEWER']).optional() }), body);
+    const v = validateOrReturn(z.object({ email: z.string().email(), name: z.string(), password: z.string().min(6), role: z.enum(['admin', 'sales', 'purchasing', 'warehouse', 'viewer']).optional() }), body);
     if (!v.success) return v.response;
     const { email, name, password, role } = v.data;
 
@@ -71,16 +76,23 @@ export async function POST(request: NextRequest) {
         email,
         name,
         passwordHash,
-        role: role || 'SALES',
       },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
         createdAt: true,
       },
     });
+
+    // 创建主角色关联
+    const roleName = role || 'sales';
+    const roleRecord = await prisma.role.findUnique({ where: { name: roleName } });
+    if (roleRecord) {
+      await prisma.userRole.create({
+        data: { userId: user.id, roleId: roleRecord.id, isPrimary: true },
+      });
+    }
 
     return createdResponse(user, '用户创建成功');
   } catch (error) {

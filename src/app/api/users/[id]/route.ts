@@ -21,7 +21,7 @@ export async function PUT(
     }
 
     // 只有管理员可以更新用户
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'admin') {
       return forbiddenResponse('权限不足');
     }
 
@@ -43,9 +43,26 @@ export async function PUT(
     const updateData: any = {};
     if (email !== undefined) updateData.email = email;
     if (name !== undefined) updateData.name = name;
-    if (role !== undefined) updateData.role = role;
     if (isApproved !== undefined) updateData.isApproved = isApproved;
-    
+
+    // 更新主角色（UserRole）
+    if (role !== undefined) {
+      const roleRecord = await prisma.role.findUnique({ where: { name: role } });
+      if (roleRecord) {
+        // 先取消所有主角色标记
+        await prisma.userRole.updateMany({
+          where: { userId: id, isPrimary: true },
+          data: { isPrimary: false },
+        });
+        // 创建或更新主角色
+        await prisma.userRole.upsert({
+          where: { userId_roleId: { userId: id, roleId: roleRecord.id } },
+          create: { userId: id, roleId: roleRecord.id, isPrimary: true },
+          update: { isPrimary: true },
+        });
+      }
+    }
+
     // 如果提供了新密码，加密后更新
     if (password && password.trim()) {
       updateData.passwordHash = await bcrypt.hash(password, 10);
@@ -58,7 +75,6 @@ export async function PUT(
         id: true,
         email: true,
         name: true,
-        role: true,
         isApproved: true,
         avatar: true,
         createdAt: true,
@@ -88,7 +104,7 @@ export async function DELETE(
     }
 
     // 只有管理员可以删除用户
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'admin') {
       return forbiddenResponse('权限不足');
     }
 
@@ -132,7 +148,6 @@ export async function GET(
         id: true,
         email: true,
         name: true,
-        role: true,
         isApproved: true,
         avatar: true,
         createdAt: true,

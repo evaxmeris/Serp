@@ -264,7 +264,7 @@ export async function PUT(
 
     // 如果请求中包含 status 字段且与当前状态不同，验证状态跳转是否合法
     if (restData.status && restData.status !== existingOrder.status) {
-      const isAdmin = session?.role === 'ADMIN';
+      const isAdmin = session?.role === 'admin';
 
       const result = validateTransition(
         existingOrder.status as OrderStatus,

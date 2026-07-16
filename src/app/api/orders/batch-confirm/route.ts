@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     // 认证检查
     const user = await getCurrentUser();
-    if (!user || !['ADMIN', 'SALES'].includes(user.role)) {
+    if (!user || !['admin', 'sales'].includes(user.role)) {
       return forbiddenResponse('需要销售管理权限');
     }
 

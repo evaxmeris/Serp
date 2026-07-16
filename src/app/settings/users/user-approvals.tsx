@@ -30,7 +30,8 @@ export default function UserApprovalsTab() {
     try {
       const res = await fetch('/api/auth/approvals?status=PENDING');
       const data = await res.json();
-      setRegistrations(data.registrations || []);
+      const result = data.data || data;
+      setRegistrations(result.registrations || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -40,8 +41,8 @@ export default function UserApprovalsTab() {
     try {
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      const user = data.user || data;
-      if (user.role === 'ADMIN') { setPerms(['*']); }
+      const user = data.data || data;
+      if (user.role === 'admin' || user.role === 'super-admin') { setPerms(['*']); }
       else { const p = user.permissions || []; setPerms(Array.isArray(p) ? p : []); }
     } catch { setPerms([]); }
   };

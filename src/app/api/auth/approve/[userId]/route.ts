@@ -31,7 +31,7 @@ export async function POST(
     }
 
     // 检查当前用户是否有审批权限（需要管理员角色）
-    if (currentSession.role !== 'ADMIN') {
+    if (currentSession.role !== 'admin') {
       return forbiddenResponse('Permission denied');
     }
 
@@ -60,9 +60,16 @@ export async function POST(
             email: reg.email,
             passwordHash: reg.passwordHash,
             name: reg.name,
-            role: 'SALES', // 默认角色为业务员
           },
         });
+
+        // 创建主角色关联（默认业务员）
+        const defaultRole = await tx.role.findUnique({ where: { name: 'sales' } });
+        if (defaultRole) {
+          await tx.userRole.create({
+            data: { userId: createdUser.id, roleId: defaultRole.id, isPrimary: true },
+          });
+        }
 
         // 更新注册申请状态
         await tx.userRegistration.update({
@@ -98,7 +105,6 @@ export async function POST(
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
         createdAt: user.createdAt,
       },
       approved

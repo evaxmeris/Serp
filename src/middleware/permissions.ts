@@ -41,7 +41,7 @@ export async function checkUserPermission(
       select: { role: true },
     });
 
-    if (user?.role === 'ADMIN') {
+    if (user?.role === 'admin') {
       return {
         hasPermission: true,
         userId,
@@ -232,7 +232,7 @@ export async function checkModulePermission(
       select: { role: true },
     });
 
-    if (user?.role === 'ADMIN') {
+    if (user?.role === 'admin') {
       return {
         hasPermission: true,
         userId,

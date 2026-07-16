@@ -6,7 +6,7 @@
  * @创建日期 2026-03-23
  */
 
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, loadUserPermissions } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
 
 /**
@@ -17,11 +17,15 @@ export async function GET() {
     const user = await getCurrentUser();
 
     if (user) {
+      // 加载用户的权限列表
+      const perms = await loadUserPermissions(user.id);
+      const isAdmin = user.role === 'admin' || user.role === 'super-admin';
       return successResponse({
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: isAdmin ? ['*'] : Array.from(perms.permissions),
       });
     } else {
       return errorResponse('未认证', 'UNAUTHORIZED', 401);

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     // 验证管理员权限
     const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || user.role !== 'admin') {
       return forbiddenResponse('无权限访问');
     }
 

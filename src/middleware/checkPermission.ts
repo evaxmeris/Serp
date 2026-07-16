@@ -43,9 +43,9 @@ const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
  */
 function getDefaultPermissionsForRole(roleName: string): string[] {
   switch (roleName) {
-    case 'ADMIN':
+    case 'admin':
       return ['*'];
-    case 'SALES':
+    case 'sales':
       return [
         'customer:view', 'customer:create', 'customer:edit',
         'inquiry:view', 'inquiry:create', 'inquiry:edit',
@@ -53,7 +53,7 @@ function getDefaultPermissionsForRole(roleName: string): string[] {
         'order:view', 'order:create', 'order:edit',
         'report:view',
       ];
-    case 'PURCHASING':
+    case 'purchasing':
       return [
         'supplier:view', 'supplier:create', 'supplier:edit',
         'product:view', 'product:create', 'product:edit',
@@ -61,7 +61,7 @@ function getDefaultPermissionsForRole(roleName: string): string[] {
         'inventory:view',
         'report:view',
       ];
-    case 'WAREHOUSE':
+    case 'warehouse':
       return [
         'product:view',
         'inventory:view', 'inventory:adjust',
@@ -69,7 +69,7 @@ function getDefaultPermissionsForRole(roleName: string): string[] {
         'outbound:view', 'outbound:create', 'outbound:process',
         'report:view',
       ];
-    case 'VIEWER':
+    case 'viewer':
       return [
         'customer:view',
         'inquiry:view',

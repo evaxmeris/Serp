@@ -76,7 +76,7 @@ export async function POST(
     }
 
     // 行级权限：非 ADMIN 用户只能对自己负责的询盘操作
-    if (session.role !== 'ADMIN' && inquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && inquiry.assignedTo !== session.id) {
       return errorResponse('无权操作此询盘', 'FORBIDDEN', 403);
     }
 

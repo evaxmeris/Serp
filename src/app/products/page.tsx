@@ -356,12 +356,7 @@ export default function ProductsPage() {
 
   // 筛选后的产品
   const getFilteredProducts = (): Product[] => {
-    if (categoryFilter === 'all') return products;
-    return products.filter(product => {
-      return product.categoryId === categoryFilter ||
-             product.category === categoryFilter ||
-             product.categoryName === categoryFilter;
-    });
+    return products;
   };
 
   // 获取当前用户（判断权限）
@@ -373,8 +368,10 @@ export default function ProductsPage() {
     } catch { return null; }
   };
   const currentUser = getCurrentUser();
-  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SALES';
-  const canDelete = currentUser?.role === 'ADMIN' || currentUser?.role === 'SALES' || currentUser?.role === 'PURCHASING';
+  const userPerms: string[] = currentUser?.permissions || [];
+  const hasPerm = (p: string) => userPerms.includes(p) || userPerms.includes('*');
+  const canEdit = hasPerm('product:edit');
+  const canDelete = hasPerm('product:delete');
 
   // 单个删除
   const handleSingleDelete = async (product: Product) => {
@@ -1429,8 +1426,7 @@ export default function ProductsPage() {
       />
 
       {/* 编辑产品弹窗 */}
-      {editDialogOpen && (
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>编辑产品</DialogTitle>
@@ -2007,7 +2003,6 @@ export default function ProductsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
 
       {/* 供应商管理弹窗 */}
       {supplierDialogProductId && (

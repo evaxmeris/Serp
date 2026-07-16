@@ -51,7 +51,7 @@ function KeyboardShortcutsHelpBridge() {
  */
 export default function RootLayoutContent({ children }: RootLayoutContentProps) {
   const pathname = usePathname();
-  const [role, setRole] = useState<UserRole>('ADMIN');
+  const [role, setRole] = useState<UserRole>('admin');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

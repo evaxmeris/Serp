@@ -95,6 +95,7 @@ const emptyForm = {
   contactPhone: '',
   contactIdFront: '',
   contactIdBack: '',
+  businessCard: '',
   status: 'ACTIVE',
   notes: '',
 };
@@ -192,6 +193,7 @@ export default function LogisticsProvidersPage() {
       contactPhone: provider.contactPhone || '',
       contactIdFront: provider.contactIdFront || '',
       contactIdBack: provider.contactIdBack || '',
+      businessCard: provider.businessCard || '',
       status: provider.status || 'ACTIVE',
       notes: provider.notes || '',
     });
@@ -297,7 +299,7 @@ export default function LogisticsProvidersPage() {
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-2xl">物流服务商管理</CardTitle>
-            <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
+            <Dialog key={editingProvider?.id || 'new'} open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
               <DialogTrigger asChild>
                 <Button onClick={openCreateDialog}>
                   <Plus className="h-4 w-4 mr-2" />
@@ -424,6 +426,12 @@ export default function LogisticsProvidersPage() {
                       <Label>联系人身份证反面</Label>
                       <FileUpload currentUrl={formData.contactIdBack} onUpload={(url) => updateField('contactIdBack', url)} accept="image/*" />
                     </div>
+                  </div>
+
+                  {/* 名片 */}
+                  <div>
+                    <Label>名片（选填）</Label>
+                    <FileUpload currentUrl={formData.businessCard} onUpload={(url) => updateField('businessCard', url)} accept="image/*" />
                   </div>
 
                   {/* 状态 */}

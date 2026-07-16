@@ -40,7 +40,7 @@ export async function GET(
     }
 
     // 行级权限：非 ADMIN 用户只能查看分配给自己的询盘
-    if (session.role !== 'ADMIN' && inquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && inquiry.assignedTo !== session.id) {
       return errorResponse('无权访问此询盘', 'FORBIDDEN', 403);
     }
 
@@ -72,7 +72,7 @@ export async function PUT(
     if (!existingInquiry) {
       return notFoundResponse('询盘');
     }
-    if (session.role !== 'ADMIN' && existingInquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && existingInquiry.assignedTo !== session.id) {
       return errorResponse('无权修改此询盘', 'FORBIDDEN', 403);
     }
 
@@ -161,7 +161,7 @@ export async function DELETE(
     if (!existingInquiry) {
       return notFoundResponse('询盘');
     }
-    if (session.role !== 'ADMIN' && existingInquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && existingInquiry.assignedTo !== session.id) {
       return errorResponse('无权删除此询盘', 'FORBIDDEN', 403);
     }
 

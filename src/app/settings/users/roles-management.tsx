@@ -57,14 +57,17 @@ export default function RolesManagementTab() {
     try {
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      const user = data.user || data;
-      if (user.role === 'ADMIN') { setPerms(['*']); }
+      const user = data.data || data;
+      if (user.role === 'admin' || user.role === 'super-admin') { setPerms(['*']); }
       else { const p = user.permissions || []; setPerms(Array.isArray(p) ? p : []); }
     } catch { setPerms([]); }
   };
   const hasPerm = (p: string) => perms.includes(p) || perms.includes('*');
 
-  const openCreate = () => { setEditingRole(null); setFormData({ name: '', displayName: '', description: '', isActive: true }); setOpenDialog(true); };
+  const openCreate = () => {
+    if (roles.length >= 20) { toast.warning('角色总数不能超过 20 个'); return; }
+    setEditingRole(null); setFormData({ name: '', displayName: '', description: '', isActive: true }); setOpenDialog(true);
+  };
   const openEdit = (role: Role) => { setEditingRole(role); setFormData({ name: role.name, displayName: role.displayName, description: role.description || '', isActive: role.isActive }); setOpenDialog(true); };
 
   const openPermissions = async (role: Role) => {

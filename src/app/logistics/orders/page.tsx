@@ -283,9 +283,10 @@ export default function LogisticsOrdersPage() {
   );
 
   const renderActions = (order: any) => {
-    const isMyReview = order.reviewerId === currentUser?.id || currentUser?.role === 'ADMIN';
-    const isMyApprove = order.approverId === currentUser?.id || currentUser?.role === 'ADMIN';
-    const isMyFinance = order.financeId === currentUser?.id || currentUser?.role === 'ADMIN';
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
+    const isMyReview = order.reviewerId === currentUser?.id || isAdmin;
+    const isMyApprove = order.approverId === currentUser?.id || isAdmin;
+    const isMyFinance = order.financeId === currentUser?.id || isAdmin;
 
     return (
       <div className="flex gap-1 flex-wrap">

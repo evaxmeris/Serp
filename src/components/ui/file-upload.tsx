@@ -11,7 +11,7 @@
  * 限制：单文件 ≤ 500KB，仅支持 JPG/PNG/WebP
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 
 interface FileUploadProps {
@@ -25,6 +25,11 @@ export function FileUpload({ currentUrl, onUpload, accept = 'image/*' }: FileUpl
   const [preview, setPreview] = useState<string | null>(currentUrl || null);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 当 currentUrl 变化时同步预览（支持 Dialog 复用场景）
+  useEffect(() => {
+    setPreview(currentUrl || null);
+  }, [currentUrl]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

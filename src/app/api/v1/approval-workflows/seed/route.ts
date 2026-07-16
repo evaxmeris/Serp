@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
                 name: '提交',
                 description: '提交物流采购申请',
                 assignees: {
-                  create: [{ role: 'ADMIN' }, { role: 'SALES' }, { role: 'PURCHASING' }],
+                  create: [{ role: 'admin' }, { role: 'sales' }, { role: 'purchasing' }],
                 },
               },
               {
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
                 name: '校对',
                 description: '校对物流订单信息、费用明细',
                 assignees: {
-                  create: [{ role: 'ADMIN' }, { role: 'PURCHASING' }],
+                  create: [{ role: 'admin' }, { role: 'purchasing' }],
                 },
               },
               {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
                 name: '审批',
                 description: '审批物流采购订单',
                 assignees: {
-                  create: [{ role: 'ADMIN' }],
+                  create: [{ role: 'admin' }],
                 },
               },
               {
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
                 name: '财务确认',
                 description: '财务确认费用并安排付款',
                 assignees: {
-                  create: [{ role: 'ADMIN' }],
+                  create: [{ role: 'admin' }],
                 },
               },
             ],
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
                 name: '提交',
                 description: '提交产品采购申请',
                 assignees: {
-                  create: [{ role: 'ADMIN' }, { role: 'SALES' }, { role: 'PURCHASING' }],
+                  create: [{ role: 'admin' }, { role: 'sales' }, { role: 'purchasing' }],
                 },
               },
               {
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
                 name: '审批',
                 description: '审批产品采购订单',
                 assignees: {
-                  create: [{ role: 'ADMIN' }, { role: 'PURCHASING' }],
+                  create: [{ role: 'admin' }, { role: 'purchasing' }],
                 },
               },
               {
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
                 name: '财务确认',
                 description: '财务确认采购费用并安排付款',
                 assignees: {
-                  create: [{ role: 'ADMIN' }],
+                  create: [{ role: 'admin' }],
                 },
               },
             ],

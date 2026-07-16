@@ -20,7 +20,7 @@ interface AuthGuardProps {
 export function AuthGuard({ children, fallback, requiredRoles }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>('ADMIN');
+  const [userRole, setUserRole] = useState<string>('admin');
   const router = useRouter();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function AuthGuard({ children, fallback, requiredRoles }: AuthGuardProps)
 
       const user = JSON.parse(userStr);
       setIsAuthenticated(true);
-      setUserRole(user.role || 'ADMIN');
+      setUserRole(user.role || 'admin');
       setIsLoading(false);
 
       // 检查角色权限

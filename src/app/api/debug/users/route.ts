@@ -6,7 +6,7 @@ import { getUserFromRequest } from '@/lib/auth-unified';
 export async function GET(request: NextRequest) {
   // 仅允许管理员访问
   const session = await getUserFromRequest(request);
-  if (!session || session.role !== 'ADMIN') {
+  if (!session || session.role !== 'admin') {
     return NextResponse.json(
       { success: false, error: '需要管理员权限', code: 'FORBIDDEN' },
       { status: 403 }

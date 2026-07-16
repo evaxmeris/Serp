@@ -16,7 +16,7 @@ export async function POST(
   try {
     // 验证管理员权限
     const currentUser = await getCurrentUser();
-    if (!currentUser || currentUser.role !== 'ADMIN') {
+    if (!currentUser || currentUser.role !== 'admin') {
       return NextResponse.json(
         { error: '无权限访问' },
         { status: 403 }
@@ -73,7 +73,7 @@ export async function POST(
             email: reg.email,
             name: reg.name || reg.username,
             passwordHash: reg.passwordHash,
-            role: 'VIEWER', // 默认访客角色，可后续修改
+            role: 'viewer', // 默认访客角色，可后续修改
             isApproved: true, // 已批准
           },
         });
@@ -119,7 +119,6 @@ export async function POST(
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
         createdAt: user.createdAt,
       },
     });

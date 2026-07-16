@@ -71,7 +71,7 @@ export async function PUT(request: NextRequest) {
     }
     
     // TODO: 检查管理员权限
-    // if (session.user.role !== 'ADMIN') {
+    // if (session.user.role !== 'admin') {
     //   return errorResponse('权限不足', 'FORBIDDEN', 403);
     // }
     

@@ -41,7 +41,7 @@ export async function GET(
       select: { id: true, assignedTo: true },
     });
     if (!inquiry) return notFoundResponse('询盘');
-    if (session.role !== 'ADMIN' && inquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && inquiry.assignedTo !== session.id) {
       return errorResponse('无权访问此询盘', 'FORBIDDEN', 403);
     }
 
@@ -75,7 +75,7 @@ export async function POST(
       select: { id: true, assignedTo: true },
     });
     if (!inquiry) return notFoundResponse('询盘');
-    if (session.role !== 'ADMIN' && inquiry.assignedTo !== session.id) {
+    if (session.role !== 'admin' && inquiry.assignedTo !== session.id) {
       return errorResponse('无权操作此询盘', 'FORBIDDEN', 403);
     }
 

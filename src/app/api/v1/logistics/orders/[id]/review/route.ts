@@ -58,7 +58,7 @@ export async function POST(
     }
 
     // 权限检查：只有指定的校对人或 ADMIN 可以操作
-    if (session.role !== 'ADMIN' && existing.reviewerId !== session.id) {
+    if (session.role !== 'admin' && existing.reviewerId !== session.id) {
       return forbiddenResponse('只有指定的校对人可以执行校对操作');
     }
 

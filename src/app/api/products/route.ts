@@ -65,7 +65,12 @@ export async function GET(request: NextRequest) {
     }
     
     if (category) {
-      where.categoryId = category;
+      // 查找该分类及所有子分类的 ID，实现上级分类显示所有下级产品
+      const childIds = await prisma.productCategory.findMany({
+        where: { OR: [{ id: category }, { parentId: category }] },
+        select: { id: true },
+      });
+      where.categoryId = { in: childIds.map(c => c.id) };
     }
     
     if (status) {
@@ -88,11 +93,12 @@ export async function GET(request: NextRequest) {
         orderBy: { sku: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: { category: { select: { name: true } } },
       }),
       prisma.product.count({ where }),
     ]);
 
-    return listResponse(products, {
+    return listResponse(products.map(p => ({ ...p, categoryName: (p as any).category?.name || '' })), {
       page,
       limit,
       total,

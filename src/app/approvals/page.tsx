@@ -70,7 +70,8 @@ export default function ApprovalsPage() {
       const res = await fetch(`/api/auth/approvals?status=${activeTab === 'all' ? '' : activeTab}`);
       const data = await res.json();
       if (res.ok) {
-        setRegistrations(data.registrations || []);
+        const result = data.data || data;
+        setRegistrations(result.registrations || []);
       } else {
         setError(data.error || '获取数据失败');
       }

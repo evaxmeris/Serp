@@ -13,6 +13,7 @@ import bcrypt from 'bcryptjs';
 import { LoginSchema, validateBody } from '@/lib/api-schemas';
 import { validationErrorResponse, errorResponse } from '@/lib/api-response';
 import { rateLimit } from '@/lib/rate-limit';
+import { loadUserPermissions } from '@/lib/auth';
 
 // 失败登录计数 Map（只记录失败登录）
 const failedLoginMap = new Map<string, { count: number; resetTime: number }>();
@@ -100,13 +101,25 @@ export async function POST(request: Request) {
       );
     }
 
+    // 查找用户的主角色
+    const primaryRole = await prisma.userRole.findFirst({
+      where: { userId: user.id, isPrimary: true },
+      include: { role: true },
+    });
+
+    // 加载用户权限
+    const perms = await loadUserPermissions(user.id);
+    const roleName = primaryRole?.role?.name || 'viewer';
+    const isAdmin = roleName === 'admin' || roleName === 'super-admin';
+    const permissions = isAdmin ? ['*'] : Array.from(perms.permissions);
+
     // 生成 JWT token
     const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
     const token = await new SignJWT({ 
       id: user.id, 
       email: user.email,
       name: user.name,
-      role: user.role 
+      role: primaryRole?.role?.name || 'viewer'
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('7d')
@@ -131,7 +144,8 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: primaryRole?.role?.name || 'viewer',
+        permissions,
       },
       message: '登录成功',
     });

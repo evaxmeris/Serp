@@ -69,7 +69,7 @@ export async function POST(
     }
 
     // 权限检查：只有当前步骤的负责人或 ADMIN 可以拒绝
-    if (session.role !== 'ADMIN') {
+    if (session.role !== 'admin') {
       const isCurrentStepOwner =
         (existing.approvalStep === 'PENDING_REVIEW' && existing.reviewerId === session.id) ||
         (existing.approvalStep === 'PENDING_APPROVAL' && existing.approverId === session.id) ||

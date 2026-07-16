@@ -58,7 +58,7 @@ export async function POST(
     }
 
     // 权限检查：只有指定的财务人或 ADMIN 可以操作
-    if (session.role !== 'ADMIN' && existing.financeId !== session.id) {
+    if (session.role !== 'admin' && existing.financeId !== session.id) {
       return forbiddenResponse('只有指定的财务人员可以执行财务确认操作');
     }
 

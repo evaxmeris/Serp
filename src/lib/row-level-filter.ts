@@ -66,7 +66,7 @@ export function applyRowLevelFilter(
   }
 
   // ADMIN 角色无限制，返回原始条件
-  if (user.role === 'ADMIN') {
+  if (user.role === 'admin') {
     return existingWhere;
   }
 

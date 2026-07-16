@@ -210,7 +210,7 @@ export async function hasPermission(
     select: { role: true },
   });
 
-  if (user?.role === 'ADMIN') {
+  if (user?.role === 'admin') {
     return true;
   }
 
@@ -276,29 +276,29 @@ export async function hasAllPermissions(
 function getDefaultPermissionsForRole(role: string): string[] {
   // PERM-004: 统一使用冒号分隔格式 module:action
   switch (role) {
-    case 'ADMIN':
+    case 'admin':
       return ['*'];
-    case 'SALES':
+    case 'sales':
       return [
         'customer:list', 'customer:create', 'customer:edit',
         'quotation:list', 'quotation:create', 'quotation:edit',
         'order:list', 'order:create', 'order:edit',
         'inquiry:list', 'inquiry:create', 'inquiry:edit',
       ];
-    case 'PURCHASING':
+    case 'purchasing':
       return [
         'supplier:list', 'supplier:create', 'supplier:edit',
         'purchase:list', 'purchase:create', 'purchase:edit',
         'inventory:list',
       ];
-    case 'WAREHOUSE':
+    case 'warehouse':
       return [
         'inventory:list', 'inventory:edit',
         'inbound:list', 'inbound:edit',
         'outbound:list', 'outbound:edit',
         'product:list',
       ];
-    case 'VIEWER':
+    case 'viewer':
       return [
         'customer:list', 'product:list', 'order:list',
         'quotation:list', 'supplier:list', 'inventory:list',
@@ -400,11 +400,11 @@ export async function initDefaultPermissions() {
 
   // 初始化默认角色
   const defaultRoles = [
-    { name: 'ADMIN', code: 'ADMIN', displayName: '管理员', description: '系统管理员，拥有所有权限', isSystem: true },
-    { name: 'SALES', code: 'SALES', displayName: '业务员', description: '负责客户、报价、订单业务', isSystem: true },
-    { name: 'PURCHASING', code: 'PURCHASING', displayName: '采购员', description: '负责供应商、采购、入库', isSystem: true },
-    { name: 'WAREHOUSE', code: 'WAREHOUSE', displayName: '仓管员', description: '负责出入库、库存管理', isSystem: true },
-    { name: 'VIEWER', code: 'VIEWER', displayName: '访客', description: '只读访问权限', isSystem: true },
+    { name: 'admin', code: 'admin', displayName: '管理员', description: '系统管理员，拥有所有权限', isSystem: true },
+    { name: 'sales', code: 'sales', displayName: '业务员', description: '负责客户、报价、订单业务', isSystem: true },
+    { name: 'purchasing', code: 'purchasing', displayName: '采购员', description: '负责供应商、采购、入库', isSystem: true },
+    { name: 'warehouse', code: 'warehouse', displayName: '仓管员', description: '负责出入库、库存管理', isSystem: true },
+    { name: 'viewer', code: 'viewer', displayName: '访客', description: '只读访问权限', isSystem: true },
   ];
 
   for (const role of defaultRoles) {

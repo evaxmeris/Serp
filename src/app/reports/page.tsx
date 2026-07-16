@@ -36,7 +36,7 @@ const REPORT_TYPES: ReportType[] = [
   {
     id: 'sales',
     name: '销售报表',
-    code: 'SALES',
+    code: 'sales',
     description: '分析销售数据，包括销售额、订单量、客户分布等',
     icon: '📊',
     color: 'bg-blue-500',

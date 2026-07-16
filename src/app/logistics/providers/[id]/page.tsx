@@ -62,6 +62,7 @@ interface LogisticsProvider {
   contactPhone: string;
   contactIdFront?: string | null;
   contactIdBack?: string | null;
+  businessCard?: string | null;
   status: string;
   notes?: string | null;
   createdAt: string;
@@ -440,7 +441,8 @@ export default function LogisticsProviderDetailPage() {
             provider.legalRepIdFront ||
             provider.legalRepIdBack ||
             provider.contactIdFront ||
-            provider.contactIdBack) && (
+            provider.contactIdBack ||
+            provider.businessCard) && (
             <div className="mt-6">
               <h4 className="text-sm font-semibold text-gray-500 uppercase mb-3">证件图片</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -463,6 +465,10 @@ export default function LogisticsProviderDetailPage() {
                 <DocImagePreview
                   src={provider.contactIdBack}
                   label="联系人身份证反面"
+                />
+                <DocImagePreview
+                  src={provider.businessCard}
+                  label="名片"
                 />
               </div>
             </div>

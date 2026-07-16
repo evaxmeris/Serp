@@ -12,7 +12,6 @@ model User {
   email                        String              @unique
   name                         String?
   passwordHash                 String?
-  role                         RoleEnum            @default(ADMIN)
   avatar                       String?
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
@@ -1293,13 +1292,14 @@ model UserRole {
   id        String   @id @default(cuid())
   userId    String
   roleId    String
+  isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
   role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@index([userId])
-  @@index([roleId])
+  @@index([roleId, isPrimary])
   @@map("user_roles")
 }
 
@@ -1802,6 +1802,7 @@ model LogisticsProvider {
   contactPhone      String              // 联系人电话
   contactIdFront    String?             // 联系人身份证正面
   contactIdBack     String?             // 联系人身份证反面
+  businessCard      String?             // 名片
   status            String              @default("ACTIVE") // ACTIVE | INACTIVE
   notes             String?             // 备注
 
@@ -2014,14 +2015,6 @@ model ApprovalActionRecord {
   @@index([instanceId])
   @@index([userId])
   @@map("approval_action_records")
-}
-
-enum RoleEnum {
-  ADMIN
-  SALES
-  PURCHASING
-  WAREHOUSE
-  VIEWER
 }
 
 enum CustomerStatus {

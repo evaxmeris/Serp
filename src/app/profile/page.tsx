@@ -9,7 +9,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import Cookies from 'js-cookie';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +31,7 @@ import {
   Package,
   ShoppingCart,
   Users,
+  Palette,
   BarChart3,
   Settings,
   Warehouse,
@@ -113,28 +113,28 @@ export default function ProfilePage() {
   // 读取用户信息（从 cookie）
   useEffect(() => {
     const loadUser = async () => {
-      // 尝试从 cookie 读取
-      const userId = Cookies.get('user_id');
-      const token = Cookies.get('auth_token');
-      
-      if (userId && token) {
+      // 先尝试从 localStorage 读取
+      const localUser = localStorage.getItem('user');
+      if (localUser) {
         try {
-          const res = await fetch('/api/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          
-          if (res.ok) {
-            const data = await res.json();
-            const userData = data.user || data;
-            setUser(userData);
-            // 初始化受控表单字段
-            setFormName(userData.name || '');
-          }
-        } catch (error) {
-          console.error('加载用户失败:', error);
+          const parsed = JSON.parse(localUser);
+          setUser(parsed);
+          setFormName(parsed.name || '');
+          return;
+        } catch {}
+      }
+      
+      // 兜底：通过 API 获取
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          const userData = data.data || data.user || data;
+          setUser(userData);
+          setFormName(userData.name || '');
         }
+      } catch (error) {
+        console.error('加载用户失败:', error);
       }
     };
     
@@ -176,13 +176,9 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       // 调用 /api/profile PUT 接口，更新 name 字段
-      const token = Cookies.get('auth_token');
       const res = await fetch('/api/profile', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formName,
           phone: formPhone || undefined,

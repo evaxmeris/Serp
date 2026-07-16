@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
           amountCny,
           counterParty: body.counterParty || null,
           description: `订单收款 - ${order.id}`,
-          category: 'SALES',
+          category: 'sales',
           businessType: 'PAYMENT',
           businessId: payment.id,
           transactionDate: body.paymentDate ? new Date(body.paymentDate) : new Date(),

@@ -83,7 +83,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       getValue: (data) => data.overview.pendingOrders,
-      roles: ['ADMIN', 'SALES', 'WAREHOUSE'],
+      roles: ['admin', 'sales', 'warehouse'],
     },
     {
       id: 'lowStock',
@@ -92,7 +92,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       getValue: (data) => `${data.overview.lowStockAlerts} 款`,
-      roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'],
+      roles: ['admin', 'purchasing', 'warehouse'],
     },
     {
       id: 'pendingApprovals',
@@ -101,7 +101,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-orange-500',
       bgColor: 'bg-orange-50',
       getValue: (data) => data.overview.pendingApprovals,
-      roles: ['ADMIN'],
+      roles: ['admin'],
     },
     {
       id: 'pendingPayments',
@@ -110,7 +110,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       getValue: (data) => `$${data.overview.pendingPayments.toLocaleString()}`,
-      roles: ['ADMIN'],
+      roles: ['admin'],
     },
     {
       id: 'todaySales',
@@ -119,7 +119,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-green-600',
       bgColor: 'bg-emerald-50',
       getValue: (data) => `$${data.overview.todaySales.toLocaleString()}`,
-      roles: ['ADMIN', 'SALES'],
+      roles: ['admin', 'sales'],
     },
     {
       id: 'monthlyMargin',
@@ -128,7 +128,7 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       getValue: (data) => `${data.overview.monthlyGrossMargin.toFixed(1)}%`,
-      roles: ['ADMIN'],
+      roles: ['admin'],
     },
   ];
 
@@ -138,14 +138,14 @@ const getMetricCards = (role: UserRole): MetricCard[] => {
 // 根据角色获取快捷操作
 const getQuickActions = (role: UserRole): QuickAction[] => {
   const allActions: QuickAction[] = [
-    { id: 'new-order', label: '➕ 新建订单', icon: <Plus className="h-5 w-5" />, href: '/orders/new', roles: ['ADMIN', 'SALES'] },
-    { id: 'purchase-in', label: '📥 采购入库', icon: <Download className="h-5 w-5" />, href: '/inbound-orders/new', roles: ['ADMIN', 'PURCHASING', 'WAREHOUSE'] },
-    { id: 'ship-order', label: '📤 发货处理', icon: <Package className="h-5 w-5" />, href: '/outbound-orders/new', roles: ['ADMIN', 'WAREHOUSE'] },
-    { id: 'inventory-search', label: '🔍 库存查询', icon: <Search className="h-5 w-5" />, href: '/inventory', roles: ['ADMIN', 'WAREHOUSE', 'PURCHASING'] },
-    { id: 'expense', label: '📝 报销申请', icon: <Edit className="h-5 w-5" />, href: '/expenses/new', roles: ['ADMIN', 'SALES', 'PURCHASING', 'WAREHOUSE'] },
-    { id: 'new-customer', label: '➕ 新建客户', icon: <UserPlus className="h-5 w-5" />, href: '/customers/new', roles: ['ADMIN', 'SALES'] },
-    { id: 'new-purchase', label: '🛒 新建采购', icon: <ShoppingCart className="h-5 w-5" />, href: '/purchase-orders/new', roles: ['ADMIN', 'PURCHASING'] },
-    { id: 'inventory-report', label: '📊 库存报表', icon: <BarChart3 className="h-5 w-5" />, href: '/reports/inventory', roles: ['ADMIN'] },
+    { id: 'new-order', label: '➕ 新建订单', icon: <Plus className="h-5 w-5" />, href: '/orders/new', roles: ['admin', 'sales'] },
+    { id: 'purchase-in', label: '📥 采购入库', icon: <Download className="h-5 w-5" />, href: '/inbound-orders/new', roles: ['admin', 'purchasing', 'warehouse'] },
+    { id: 'ship-order', label: '📤 发货处理', icon: <Package className="h-5 w-5" />, href: '/outbound-orders/new', roles: ['admin', 'warehouse'] },
+    { id: 'inventory-search', label: '🔍 库存查询', icon: <Search className="h-5 w-5" />, href: '/inventory', roles: ['admin', 'warehouse', 'purchasing'] },
+    { id: 'expense', label: '📝 报销申请', icon: <Edit className="h-5 w-5" />, href: '/expenses/new', roles: ['admin', 'sales', 'purchasing', 'warehouse'] },
+    { id: 'new-customer', label: '➕ 新建客户', icon: <UserPlus className="h-5 w-5" />, href: '/customers/new', roles: ['admin', 'sales'] },
+    { id: 'new-purchase', label: '🛒 新建采购', icon: <ShoppingCart className="h-5 w-5" />, href: '/purchase-orders/new', roles: ['admin', 'purchasing'] },
+    { id: 'inventory-report', label: '📊 库存报表', icon: <BarChart3 className="h-5 w-5" />, href: '/reports/inventory', roles: ['admin'] },
   ];
 
   return allActions.filter(action => action.roles.includes(role));
@@ -156,7 +156,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [period, setPeriod] = useState('7');
-  const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
+  const [currentRole, setCurrentRole] = useState<UserRole>('admin');
 
   useEffect(() => {
     const loadRole = async () => {

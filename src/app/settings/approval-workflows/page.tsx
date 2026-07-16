@@ -142,10 +142,10 @@ const mockUsers = [
 ];
 
 const mockRoles = [
-  { id: 'r1', name: 'ADMIN', displayName: '管理员' },
-  { id: 'r2', name: 'SALES', displayName: '业务员' },
-  { id: 'r3', name: 'PURCHASING', displayName: '采购员' },
-  { id: 'r4', name: 'WAREHOUSE', displayName: '仓管员' },
+  { id: 'r1', name: 'admin', displayName: '管理员' },
+  { id: 'r2', name: 'sales', displayName: '业务员' },
+  { id: 'r3', name: 'purchasing', displayName: '采购员' },
+  { id: 'r4', name: 'warehouse', displayName: '仓管员' },
 ];
 
 // ============================================================

@@ -155,13 +155,12 @@ export async function loadUserPermissions(userId: string): Promise<{
     }
   }
 
-  // 从用户表获取主角色（向后兼容）
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
+  // 从 UserRole 获取主角色
+  const primaryRole = await prisma.userRole.findFirst({
+    where: { userId, isPrimary: true },
+    include: { role: { select: { name: true } } },
   });
-
-  const mainRole = user?.role || 'ADMIN';
+  const mainRole = primaryRole?.role?.name || 'viewer';
 
   return { roleIds, permissions, mainRole };
 }
@@ -327,7 +326,7 @@ export function requireRole(
   requiredRole: string
 ): NextResponse<AuthErrorResponse> | null {
   // ADMIN 可以访问所有资源
-  if (session.user.role === 'ADMIN' || session.user.permissions.has('*')) {
+  if (session.user.role === 'admin' || session.user.permissions.has('*')) {
     return null;
   }
   
@@ -367,7 +366,7 @@ export function requirePermission(
   permission: PermissionName
 ): NextResponse<AuthErrorResponse> | null {
   // 超级管理员权限通配符
-  if (session.user.permissions.has('*') || session.user.role === 'ADMIN') {
+  if (session.user.permissions.has('*') || session.user.role === 'admin') {
     return null;
   }
 
@@ -403,7 +402,7 @@ export function requireAnyPermission(
   session: AuthSession,
   permissions: PermissionName[]
 ): NextResponse<AuthErrorResponse> | null {
-  if (session.user.permissions.has('*') || session.user.role === 'ADMIN') {
+  if (session.user.permissions.has('*') || session.user.role === 'admin') {
     return null;
   }
 
@@ -438,7 +437,7 @@ export function requireAllPermissions(
   session: AuthSession,
   permissions: PermissionName[]
 ): NextResponse<AuthErrorResponse> | null {
-  if (session.user.permissions.has('*') || session.user.role === 'ADMIN') {
+  if (session.user.permissions.has('*') || session.user.role === 'admin') {
     return null;
   }
 
@@ -479,7 +478,7 @@ export function requireAllPermissions(
  */
 export function getRowLevelFilter(session: AuthSession): RowLevelFilter {
   // ADMIN 无过滤，可访问所有数据
-  if (session.user.role === 'ADMIN' || session.user.permissions.has('*')) {
+  if (session.user.role === 'admin' || session.user.permissions.has('*')) {
     return {};
   }
 
@@ -521,7 +520,7 @@ export function hasPermission(
   session: AuthSession,
   permission: PermissionName
 ): boolean {
-  if (session.user.permissions.has('*') || session.user.role === 'ADMIN') {
+  if (session.user.permissions.has('*') || session.user.role === 'admin') {
     return true;
   }
 
@@ -581,7 +580,14 @@ export async function getCurrentUser(): Promise<{
 
     const user = await prisma.user.findUnique({
       where: { id: tokenResult.id },
-      select: { id: true, email: true, name: true, role: true },
+      select: {
+        id: true, email: true, name: true,
+        userRoles: {
+          where: { isPrimary: true },
+          include: { role: { select: { name: true } } },
+          take: 1,
+        },
+      },
     });
     if (!user) return null;
 
@@ -589,7 +595,7 @@ export async function getCurrentUser(): Promise<{
       id: user.id,
       email: user.email,
       name: user.name || undefined,
-      role: user.role,
+      role: user.userRoles?.[0]?.role?.name || 'viewer',
     };
   } catch (error) {
     console.error('获取当前用户失败:', error);

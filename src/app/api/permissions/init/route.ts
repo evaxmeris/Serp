@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SEC-006: 仅允许管理员初始化权限系统
-    if (session.role !== 'ADMIN') {
+    if (session.role !== 'admin') {
       return errorResponse('需要管理员权限', 'FORBIDDEN', 403);
     }
 

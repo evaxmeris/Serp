@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const [role, setRole] = useState<UserRole>('ADMIN');
+  const [role, setRole] = useState<UserRole>('admin');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

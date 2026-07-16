@@ -15,8 +15,9 @@ import { useToast, ToastContainer } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 type User = {
-  id: string; email: string; name?: string; role?: string; isApproved: boolean;
+  id: string; email: string; name?: string; isApproved: boolean;
   createdAt: string; roles: Role[]; permissions: string[];
+  userRoles?: { role: { name: string; displayName: string } }[];
 };
 type Role = {
   id: string; name: string; displayName: string; description?: string;
@@ -84,7 +85,7 @@ export default function UserListTab() {
       // API 可能返回 {success, data: {...}} 或直接返回用户对象
       const user = data.data || data.user || data;
       // ADMIN 拥有全部权限；其他角色从 API 返回的 permissions 读取
-      if (user.role === 'ADMIN') {
+      if (user.role === 'admin' || user.role === 'super-admin') {
         setPerms(['*']);
       } else {
         const p = user.permissions || [];
@@ -101,7 +102,7 @@ export default function UserListTab() {
     setEditForm({
       name: user.name || '',
       email: user.email,
-      role: user.role || 'VIEWER',
+      role: user.userRoles?.[0]?.role?.name || 'viewer',
       password: '',
       isApproved: user.isApproved !== undefined ? user.isApproved : true,
     });
@@ -183,7 +184,8 @@ export default function UserListTab() {
                 <TableHead>用户</TableHead>
                 <TableHead>邮箱</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>已分配角色</TableHead>
+                <TableHead>主角色</TableHead>
+                <TableHead>兼任角色</TableHead>
                 <TableHead>创建时间</TableHead>
                 <TableHead className="text-right w-52">操作</TableHead>
               </TableRow>
@@ -205,6 +207,14 @@ export default function UserListTab() {
                       {user.isApproved ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
                       {user.isApproved ? '已批准' : '待批准'}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm font-medium">
+                      {(() => {
+                        const primary = user.userRoles?.[0]?.role;
+                        return primary?.displayName || primary?.name || '-';
+                      })()}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
@@ -251,11 +261,11 @@ export default function UserListTab() {
             <div className="space-y-3 text-sm">
               <div><span className="text-zinc-500">姓名：</span>{viewUser.name || '-'}</div>
               <div><span className="text-zinc-500">邮箱：</span>{viewUser.email}</div>
-              <div><span className="text-zinc-500">角色：</span>{{ADMIN:'管理员',SALES:'业务员',PURCHASING:'采购员',WAREHOUSE:'仓管员',VIEWER:'访客'}[viewUser.role||''] || viewUser.role || '-'}</div>
+              <div><span className="text-zinc-500">主角色：</span>{viewUser.userRoles?.[0]?.role?.displayName || viewUser.userRoles?.[0]?.role?.name || '-'}</div>
               <div><span className="text-zinc-500">状态：</span>{viewUser.isApproved ? '已批准' : '待批准'}</div>
               <div><span className="text-zinc-500">创建时间：</span>{new Date(viewUser.createdAt).toLocaleString('zh-CN')}</div>
               <div>
-                <span className="text-zinc-500">已分配角色：</span>
+                <span className="text-zinc-500">兼任角色：</span>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {viewUser.roles.length === 0 ? <span className="text-zinc-400">无</span> :
                     viewUser.roles.map(r => <Badge key={r.id} variant="outline" className="text-xs">{r.displayName}</Badge>)
@@ -289,7 +299,7 @@ export default function UserListTab() {
                 className="w-full border rounded px-3 py-2 text-sm bg-white"
               >
                 {roles.map(r => (
-                  <option key={r.id} value={r.name.toUpperCase()}>{r.displayName}</option>
+                  <option key={r.id} value={r.name}>{r.displayName}</option>
                 ))}
               </select>
             </div>

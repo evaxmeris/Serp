@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     // 认证检查
     const user = await getCurrentUser();
-    if (!user || !['ADMIN', 'SALES', 'PURCHASING'].includes(user.role)) {
+    if (!user || !['admin', 'sales', 'purchasing'].includes(user.role)) {
       return NextResponse.json(
         { error: '需要产品管理权限' },
         { status: 403 }
