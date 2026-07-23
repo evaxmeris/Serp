@@ -7,10 +7,10 @@ RUN apk add --no-cache libc6-compat
 # 设置工作目录
 WORKDIR /app
 
-# 复制 package.json
-COPY package.json package-lock.json* ./
+# 复制 package.json 和 npm 配置
+COPY package.json package-lock.json* .npmrc ./
 
-# 安装依赖
+# 安装依赖（使用 npmmirror 加速）
 RUN npm install
 
 # 复制源代码

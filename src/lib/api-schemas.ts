@@ -507,7 +507,7 @@ export const LogisticsOrderStatus = z.enum([
 ]);
 
 /** 运输方式 */
-export const TransportMethod = z.enum(['SEA_FREIGHT', 'AIR_FREIGHT', 'RAIL', 'EXPRESS', 'TRUCK']);
+export const TransportMethod = z.enum(['SEA', 'AIR', 'LAND', 'RAIL', 'EXPRESS', 'SEA_FREIGHT', 'AIR_FREIGHT', 'TRUCK']);
 
 /** 审批步骤（四级审批流程） */
 export const APPROVAL_STEP = z.enum([
@@ -532,6 +532,7 @@ export const CreateLogisticsProviderSchema = z.object({
   contactPhone: z.string().min(1, '联系人电话不能为空').max(20, '联系人电话过长'),
   contactIdFront: z.string().max(200).optional(),
   contactIdBack: z.string().max(200).optional(),
+  businessCard: z.string().max(500).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -547,8 +548,8 @@ export const CreateLogisticsQuotationSchema = z.object({
   pricePerKg: z.number().min(0, '每公斤价格不能为负'),
   pricePerCbm: z.number().min(0).optional(),
   minimumCharge: z.number().min(0).default(0),
-  validFrom: z.string().datetime().optional(),
-  validUntil: z.string().datetime().optional(),
+  validFrom: z.string().optional().default(''),
+  validUntil: z.string().optional().default(''),
   notes: z.string().max(2000).optional(),
 });
 

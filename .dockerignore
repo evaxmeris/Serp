@@ -11,3 +11,6 @@ scripts
 tests
 *.test.ts
 test-*.html
+**/.venv
+**/__pycache__
+services/alibaba-collector/.cookies
