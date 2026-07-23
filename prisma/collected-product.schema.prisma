@@ -1,0 +1,211 @@
+// ============================================
+// 采集产品模块 Schema - Collected Product Module
+// ============================================
+// 功能：从阿里/1688等平台采集产品，梳理后发布到 WooCommerce
+// 管线：collected → organizing → ready → publishing → published / discarded / error
+// ============================================
+
+// ============================================
+// 1. 采集产品主表 - Collected Product
+// ============================================
+model CollectedProduct {
+  id                String   @id @default(cuid())
+
+  // ── 来源信息 ──
+  source            String   // "alibaba" | "1688" | "manual" | ...
+  sourceUrl         String   // 采集时的原始页面 URL
+  sourceId          String?  // 平台产品 ID（如有）
+
+  // ── 基本信息 ──
+  title             String   // 标题（采集原文）
+  titleEn           String?  // 英文标题（翻译后）
+  shortDescription  String?  @db.Text // 短描述/卖点
+  description       String?  @db.Text // 详细描述（HTML）
+  descriptionEn     String?  @db.Text // 英文详细描述
+  brand             String?  // 品牌
+  sku               String?  // SKU
+
+  // ── 价格与库存 ──
+  price             Decimal? @db.Decimal(10, 2) // 售价
+  compareAtPrice    Decimal? @db.Decimal(10, 2) // 划线价/原价
+  currency          String   @default("USD")
+  stockQuantity     Int?     // 库存数量
+
+  // ── 物流 ──
+  weight            Decimal? @db.Decimal(10, 2) // 重量（kg）
+  length            Decimal? @db.Decimal(10, 2) // 长（cm）
+  width             Decimal? @db.Decimal(10, 2) // 宽（cm）
+  height            Decimal? @db.Decimal(10, 2) // 高（cm）
+  shippingClass     String?  // 运费分类
+  hsCode            String?  // 海关编码
+
+  // ── SEO ──
+  metaTitle         String?  // SEO 标题
+  metaDescription   String?  // SEO 描述
+  urlSlug           String?  // URL 别名
+  tags              String[] // 标签/关键词
+
+  // ── 分类 ──
+  categoryId        String?  // 关联到 ERP 产品分类（ProductCategory）
+  woocommerceCategoryId Int? // WooCommerce 上的分类 ID
+
+  // ── 状态 ──
+  pipelineStatus    String   @default("collected")
+  // collected → organizing → ready → publishing → published
+  //                                              → discarded
+  //                                              → error
+
+  // ── 发布信息 ──
+  woocommerceId     Int?     // WooCommerce 上的产品 ID
+  woocommerceUrl    String?  // WooCommerce 产品链接
+  lastPublishedAt   DateTime?
+  publishError      String?  @db.Text // 上次发布失败的错误信息
+
+  // ── 关联到正式产品 ──
+  productId         String?  // 转为正式产品后关联的 Product ID
+  product           Product? @relation(fields: [productId], references: [id])
+
+  // ── 原始数据 ──
+  rawData           Json?    // DOM 抓取原文（JSON 存留备查）
+
+  // ── 时间 ──
+  collectedAt       DateTime @default(now())
+  organizedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // ── 关联 ──
+  images            CollectedProductImage[]
+  variants          CollectedProductVariant[]
+  attributes        CollectedProductAttribute[]
+  publishLogs       PublishLog[]
+
+  @@index([pipelineStatus])
+  @@index([source, pipelineStatus])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("collected_products")
+}
+
+// ============================================
+// 2. 采集产品图片 - Images
+// ============================================
+model CollectedProductImage {
+  id                String               @id @default(cuid())
+  collectedProductId String
+
+  type              String               // "main" | "gallery" | "detail"
+  // main    = 主图（对应 WooCommerce featured image）
+  // gallery = 产品图库（对应 WooCommerce gallery）
+  // detail  = 详情图（嵌入描述中的说明图）
+
+  data              Bytes?               // 图片二进制（PostgreSQL bytea）
+  originalUrl       String?              // 原始图片 URL（采集来源）
+  mimeType          String               @default("image/jpeg")
+  fileName          String?
+  fileSize          Int?                 // 文件大小（字节）
+  width             Int?                 // 图片宽度
+  height            Int?                 // 图片高度
+  altText           String?              // 图片 ALT 文字
+  sortOrder         Int                  @default(0)
+
+  collectedProduct  CollectedProduct     @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId, type])
+  @@map("collected_product_images")
+}
+
+// ============================================
+// 3. 采集产品变体/规格 - Variants
+// ============================================
+model CollectedProductVariant {
+  id                String   @id @default(cuid())
+  collectedProductId String
+
+  sku               String?  // 变体 SKU
+  price             Decimal? @db.Decimal(10, 2) // 变体价格
+  stock             Int?     // 变体库存
+  imageId           String?  // 变体关联的图片 ID
+
+  // 规格选项，如 [{ "name": "颜色", "value": "红色" }, { "name": "尺寸", "value": "M" }]
+  options           Json?
+
+  sortOrder         Int      @default(0)
+
+  collectedProduct  CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@map("collected_product_variants")
+}
+
+// ============================================
+// 4. 采集产品属性 - Custom Attributes
+// ============================================
+model CollectedProductAttribute {
+  id                String   @id @default(cuid())
+  collectedProductId String
+
+  name              String   // 属性名（如 "材质"）
+  nameEn            String?  // 属性名（英文）
+  value             String   // 属性值（如 "玻璃"）
+  valueEn           String?  // 属性值（英文）
+  unit              String?  // 单位
+  sortOrder         Int      @default(0)
+
+  collectedProduct  CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@map("collected_product_attributes")
+}
+
+// ============================================
+// 5. 发布日志 - Publish Log
+// ============================================
+model PublishLog {
+  id                String   @id @default(cuid())
+  collectedProductId String
+
+  action            String   // "publish" | "update" | "delete"
+  status            String   // "success" | "failed"
+  woocommerceId     Int?
+  requestData       Json?    // 发送给 WooCommerce 的请求数据
+  responseData      Json?    // WooCommerce 返回的响应数据
+  errorMessage      String?  @db.Text
+  durationMs        Int?     // 耗时
+
+  createdAt         DateTime @default(now())
+
+  collectedProduct  CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@index([createdAt])
+  @@map("publish_logs")
+}
+
+// ============================================
+// 6. WooCommerce 店铺配置
+// ============================================
+model WooCommerceConfig {
+  id                String   @id @default(cuid())
+  name              String   // 店铺名称（如 "QEVORIA 独立站"）
+  url               String   // 独立站 URL
+  consumerKey       String   // API Consumer Key
+  consumerSecret    String   // API Consumer Secret
+  isActive          Boolean  @default(true)
+  isDefault         Boolean  @default(false) // 是否为默认店铺
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("woocommerce_configs")
+}
+
+// ============================================
+// 7. 新增权限码（在现有 Permission 表中插入）
+// ============================================
+// permission_code: collected_product.view
+// permission_code: collected_product.create
+// permission_code: collected_product.edit
+// permission_code: collected_product.publish
+// permission_code: collected_product.delete
+// permission_code: woocommerce_config.manage

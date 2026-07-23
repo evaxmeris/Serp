@@ -14,9 +14,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // CSRF 保护：所有环境均启用，但排除 /api/auth/
-  // 通过校验 Origin/Referer 与请求 Host 是否一致来防御跨站请求
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  // CSRF 保护：排除 /api/auth/ 和 /api/external/（Chrome 插件采集接口）
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/external/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
     const host = request.headers.get('host'); // 请求目标主机
@@ -62,7 +61,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith('/api/')) {
-    if (pathname.startsWith('/api/auth/')) return NextResponse.next();
+    if (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/external/')) return NextResponse.next();
     if (!authToken) return NextResponse.json({ success: false, error: '未认证，请先登录', code: 'UNAUTHORIZED' }, { status: 401 });
     return NextResponse.next();
   }

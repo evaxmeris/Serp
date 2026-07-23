@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ERP 采集管理</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app" class="popup-container">
+    <!-- 配置界面 -->
+    <div id="config-view" class="view hidden">
+      <h2 class="title">⚙️ 插件配置</h2>
+      <div class="form-group">
+        <label>ERP 地址</label>
+        <input type="url" id="erp-url" placeholder="http://localhost:3001" />
+      </div>
+      <div class="form-group">
+        <label>API Token</label>
+        <input type="text" id="api-token" placeholder="tcp_..." />
+      </div>
+      <div class="btn-row">
+        <button id="test-btn" class="btn btn-secondary">测试连接</button>
+        <button id="save-config-btn" class="btn btn-primary">保存</button>
+      </div>
+      <div id="config-status" class="status-msg"></div>
+      <button id="back-from-config" class="link-btn">← 返回</button>
+    </div>
+
+    <!-- 采集界面 -->
+    <div id="collect-view" class="view">
+      <div class="header">
+        <h2 class="title">📦 采集管理</h2>
+        <button id="open-config" class="icon-btn" title="设置">⚙️</button>
+      </div>
+
+      <!-- 状态区域 -->
+      <div id="status-area">
+        <div id="platform-info" class="platform-info">
+          <span id="platform-icon">🌐</span>
+          <span id="platform-text">检测中...</span>
+        </div>
+      </div>
+
+      <!-- 预览区域 -->
+      <div id="preview-area" class="hidden">
+        <div class="preview-card">
+          <div class="preview-row">
+            <span class="label">标题</span>
+            <span id="preview-title" class="value truncate">-</span>
+          </div>
+          <div class="preview-row">
+            <span class="label">价格</span>
+            <span id="preview-price" class="value">-</span>
+          </div>
+          <div class="preview-row">
+            <span class="label">图片</span>
+            <span id="preview-images" class="value">0 张</span>
+          </div>
+          <div class="preview-row">
+            <span class="label">属性</span>
+            <span id="preview-attrs" class="value">0 项</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <button id="collect-btn" class="btn btn-primary btn-large" disabled>
+        ⬇️ 采集到 ERP
+      </button>
+      <button id="select-btn" class="btn btn-secondary btn-large" disabled>
+        👆 手动选择图片/属性
+      </button>
+      <button id="confirm-btn" class="btn btn-primary btn-large" style="display:none;">
+        ✅ 确认采集
+      </button>
+      <button id="debug-btn" class="btn btn-secondary" style="font-size:11px;padding:4px 8px;">
+        🔍 调试页面
+      </button>
+
+      <!-- 状态信息 -->
+      <div id="collect-status" class="status-msg"></div>
+
+      <!-- 底部信息 -->
+      <div class="footer">
+        <span id="erp-status" class="status-dot disconnected"></span>
+        <span id="erp-status-text">未连接</span>
+        <span class="version">v1.0</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

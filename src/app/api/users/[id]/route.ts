@@ -21,7 +21,7 @@ export async function PUT(
     }
 
     // 只有管理员可以更新用户
-    if (currentUser.role !== 'admin') {
+    if (currentUser.role !== 'admin' && currentUser.role !== 'super-admin') {
       return forbiddenResponse('权限不足');
     }
 
@@ -104,7 +104,7 @@ export async function DELETE(
     }
 
     // 只有管理员可以删除用户
-    if (currentUser.role !== 'admin') {
+    if (currentUser.role !== 'admin' && currentUser.role !== 'super-admin') {
       return forbiddenResponse('权限不足');
     }
 

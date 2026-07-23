@@ -27,6 +27,7 @@ import {
   User,
   Scale,
   Upload,
+  Download,
   ShieldCheck,
   GitBranch,
   DollarSign,
@@ -35,6 +36,7 @@ import {
   Receipt,
   Warehouse,
   Globe,
+  Languages,
   RefreshCw,
   History,
 } from 'lucide-react';
@@ -86,6 +88,13 @@ const menuConfig: MenuGroup[] = [
         icon: Package,
         href: '/products',
         roles: ['admin', 'sales', 'purchasing'],
+      },
+      {
+        key: 'collected-products',
+        label: '采集管理',
+        icon: Download,
+        href: '/collected-products',
+        roles: ['admin', 'sales'],
       },
       {
         key: 'categories',
@@ -325,6 +334,13 @@ const menuConfig: MenuGroup[] = [
         label: '审计日志',
         icon: History,
         href: '/settings/audit-logs',
+        roles: ['admin'],
+      },
+      {
+        key: 'collected-config',
+        label: '采集配置',
+        icon: Settings,
+        href: '/settings/collected-config',
         roles: ['admin'],
       },
       {

@@ -1,0 +1,4 @@
+.venv/
+.cookies/
+__pycache__/
+*.pyc

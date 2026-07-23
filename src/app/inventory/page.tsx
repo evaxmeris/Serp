@@ -43,11 +43,7 @@ interface Inventory {
     sku: string;
     unit: string;
   };
-  warehouse: {
-    id: string;
-    name: string;
-    code: string;
-  };
+  warehouse: string | { id: string; name: string; code: string };
   quantity: number;
   availableQuantity: number;
   lockedQuantity: number;
@@ -89,6 +85,7 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
@@ -129,6 +126,7 @@ export default function InventoryPage() {
       if (data.success) {
         setInventories(data.data.items);
         setTotal(data.data.pagination.total);
+        setTotalPages(Math.ceil(data.data.pagination.total / 50));
       }
     } catch (error) {
       console.error('Failed to fetch inventory:', error);
@@ -365,6 +363,7 @@ export default function InventoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center">序号</TableHead>
                     <TableHead
                       className="cursor-pointer select-none hover:bg-gray-100"
                       onClick={() => requestSort('product.name')}
@@ -381,10 +380,10 @@ export default function InventoryPage() {
                     </TableHead>
                     <TableHead
                       className="cursor-pointer select-none hover:bg-gray-100"
-                      onClick={() => requestSort('warehouse.name')}
+                      onClick={() => requestSort('warehouse')}
                     >
                       仓库
-                      <SortIndicator field="warehouse.name" sortConfig={sortConfig} />
+                      <SortIndicator field="warehouse" sortConfig={sortConfig} />
                     </TableHead>
                     <TableHead
                       className="text-right cursor-pointer select-none hover:bg-gray-100"
@@ -426,7 +425,7 @@ export default function InventoryPage() {
                 <TableBody>
                   {inventories.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={9}>
                         <EmptyState
                           title="暂无库存数据"
                           description="还没有任何库存记录，入库后将自动生成库存数据"
@@ -434,13 +433,18 @@ export default function InventoryPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sorted.map((inv) => (
+                    sorted.map((inv, idx) => (
                       <TableRow key={inv.id}>
+                        <TableCell className="text-center text-muted-foreground text-sm">{(page - 1) * 50 + idx + 1}</TableCell>
                         <TableCell className="font-medium">
                           {inv.product.name}
                         </TableCell>
                         <TableCell>{inv.product.sku}</TableCell>
-                        <TableCell>{inv.warehouse.name}</TableCell>
+                        <TableCell>{(() => {
+                          const whCode = typeof inv.warehouse === 'string' ? inv.warehouse : inv.warehouse?.code || '';
+                          const wh = warehouses.find(w => w.code === whCode);
+                          return wh?.name || whCode || '-';
+                        })()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {inv.quantity > 0 ? (
@@ -480,7 +484,7 @@ export default function InventoryPage() {
                   <div className="text-sm text-gray-500">
                     共 {total} 条记录
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Button
                       variant="outline"
                       size="sm"
@@ -489,10 +493,52 @@ export default function InventoryPage() {
                     >
                       上一页
                     </Button>
+                    <div className="flex items-center gap-1 text-sm">
+                      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 7) {
+                          pageNum = i + 1;
+                        } else if (page <= 4) {
+                          pageNum = i + 1;
+                        } else if (page >= totalPages - 3) {
+                          pageNum = totalPages - 6 + i;
+                        } else {
+                          pageNum = page - 3 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={pageNum === page ? 'default' : 'outline'}
+                            size="sm"
+                            className="min-w-[32px]"
+                            onClick={() => setPage(pageNum)}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-sm text-gray-500">/ {totalPages} 页</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm text-gray-500">跳至</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        className="w-16 h-8 text-sm"
+                        placeholder="页"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt((e.target as HTMLInputElement).value);
+                            if (val >= 1 && val <= totalPages) setPage(val);
+                          }
+                        }}
+                      />
+                    </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={inventories.length < 50}
+                      disabled={page >= totalPages}
                       onClick={() => setPage(page + 1)}
                     >
                       下一页

@@ -81,6 +81,8 @@ export async function GET(request: NextRequest) {
     const items = inventories.map(item => ({
       ...item,
       availableQty: computeAvailableQty(item.quantity, item.reservedQty),
+      availableQuantity: computeAvailableQty(item.quantity, item.reservedQty),
+      lockedQuantity: item.reservedQty,
     }));
 
     return successResponse({

@@ -31,7 +31,7 @@ export async function POST(
     }
 
     // 检查当前用户是否有审批权限（需要管理员角色）
-    if (currentSession.role !== 'admin') {
+    if (currentSession.role !== 'admin' && currentSession.role !== 'super-admin') {
       return forbiddenResponse('Permission denied');
     }
 

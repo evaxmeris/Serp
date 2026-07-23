@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "96adeb79a502663061e589e2ac46daf95d3fcf0d",
-    "indexed_at": "2026-07-15T02:06:27Z",
+    "commit": "372e0c31b8baafc0cd20991ced9af71090122f94",
+    "indexed_at": "2026-07-22T02:12:20Z",
     "project": "Users-apple-clawd-trade-erp",
-    "nodes": 12743,
-    "edges": 20745,
-    "original_size": 18743296,
-    "compressed_size": 2313172,
+    "nodes": 12948,
+    "edges": 21432,
+    "original_size": 19267584,
+    "compressed_size": 2389942,
     "compression_level": 3
 }
