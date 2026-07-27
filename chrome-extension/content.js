@@ -748,35 +748,26 @@
             if (!selStr) return;
             var containers = document.querySelectorAll(selStr);
             containers.forEach(function(c) {
-              // 策略1: :scope > div 成对提取
-              var childDivs = c.querySelectorAll(':scope > div');
-              if (childDivs.length >= 2) {
-                for (var di = 0; di < childDivs.length - 1; di += 2) {
-                  var nm = childDivs[di].textContent.replace(/[：:]/g,'').trim();
-                  var vl = childDivs[di+1].textContent.replace(/[：:]/g,'').trim();
-                  if (nm && vl && nm.length < 100 && !seenNames[nm]) {
+              // === 策略A: 三列布局行结构（最优先） ===
+              // 容器内找行: data-testid 含 row 的子元素
+              var rows = c.querySelectorAll('[data-testid$="row"], [data-testid*="-row"], [class*="row"], :scope > div');
+              var hasRowStructure = false;
+              rows.forEach(function(r) {
+                // 检查行内是否有两个子div（name + value）
+                var cells = r.querySelectorAll(':scope > div');
+                if (cells.length >= 2) {
+                  hasRowStructure = true;
+                  var nm = cells[0].textContent.replace(/[：:]/g,'').trim();
+                  var vl = cells[1].textContent.replace(/[：:]/g,'').trim();
+                  if (nm && vl && nm.length < 100 && !seenNames[nm] && vl.length < 500) {
                     seenNames[nm] = true;
                     allAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
                   }
                 }
-                return; // 跳过后面的策略
-              }
+              });
+              if (hasRowStructure) return;
 
-              // 策略2: :scope > span
-              var spans = c.querySelectorAll(':scope > span');
-              if (spans.length >= 2) {
-                for (var si = 0; si < spans.length - 1; si += 2) {
-                  var nm2 = spans[si].textContent.replace(/[：:]/g,'').trim();
-                  var vl2 = spans[si+1].textContent.replace(/[：:]/g,'').trim();
-                  if (nm2 && vl2 && nm2.length < 100 && !seenNames[nm2]) {
-                    seenNames[nm2] = true;
-                    allAttrs.push({ name: nm2, value: vl2, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
-                  }
-                }
-                return;
-              }
-
-              // 策略3: 所有 <p> 标签成对
+              // === 策略B: <p> 标签成对 ===
               var pTags = c.querySelectorAll('p');
               if (pTags.length >= 2) {
                 var texts = [];
@@ -790,7 +781,21 @@
                 return;
               }
 
-              // 策略4: 所有文本节点，找包含冒号的
+              // === 策略C: :scope > div 成对（后备） ===
+              var childDivs = c.querySelectorAll(':scope > div');
+              if (childDivs.length >= 2) {
+                for (var di = 0; di < childDivs.length - 1; di += 2) {
+                  var nm = childDivs[di].textContent.replace(/[：:]/g,'').trim();
+                  var vl = childDivs[di+1].textContent.replace(/[：:]/g,'').trim();
+                  if (nm && vl && nm.length < 100 && !seenNames[nm]) {
+                    seenNames[nm] = true;
+                    allAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                  }
+                }
+                return;
+              }
+
+              // === 策略D: 文本找冒号 ===
               var allText = c.textContent.trim();
               var lines = allText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
               for (var li2 = 0; li2 < lines.length; li2++) {
