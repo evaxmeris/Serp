@@ -742,8 +742,10 @@
         var allAttrs = [];
         var seenNames = {};
 
-        selectors.forEach(function(selStr) {
+        selectors.forEach(function(selItem) {
           try {
+            var selStr = (typeof selItem === 'string') ? selItem : (selItem.containerSelector || '');
+            if (!selStr) return;
             var containers = document.querySelectorAll(selStr);
             containers.forEach(function(c) {
               // 策略1: :scope > div 成对提取
