@@ -39,6 +39,7 @@ var containerList = document.getElementById('selected-containers');
 var trainConfirmBtn = document.getElementById('train-confirm-btn');
 var trainCancelBtn = document.getElementById('train-cancel-btn');
 var trainStatus = document.getElementById('train-status');
+var attrResultPanel = document.getElementById('attr-result-panel');
 var collectStatus = document.getElementById('collect-status');
 var platformIcon = document.getElementById('platform-icon');
 var platformText = document.getElementById('platform-text');
