@@ -1,49 +1,82 @@
 /**
- * Popup 脚本 - 插件弹出窗口的交互逻辑
+ * Popup 脚本 v2 - 增强版采集进度反馈 + 去重检测 + 成功跳转
+ *
+ * 状态机: IDLE → EXTRACTING → CAPTURING → UPLOADING → DONE / ERROR
  */
+'use strict';
 
-// DOM 引用
-const configView = document.getElementById('config-view');
-const collectView = document.getElementById('collect-view');
-const openConfigBtn = document.getElementById('open-config');
-const backFromConfigBtn = document.getElementById('back-from-config');
-const erpUrlInput = document.getElementById('erp-url');
-const apiTokenInput = document.getElementById('api-token');
-const saveConfigBtn = document.getElementById('save-config-btn');
-const testBtn = document.getElementById('test-btn');
-const configStatus = document.getElementById('config-status');
-const collectBtn = document.getElementById('collect-btn');
-const collectStatus = document.getElementById('collect-status');
-const platformIcon = document.getElementById('platform-icon');
-const platformText = document.getElementById('platform-text');
-const previewTitle = document.getElementById('preview-title');
-const previewPrice = document.getElementById('preview-price');
-const previewImages = document.getElementById('preview-images');
-const previewArea = document.getElementById('preview-area');
-const erpStatus = document.getElementById('erp-status');
-const erpStatusText = document.getElementById('erp-status-text');
+// ===== 状态定义 =====
+var CollectionState = {
+  IDLE: 'IDLE',
+  EXTRACTING: 'EXTRACTING',
+  CAPTURING: 'CAPTURING',
+  UPLOADING: 'UPLOADING',
+  DONE: 'DONE',
+  ERROR: 'ERROR',
+};
 
-// 当前提取的产品数据
-let currentProductData = null;
+var currentState = CollectionState.IDLE;
+var retryData = null; // 保存重试上下文
 
-// 初始化
-document.addEventListener('DOMContentLoaded', async () => {
+// ===== DOM 引用 =====
+var configView = document.getElementById('config-view');
+var collectView = document.getElementById('collect-view');
+var openConfigBtn = document.getElementById('open-config');
+var backFromConfigBtn = document.getElementById('back-from-config');
+var erpUrlInput = document.getElementById('erp-url');
+var apiTokenInput = document.getElementById('api-token');
+var saveConfigBtn = document.getElementById('save-config-btn');
+var testBtn = document.getElementById('test-btn');
+var configStatus = document.getElementById('config-status');
+var collectBtn = document.getElementById('collect-btn');
+var retryBtn = document.getElementById('retry-btn');
+var selectBtn = document.getElementById('select-btn');
+var confirmBtn = document.getElementById('confirm-btn');
+var debugBtn = document.getElementById('debug-btn');
+var trainBtn = document.getElementById('attr-train-btn');
+var trainPanel = document.getElementById('attr-train-panel');
+var containerList = document.getElementById('selected-containers');
+var trainConfirmBtn = document.getElementById('train-confirm-btn');
+var trainCancelBtn = document.getElementById('train-cancel-btn');
+var trainStatus = document.getElementById('train-status');
+var collectStatus = document.getElementById('collect-status');
+var platformIcon = document.getElementById('platform-icon');
+var platformText = document.getElementById('platform-text');
+var previewArea = document.getElementById('preview-area');
+var previewTitle = document.getElementById('preview-title');
+var previewPrice = document.getElementById('preview-price');
+var previewImages = document.getElementById('preview-images');
+var previewAttrs = document.getElementById('preview-attrs');
+var previewVariants = document.getElementById('preview-variants');
+var erpStatus = document.getElementById('erp-status');
+var erpStatusText = document.getElementById('erp-status-text');
+var progressArea = document.getElementById('progress-area');
+var progressFill = document.getElementById('progress-fill');
+var progressText = document.getElementById('progress-text');
+var subProgress = document.getElementById('sub-progress');
+var subProgressText = document.getElementById('sub-progress-text');
+var successCard = document.getElementById('success-card');
+var viewInErpLink = document.getElementById('view-in-erp-link');
+var duplicateWarning = document.getElementById('duplicate-warning');
+var dupTime = document.getElementById('dup-time');
+var dupTitle = document.getElementById('dup-title');
+
+// ===== 初始化 =====
+document.addEventListener('DOMContentLoaded', async function () {
   await loadConfig();
   await checkConnection();
   await detectCurrentPage();
 });
 
-// ---- 配置管理 ----
+// ===== 配置管理 =====
 
 async function loadConfig() {
-  // 优先从 storage 读取用户保存的配置，没有则 fallback 到 background 的 ERP_CONFIG
-  const saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+  var saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
   if (saved.erpUrl) erpUrlInput.value = saved.erpUrl;
   if (saved.apiToken) apiTokenInput.value = saved.apiToken;
 
-  // 如果 storage 中没有，从 background 获取默认值
   if (!saved.erpUrl || !saved.apiToken) {
-    chrome.runtime.sendMessage({ type: 'GET_CONFIG' }, (result) => {
+    chrome.runtime.sendMessage({ type: 'GET_CONFIG' }, function (result) {
       if (result) {
         if (!saved.erpUrl) erpUrlInput.value = result.erpUrl || '';
         if (!saved.apiToken) apiTokenInput.value = result.apiToken || '';
@@ -52,35 +85,37 @@ async function loadConfig() {
   }
 }
 
-openConfigBtn.addEventListener('click', () => {
+function getErpBaseUrl() {
+  return (erpUrlInput.value || '').replace(/\/$/, '');
+}
+
+openConfigBtn.addEventListener('click', function () {
   configView.classList.remove('hidden');
   collectView.classList.add('hidden');
   configStatus.textContent = '';
   configStatus.className = 'status-msg';
 });
 
-backFromConfigBtn.addEventListener('click', () => {
+backFromConfigBtn.addEventListener('click', function () {
   configView.classList.add('hidden');
   collectView.classList.remove('hidden');
 });
 
-saveConfigBtn.addEventListener('click', async () => {
-  const erpUrl = erpUrlInput.value.trim();
-  const apiToken = apiTokenInput.value.trim();
+saveConfigBtn.addEventListener('click', async function () {
+  var erpUrl = erpUrlInput.value.trim();
+  var apiToken = apiTokenInput.value.trim();
 
   if (!erpUrl || !apiToken) {
     showStatus(configStatus, '请填写 ERP 地址和 API Token', 'error');
     return;
   }
 
-  // 显示加载状态
   saveConfigBtn.disabled = true;
   saveConfigBtn.textContent = '⏳ 保存中...';
   showStatus(configStatus, '⏳ 正在保存...', 'loading');
 
   try {
-    // 直接存到 chrome.storage.local，不经过 background.js
-    await chrome.storage.local.set({ erpUrl, apiToken });
+    await chrome.storage.local.set({ erpUrl: erpUrl, apiToken: apiToken });
     saveConfigBtn.disabled = false;
     saveConfigBtn.textContent = '保存';
     showStatus(configStatus, '✅ 配置已保存', 'success');
@@ -92,9 +127,9 @@ saveConfigBtn.addEventListener('click', async () => {
   }
 });
 
-testBtn.addEventListener('click', async () => {
-  const erpUrl = erpUrlInput.value.trim();
-  const apiToken = apiTokenInput.value.trim();
+testBtn.addEventListener('click', async function () {
+  var erpUrl = erpUrlInput.value.trim();
+  var apiToken = apiTokenInput.value.trim();
 
   if (!erpUrl || !apiToken) {
     showStatus(configStatus, '请先填写配置', 'error');
@@ -106,24 +141,19 @@ testBtn.addEventListener('click', async () => {
   showStatus(configStatus, '⏳ 测试连接中...', 'loading');
 
   try {
-    // 第一步：测试服务器是否可达
-    const healthResp = await fetch(`${erpUrl.replace(/\/$/, '')}/api/health`, {
+    var healthResp = await fetch(erpUrl.replace(/\/$/, '') + '/api/health', {
       signal: AbortSignal.timeout(8000),
     });
     if (!healthResp.ok) {
       testBtn.disabled = false;
       testBtn.textContent = '测试连接';
-      showStatus(configStatus, `❌ 服务器不可达 (HTTP ${healthResp.status})`, 'error');
+      showStatus(configStatus, '❌ 服务器不可达 (HTTP ' + healthResp.status + ')', 'error');
       return;
     }
 
-    // 第二步：用 API Token 验证
-    const testResp = await fetch(`${erpUrl.replace(/\/$/, '')}/api/external/collect?test=1`, {
+    var testResp = await fetch(erpUrl.replace(/\/$/, '') + '/api/external/collect?test=1', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Token': apiToken,
-      },
+      headers: { 'Content-Type': 'application/json', 'X-API-Token': apiToken },
       body: JSON.stringify({ source: 'test', sourceUrl: 'https://test.com/test', title: '__test__' }),
       signal: AbortSignal.timeout(8000),
     });
@@ -136,7 +166,7 @@ testBtn.addEventListener('click', async () => {
     } else if (testResp.status === 401) {
       showStatus(configStatus, '❌ API Token 无效，请重新生成', 'error');
     } else {
-      showStatus(configStatus, `❌ 验证失败 (HTTP ${testResp.status})`, 'error');
+      showStatus(configStatus, '❌ 验证失败 (HTTP ' + testResp.status + ')', 'error');
     }
   } catch (e) {
     testBtn.disabled = false;
@@ -149,12 +179,12 @@ testBtn.addEventListener('click', async () => {
   }
 });
 
-// ---- 连接状态 ----
+// ===== 连接状态 =====
 
 async function checkConnection() {
-  const { erpUrl, apiToken } = await chrome.storage.local.get(['erpUrl', 'apiToken']);
-  const url = erpUrl || '';
-  const token = apiToken || '';
+  var saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+  var url = saved.erpUrl || '';
+  var token = saved.apiToken || '';
   if (url && token) {
     erpStatus.className = 'status-dot connected';
     erpStatusText.textContent = url.replace(/^https?:\/\//, '');
@@ -164,60 +194,69 @@ async function checkConnection() {
   }
 }
 
-// ---- 页面检测与采集 ----
+// ===== 页面检测与预览 =====
 
 async function detectCurrentPage() {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  var tab = tabs[0];
 
   if (!tab?.id || !tab?.url) {
     setPlatform('unknown', '无法获取当前页面');
     return;
   }
 
-  const url = tab.url;
-  let detectedPlatform = 'unknown';
+  var url = tab.url;
+  var detectedPlatform = 'unknown';
 
-  if (url.includes('alibaba.com') && (url.includes('/product-detail/') || url.includes('/product/'))) {
+  if (url.indexOf('alibaba.com') !== -1 && (url.indexOf('/product-detail/') !== -1 || url.indexOf('/product/') !== -1)) {
     detectedPlatform = 'alibaba';
-  } else if (url.includes('1688.com') && url.includes('/offer/')) {
+  } else if (url.indexOf('1688.com') !== -1 && url.indexOf('/offer/') !== -1) {
     detectedPlatform = '1688';
   }
 
   if (detectedPlatform === 'unknown') {
     setPlatform('unknown', '请在阿里国际站或 1688 产品详情页使用');
     collectBtn.disabled = true;
+    selectBtn.disabled = true;
     return;
   }
 
-  const names = { alibaba: '阿里国际站', '1688': '1688' };
+  var names = { alibaba: '阿里国际站', '1688': '1688' };
   setPlatform(detectedPlatform, names[detectedPlatform] + ' · 产品详情页');
   collectBtn.disabled = false;
-  document.getElementById('select-btn').disabled = false;
+  selectBtn.disabled = false;
 
   // 获取预览信息
   try {
-    const resp = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PREVIEW' });
+    var resp = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PREVIEW' });
     if (resp?.success && resp.data) {
-      previewArea.classList.remove('hidden');
-      previewTitle.textContent = resp.data.title || '(无标题)';
-      previewPrice.textContent = resp.data.price ? `${resp.data.currency || ''} ${resp.data.price}` : '-';
-      previewImages.textContent = resp.data.imageCount + ' 张';
-      document.getElementById('preview-attrs').textContent = (resp.data.attrCount || 0) + ' 项';
+      showPreview(resp.data);
+      // 去重检测
+      checkDuplicate(url);
     }
   } catch (e) {
     // content script 可能未加载，先注入
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js'],
+        files: ['parsers/selector-registry.js', 'parsers/jsonld-parser.js', 'parsers/tiered-price-parser.js', 'parsers/variant-parser.js', 'parsers/spec-parser.js', 'parsers/image-processor.js', 'parsers/payload-assembler.js', 'parsers/alibaba-v2.js', 'content.js'],
       });
-    } catch {}
+      // 重试预览
+      setTimeout(async function () {
+        var retryResp = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PREVIEW' });
+        if (retryResp?.success && retryResp.data) {
+          showPreview(retryResp.data);
+          checkDuplicate(url);
+        }
+      }, 500);
+    } catch (injectErr) {
+      console.warn('[ERP] inject failed:', injectErr);
+    }
   }
 }
 
 function setPlatform(type, text) {
-  const icons = {
+  var icons = {
     alibaba: '🌐',
     '1688': '🏭',
     unknown: '❓',
@@ -229,163 +268,547 @@ function setPlatform(type, text) {
 function showPreview(data) {
   previewArea.classList.remove('hidden');
   previewTitle.textContent = data.title || '(无标题)';
-  previewPrice.textContent = data.price ? `${data.currency || ''} ${data.price}` : '-';
-  previewImages.textContent = (data.imageCount || (data.images?.length || 0)) + ' 张';
+  previewPrice.textContent = data.price ? (data.currency || '') + ' ' + data.price : '-';
+  previewImages.textContent = data.imageCount || 0;
+  document.getElementById('preview-attrs').textContent = data.attrCount || 0;
+  document.getElementById('preview-variants').textContent = data.variantCount || 0;
 }
 
-// ---- 采集 ----
+// ===== 去重检测 =====
 
-collectBtn.addEventListener('click', async () => {
+async function checkDuplicate(sourceUrl) {
+  try {
+    var saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+    var erpUrl = saved.erpUrl;
+    var apiToken = saved.apiToken;
+    if (!erpUrl || !apiToken) return;
+
+    var resp = await fetch(
+      erpUrl.replace(/\/$/, '') + '/api/external/collect/check?sourceUrl=' + encodeURIComponent(sourceUrl),
+      { headers: { 'X-API-Token': apiToken } }
+    );
+    if (!resp.ok) return;
+
+    var data = await resp.json();
+    if (data.exists) {
+      duplicateWarning.classList.remove('hidden');
+      dupTime.textContent = formatMinutesAgo(data.minutesAgo);
+      dupTitle.textContent = data.title || '(无标题)';
+    }
+  } catch (e) {
+    console.warn('[ERP采集] 去重查询失败:', e.message);
+  }
+}
+
+function formatMinutesAgo(minutes) {
+  if (minutes < 60) return minutes + ' 分钟';
+  var hours = Math.floor(minutes / 60);
+  var mins = minutes % 60;
+  return mins > 0 ? hours + ' 小时 ' + mins + ' 分钟' : hours + ' 小时';
+}
+
+// ===== 状态机渲染 =====
+
+function renderState(state, payload) {
+  if (payload === undefined) payload = {};
+
+  // 隐藏所有切换元素
+  retryBtn.classList.add('hidden');
+  successCard.classList.add('hidden');
+  collectStatus.className = 'status-msg';
+  collectStatus.textContent = '';
+
+  switch (state) {
+    case CollectionState.IDLE:
+      progressArea.classList.add('hidden');
+      collectBtn.disabled = false;
+      collectBtn.textContent = '⬇️ 采集到 ERP';
+      collectBtn.classList.remove('hidden');
+      break;
+
+    case CollectionState.EXTRACTING:
+      progressArea.classList.remove('hidden');
+      collectBtn.disabled = true;
+      collectBtn.textContent = '⏳ 提取数据中...';
+      updateSteps({ extract: 'active', capture: '', upload: '', done: '' });
+      progressFill.style.width = '15%';
+      progressText.textContent = '⏳ 正在提取产品信息...';
+      showSubProgress(payload.detail || '');
+      break;
+
+    case CollectionState.CAPTURING:
+      updateSteps({ extract: 'done', capture: 'active', upload: '', done: '' });
+      progressFill.style.width = '40%';
+      var current = payload.current || 0;
+      var total = payload.total || '?';
+      progressText.textContent = '⏳ 下载图片 (' + current + '/' + total + ')...';
+      showSubProgress(payload.detail || '');
+      break;
+
+    case CollectionState.UPLOADING:
+      updateSteps({ extract: 'done', capture: 'done', upload: 'active', done: '' });
+      progressFill.style.width = '70%';
+      progressText.textContent = '⏳ 上传到 ERP...';
+      hideSubProgress();
+      break;
+
+    case CollectionState.DONE:
+      updateSteps({ extract: 'done', capture: 'done', upload: 'done', done: 'done' });
+      progressFill.style.width = '100%';
+      progressText.textContent = '✅ 采集完成！';
+      collectBtn.classList.add('hidden');
+      successCard.classList.remove('hidden');
+      // 跳转链接
+      var erpUrl = getErpBaseUrl();
+      if (payload.id) {
+        viewInErpLink.href = erpUrl + '/collected-products/' + payload.id;
+      } else {
+        viewInErpLink.href = erpUrl + '/collected-products';
+      }
+      setTimeout(function () { hideSubProgress(); }, 500);
+      break;
+
+    case CollectionState.ERROR:
+      updateSteps({ extract: 'done', capture: 'done', upload: 'done', done: '' });
+      progressFill.style.width = payload.progress || '70%';
+      progressText.textContent = '❌ ' + (payload.error || '采集失败');
+      collectBtn.classList.add('hidden');
+      retryBtn.classList.remove('hidden');
+      collectStatus.textContent = payload.detail || '请检查网络连接后重试';
+      collectStatus.className = 'status-msg error';
+      break;
+  }
+}
+
+function updateSteps(states) {
+  ['extract', 'capture', 'upload', 'done'].forEach(function (id) {
+    var dot = document.getElementById('dot-' + id);
+    var step = dot.closest('.step');
+    step.className = 'step';
+    if (states[id] === 'active') {
+      step.classList.add('active');
+      dot.textContent = '●';
+    } else if (states[id] === 'done') {
+      step.classList.add('done');
+      dot.textContent = '●';
+    } else {
+      dot.textContent = '○';
+    }
+  });
+}
+
+function showSubProgress(text) {
+  subProgress.classList.remove('hidden');
+  subProgressText.textContent = text;
+}
+
+function hideSubProgress() {
+  subProgress.classList.add('hidden');
+}
+
+// ===== 采集主流程 =====
+
+collectBtn.addEventListener('click', async function () {
   // 检查配置
-  const { erpUrl, apiToken } = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+  var saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+  var erpUrl = saved.erpUrl;
+  var apiToken = saved.apiToken;
   if (!erpUrl || !apiToken) {
     showStatus(collectStatus, '⚠️ 请先在设置中配置 ERP 地址和 Token', 'error');
     return;
   }
 
-  collectBtn.disabled = true;
-  collectBtn.textContent = '⏳ 提取数据...';
-  showStatus(collectStatus, '⏳ 正在提取产品数据...', 'loading');
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  var tab = tabs[0];
+  if (!tab?.id) return;
+
+  // === Phase 1: EXTRACTING ===
+  transitionTo(CollectionState.EXTRACTING, { detail: '正在提取产品信息...' });
 
   try {
-    // 从当前页面提取完整数据（含图片）
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    if (!tab?.id) throw new Error('无法获取当前页面');
+    transitionTo(CollectionState.EXTRACTING, { detail: '解析 DOM 中...' });
+    // 发送 V2 提取
+    var extractResp = await chrome.tabs.sendMessage(tab.id, {
+      type: 'EXTRACT_PRODUCT_V2',
+      enableProgress: true,
+    });
 
-    const extractResp = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PRODUCT' });
-    if (!extractResp?.success) throw new Error(extractResp?.error || '提取失败');
+    if (!extractResp?.success) {
+      throw new Error(extractResp?.error || '提取失败');
+    }
 
-    const productData = extractResp.data;
+    var productData = extractResp.data;
+    retryData = productData; // 保存用于重试
 
-    // 发送到 ERP
-    collectBtn.textContent = '⏳ 上传到 ERP...';
-    showStatus(collectStatus, '⏳ 正在上传到 ERP...', 'loading');
+    // === Phase 2: CAPTURING ===
+    var totalImages = (productData.images || []).length;
+    if (totalImages > 0) {
+      transitionTo(CollectionState.CAPTURING, { current: 0, total: totalImages });
 
-    const apiEndpoint = `${erpUrl.replace(/\/$/, '')}/api/external/collect`;
-    const resp = await fetch(apiEndpoint, {
+      for (var i = 0; i < productData.images.length; i++) {
+        var img = productData.images[i];
+
+        transitionTo(CollectionState.CAPTURING, {
+          current: i + 1,
+          total: totalImages,
+          detail: '正在下载图片 ' + (i + 1) + '/' + totalImages + '...',
+        });
+
+        var capResp = await chrome.tabs.sendMessage(tab.id, {
+          type: 'CAPTURE_IMAGE',
+          imageInfo: img,
+          index: i,
+        });
+
+        if (capResp?.success) {
+          productData.images[i] = capResp.data;
+          renderState(CollectionState.CAPTURING, {
+            current: i + 1, total: totalImages,
+            detail: '图片 ' + (i + 1) + '/' + totalImages + ' 下载完成',
+          });
+        } else {
+          renderState(CollectionState.CAPTURING, {
+            current: i + 1, total: totalImages,
+            detail: '图片 ' + (i + 1) + ' 下载失败，跳过 (共 ' + totalImages + ' 张)',
+          });
+        }
+      }
+    }
+
+    // === Phase 3: UPLOADING ===
+    transitionTo(CollectionState.UPLOADING);
+
+    var apiEndpoint = erpUrl.replace(/\/$/, '') + '/api/external/collect';
+    var apiResp = await fetch(apiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Token': apiToken },
       body: JSON.stringify(productData),
     });
-    const result = await resp.json();
 
-    collectBtn.disabled = false;
-    collectBtn.textContent = '⬇️ 采集到 ERP';
+    var result = await apiResp.json();
 
-    if (resp.ok && result.success) {
-      showStatus(collectStatus, '✅ 采集成功！已添加到 ERP', 'success');
+    if (apiResp.ok && result.success) {
+      // === Phase 4: DONE ===
+      var productId = result.data?.id || result.data?.product?.id || null;
+      transitionTo(CollectionState.DONE, { id: productId });
     } else {
-      showStatus(collectStatus, '❌ 采集失败: ' + (result.message || `HTTP ${resp.status}`), 'error');
+      throw new Error(result.message || 'HTTP ' + apiResp.status);
     }
   } catch (e) {
-    collectBtn.disabled = false;
-    collectBtn.textContent = '⬇️ 采集到 ERP';
-    showStatus(collectStatus, '❌ 采集失败: ' + (e.message || '未知错误'), 'error');
+    transitionTo(CollectionState.ERROR, {
+      error: e.message,
+      detail: '请检查网络连接后重试',
+    });
   }
 });
 
-// ---- 调试 ----
-document.getElementById('debug-btn').addEventListener('click', async () => {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tabs[0]?.id) return;
-  await chrome.tabs.sendMessage(tabs[0].id, { type: 'DEBUG_DOM' });
-  showStatus(collectStatus, '🔍 调试信息已输出到 Console（F12）', 'success');
+// ===== 重试逻辑 =====
+
+retryBtn.addEventListener('click', function () {
+  transitionTo(CollectionState.IDLE);
+  setTimeout(function () {
+    collectBtn.click();
+  }, 100);
 });
 
-// ---- 选择模式 ----
-document.getElementById('select-btn').addEventListener('click', async () => {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+// ===== 状态转换 =====
+
+function transitionTo(newState, payload) {
+  renderState(newState, payload);
+  currentState = newState;
+}
+
+// ===== 选择模式 =====
+
+selectBtn.addEventListener('click', async function () {
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tabs[0]?.id) return;
   await chrome.tabs.sendMessage(tabs[0].id, { type: 'ENTER_SELECT_MODE' });
-  // 标记选择模式已激活，存入 storage
   await chrome.storage.local.set({ selectModeActive: true });
   showStatus(collectStatus, '👆 请在页面上点击选择图片和属性，选好后重新点开本插件点"确认采集"', 'success');
-  document.getElementById('select-btn').style.display = 'none';
-  document.getElementById('collect-btn').style.display = 'none';
-  document.getElementById('confirm-btn').style.display = 'block';
+  selectBtn.classList.add('hidden');
+  collectBtn.classList.add('hidden');
+  confirmBtn.classList.remove('hidden');
 });
 
 // 弹窗打开时检查是否在选择模式中
-chrome.storage.local.get('selectModeActive').then(result => {
+chrome.storage.local.get('selectModeActive').then(function (result) {
   if (result.selectModeActive) {
-    document.getElementById('select-btn').style.display = 'none';
-    document.getElementById('collect-btn').style.display = 'none';
-    document.getElementById('confirm-btn').style.display = 'block';
+    selectBtn.classList.add('hidden');
+    collectBtn.classList.add('hidden');
+    confirmBtn.classList.remove('hidden');
   }
 });
 
-document.getElementById('confirm-btn').addEventListener('click', async () => {
-  const { erpUrl, apiToken } = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+confirmBtn.addEventListener('click', async function () {
+  var saved = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+  var erpUrl = saved.erpUrl;
+  var apiToken = saved.apiToken;
   if (!erpUrl || !apiToken) {
     showStatus(collectStatus, '⚠️ 请先在设置中配置 ERP 地址和 Token', 'error');
     return;
   }
 
-  document.getElementById('confirm-btn').disabled = true;
-  document.getElementById('confirm-btn').textContent = '⏳ 处理中...';
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '⏳ 处理中...';
   showStatus(collectStatus, '⏳ 获取选择数据...', 'loading');
 
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs[0]?.id) throw new Error('无法获取当前页面');
 
-    // 退出选择模式并获取数据
-    const resp = await chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_SELECTED' });
+    var resp = await chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_SELECTED' });
     if (!resp?.success) throw new Error(resp?.error || '获取失败');
-    let productData = resp.data;
+    var productData = resp.data;
 
-    // 退出选择模式（清除高亮）
+    // 如果手动选择了属性容器，保存选择器
+    if (resp.selector) {
+      await chrome.storage.local.set({ trainedAttrSelector: resp.selector });
+      await chrome.tabs.sendMessage(tabs[0].id, { type: 'SET_TRAINED_SELECTOR', selector: resp.selector });
+      console.log('[训练] 保存属性容器选择器:', resp.selector);
+    }
+
     await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXIT_SELECT_MODE' });
     await chrome.storage.local.remove('selectModeActive');
 
     // 下载用户选择的图片
-    if (productData.images?.length > 0) {
-      showStatus(collectStatus, `⏳ 下载 ${productData.images.length} 张图片...`, 'loading');
-      for (let i = 0; i < productData.images.length; i++) {
-        const img = productData.images[i];
+    if (productData.images && productData.images.length > 0) {
+      showStatus(collectStatus, '⏳ 下载 ' + productData.images.length + ' 张图片...', 'loading');
+      for (var i = 0; i < productData.images.length; i++) {
+        var img = productData.images[i];
         try {
-          const fullSrc = img.originalUrl.startsWith('//') ? 'https:' + img.originalUrl : img.originalUrl;
-          const resp = await fetch(fullSrc, { signal: AbortSignal.timeout(5000) });
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const base64 = await new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+          var fullSrc = img.originalUrl.indexOf('//') === 0 ? 'https:' + img.originalUrl : img.originalUrl;
+          var fetchResp = await fetch(fullSrc, { signal: AbortSignal.timeout(5000) });
+          if (fetchResp.ok) {
+            var blob = await fetchResp.blob();
+            var base64 = await new Promise(function (r) {
+              var fr = new FileReader();
+              fr.onloadend = function () { r(fr.result.split(',')[1]); };
+              fr.readAsDataURL(blob);
+            });
             img.data = base64;
             img.mimeType = blob.type || 'image/jpeg';
           }
-        } catch {}
+        } catch (e) { /* skip */ }
       }
     }
 
-    // 发送到 ERP
     showStatus(collectStatus, '⏳ 上传到 ERP...', 'loading');
-    const apiEndpoint = `${erpUrl.replace(/\/$/, '')}/api/external/collect`;
-    const apiResp = await fetch(apiEndpoint, {
+    var apiEndpoint = erpUrl.replace(/\/$/, '') + '/api/external/collect';
+    var apiResp = await fetch(apiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Token': apiToken },
       body: JSON.stringify(productData),
     });
-    const result = await apiResp.json();
+    var apiResult = await apiResp.json();
 
-    document.getElementById('confirm-btn').disabled = false;
-    document.getElementById('confirm-btn').textContent = '✅ 确认采集';
-    document.getElementById('confirm-btn').style.display = 'none';
-    document.getElementById('select-btn').style.display = 'block';
-    document.getElementById('collect-btn').style.display = 'block';
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '✅ 确认采集';
+    confirmBtn.classList.add('hidden');
+    selectBtn.classList.remove('hidden');
+    collectBtn.classList.remove('hidden');
 
-    if (apiResp.ok && result.success) {
+    if (apiResp.ok && apiResult.success) {
       showStatus(collectStatus, '✅ 采集成功！已添加到 ERP', 'success');
     } else {
-      showStatus(collectStatus, '❌ 采集失败: ' + (result.message || `HTTP ${apiResp.status}`), 'error');
+      showStatus(collectStatus, '❌ 采集失败: ' + (apiResult.message || 'HTTP ' + apiResp.status), 'error');
     }
   } catch (e) {
-    document.getElementById('confirm-btn').disabled = false;
-    document.getElementById('confirm-btn').textContent = '✅ 确认采集';
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '✅ 确认采集';
     showStatus(collectStatus, '❌ 失败: ' + (e.message || '未知'), 'error');
+    // 恢复按钮状态，退出选择模式
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXIT_SELECT_MODE' }).catch(function(){});
+    await chrome.storage.local.remove('selectModeActive').catch(function(){});
+    confirmBtn.classList.add('hidden');
+    selectBtn.classList.remove('hidden');
+    collectBtn.classList.remove('hidden');
   }
 });
 
-// ---- 工具 ----
+// ===== 调试 =====
+
+debugBtn.addEventListener('click', async function () {
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tabs[0]?.id) return;
+  
+  showStatus(collectStatus, '⏳ 正在提取数据...', '');
+  
+  try {
+    var resp = await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXTRACT_PRODUCT_V2' });
+    if (!resp || !resp.success) {
+      showStatus(collectStatus, '❌ 提取失败: ' + (resp?.error || '无响应'), 'error');
+      return;
+    }
+    
+    var data = resp.data;
+    data.pageUrl = tabs[0].url;
+    
+    showStatus(collectStatus, '⏳ 正在生成预览...', '');
+    
+    // 顺便检查属性区
+    var attrDebugInfo = '';
+    try {
+      var attrResp = await chrome.tabs.sendMessage(tabs[0].id, { type: 'DEBUG_ATTRS' });
+      if (attrResp) {
+        var issues = [];
+        if (!attrResp.attrSectionExists) issues.push('data-testid="module-attribute" 未找到');
+        issues.push('关键词: ' + (attrResp.foundKeyword || '无'));
+        issues.push('容器数: ' + (attrResp.containerCount || 0));
+        if (attrResp.bodyTextSample) issues.push('文本: ' + attrResp.bodyTextSample.substring(0, 200));
+        if (attrResp.containerSample) issues.push('容器HTML: ' + attrResp.containerSample.substring(0, 200));
+        if (attrResp.keyAttrInner) issues.push('内HTML: ' + attrResp.keyAttrInner.substring(0, 500));
+        if (attrResp.threeCols) issues.push('3列: ' + attrResp.threeCols.substring(0, 500));
+        attrDebugInfo = issues.length > 0 ? issues.join('; ') : '';
+      }
+    } catch(e) {}
+    
+    // 也从页面额外获取视频链接
+    var videoUrls = [];
+    try {
+      var videoResp = await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXTRACT_VIDEOS' });
+      if (videoResp && videoResp.success && videoResp.urls) {
+        videoUrls = videoResp.urls;
+      }
+    } catch(e) {}
+    
+    // 发送到服务器生成 HTML 预览
+    var config = await chrome.storage.local.get(['erpUrl', 'apiToken']);
+    var erpUrl = (config.erpUrl || 'http://localhost:3001').replace(/\/$/, '');
+    
+    var apiResp = await fetch(erpUrl + '/api/debug/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: data.title,
+        price: data.price,
+        currency: data.currency,
+        brand: data.brand,
+        sku: data.sku,
+        moq: data.moq || data.minOrderQuantity,
+        pageUrl: data.pageUrl,
+        description: data.description || data.descriptionEn || '',
+        attrDebugInfo: attrDebugInfo,
+        attributeCount: (data.attributes || []).length,
+        images: (function(){
+          var seenUrls = {};
+          var all = (data.images || []).map(function(img) {
+            var url = typeof img === 'string' ? img : (img.originalUrl || img.url || '');
+            var isVideo = /\.(mp4|webm|mov|avi)$/i.test(url) || img.type === 'video';
+            return { url: url, type: isVideo ? 'video' : 'image' };
+          }).filter(function(u) { return u.url; });
+          // 合并视频 URL（去重）
+          videoUrls.forEach(function(v) {
+            var key = v.replace(/^https?:/i,'').replace(/\/+$/,'').split('?')[0];
+            var exists = all.some(function(a) { return a.url.replace(/^https?:/i,'').replace(/\/+$/,'').split('?')[0] === key; });
+            if (!exists) all.push({ url: v, type: 'video' });
+          });
+          return all;
+        })(),
+        attributes: (data.attributes || []).map(function(a) {
+          return { name: a.name || a.nameCn || '', value: a.value || a.valueCn || '' };
+        }),
+      }),
+    });
+    
+    var result = await apiResp.json();
+    if (result.success) {
+      // 打开预览目录
+      chrome.tabs.create({ url: erpUrl + '/api/debug/preview/view?dir=' + encodeURIComponent(result.data.dir), active: true });
+    } else {
+      showStatus(collectStatus, '❌ 生成预览失败: ' + (result.error || '未知'), 'error');
+    }
+    
+  } catch (e) {
+    showStatus(collectStatus, '❌ 调试失败: ' + e.message, 'error');
+  }
+});
+
+// ===== 属性选择器 =====
+var trainingContainers = [];
+var trainActive = false;
+
+trainBtn.addEventListener('click', async function() {
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tabs[0]?.id) return;
+  
+  if (!trainActive) {
+    trainActive = true;
+    trainingContainers = [];
+    trainPanel.classList.remove('hidden');
+    renderContainerList();
+    
+    // 进入选择模式（用已有的手动选择 UI）
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'ENTER_SELECT_MODE' });
+    showStatus(trainStatus, '🖱️ 点击页面上的属性容器框', 'success');
+  }
+});
+
+// 监听页面点击选择的结果
+chrome.runtime.onMessage.addListener(function(msg, sender) {
+  if (msg.type === 'CONTAINER_SELECTED' && msg.selector) {
+    var idx = trainingContainers.length + 1;
+    trainingContainers.push({ id: 'c' + Date.now(), name: '框' + idx, selector: msg.selector });
+    renderContainerList();
+    showStatus(trainStatus, '✅ 已添加 ' + msg.selector.substring(0,40), 'success');
+  }
+});
+
+function renderContainerList() {
+  if (trainingContainers.length === 0) {
+    containerList.innerHTML = '<div class="train-hint">还没有选中容器，点击页面上属性所在的框</div>';
+    return;
+  }
+  containerList.innerHTML = trainingContainers.map(function(c, i) {
+    return '<div class="container-item"><span>#' + (i+1) + ' ' + c.name + '</span><span class="del-btn" data-id="' + c.id + '">✕</span></div>';
+  }).join('');
+  // 删除按钮
+  containerList.querySelectorAll('.del-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = this.getAttribute('data-id');
+      trainingContainers = trainingContainers.filter(function(c) { return c.id !== id; });
+      renderContainerList();
+    });
+  });
+}
+
+// 确认
+trainConfirmBtn.addEventListener('click', async function() {
+  if (trainingContainers.length === 0) {
+    showStatus(trainStatus, '⚠️ 请至少选择一个属性容器', 'error');
+    return;
+  }
+  
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tabs[0]?.id) return;
+  
+  // 退出选择模式
+  await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXIT_SELECT_MODE' }).catch(function(){});
+  
+  // 保存选择器（用第一个容器的）
+  var sel = trainingContainers[0].selector;
+  await chrome.storage.local.set({ trainedAttrSelector: sel });
+  await chrome.tabs.sendMessage(tabs[0].id, { type: 'SET_TRAINED_SELECTOR', selector: sel });
+  
+  showStatus(trainStatus, '✅ 已保存！现在用「调试预览」验证', 'success');
+  setTimeout(function() {
+    trainPanel.classList.add('hidden');
+    trainActive = false;
+  }, 1500);
+});
+
+// 取消
+trainCancelBtn.addEventListener('click', async function() {
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]?.id) {
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXIT_SELECT_MODE' }).catch(function(){});
+  }
+  trainPanel.classList.add('hidden');
+  trainActive = false;
+  trainingContainers = [];
+});
+
+// ===== 工具 =====
 
 function showStatus(el, msg, type) {
   el.textContent = msg;

@@ -165,6 +165,46 @@ export class WooCommercePublisher {
       data.meta_data.push({ key: '_erp_product_id', value: product.productId });
     }
 
+    // ★ 供应商信息 → meta_data
+    if (product.rawData?.supplier) {
+      data.meta_data.push({
+        key: '_supplier_info',
+        value: typeof product.rawData.supplier === 'string'
+          ? product.rawData.supplier
+          : JSON.stringify(product.rawData.supplier),
+      });
+    }
+
+    // ★ 非变体属性（成分/功效/容量等）→ meta_data
+    if (product.attributes?.length > 0) {
+      data.meta_data.push({
+        key: '_product_attributes',
+        value: JSON.stringify(
+          product.attributes.map((a: any) => ({
+            name: a.name,
+            value: a.value,
+            unit: a.unit || null,
+          }))
+        ),
+      });
+    }
+
+    // ★ HS Code → meta_data
+    if (product.hsCode) {
+      data.meta_data.push({ key: '_hs_code', value: product.hsCode });
+    }
+
+    // ★ Shipping Class → meta_data
+    if (product.shippingClass) {
+      data.meta_data.push({ key: '_shipping_class', value: product.shippingClass });
+    }
+
+    // ★ 库存管理
+    if (product.stockQuantity !== null && product.stockQuantity !== undefined) {
+      data.stock_quantity = product.stockQuantity;
+      data.manage_stock = true;
+    }
+
     // 分类
     if (product.woocommerceCategoryId) {
       data.categories = [{ id: product.woocommerceCategoryId }];

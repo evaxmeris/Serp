@@ -1,11 +1,14 @@
 """
-阿里国际站店铺产品采集器 v2
-=============================
-直接从店铺公开页面采集产品，不需要登录。
-访问 intellirise.en.alibaba.com/productlist 获取所有产品链接，
-然后逐个访问产品详情页提取数据。
-"""
+阿里国际站店铺产品采集器 v2 (重写版)
+======================================
+使用 ProductListCrawler + DedupChecker + v2 提取引擎
 
+主要改进:
+1. ProductListCrawler: 多选择器回退 + 翻页 + 懒加载
+2. DedupChecker: 采集前 API 去重查询
+3. v2 提取引擎: 变体/阶梯定价/全规格/物流/Supplier/MOQ
+4. build_erp_payload_v2: 全字段映射
+"""
 import asyncio
 import json
 import logging
@@ -15,6 +18,13 @@ from datetime import datetime
 from typing import Optional
 
 from playwright.async_api import async_playwright
+
+from config import ERP_URL, API_TOKEN, HEADLESS
+from lib.product_list import ProductListCrawler
+from lib.dedup import DedupChecker
+from lib.extractor import extract_product_detail
+from lib.image import download_product_images
+from lib.export import post_to_erp, build_erp_payload_v2
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("store-collector-v2")
@@ -27,18 +37,20 @@ Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
 """
 
 STORE_URL = os.environ.get("STORE_URL", "https://intellirise.en.alibaba.com")
-ERP_URL = os.environ.get("ERP_URL", "http://localhost:3001")
-API_TOKEN = os.environ.get("COLLECT_API_TOKEN", "")
 MAX_PRODUCTS = int(os.environ.get("MAX_PRODUCTS", "500"))
+MAX_PAGES = int(os.environ.get("MAX_PAGES", "20"))
+DELAY = float(os.environ.get("COLLECT_DELAY", "2.0"))
+SKIP_DEDUP = os.environ.get("SKIP_DEDUP", "").lower() in ("1", "true", "yes")
 
 
 async def run():
     logger.info(f"店铺: {STORE_URL}")
-    logger.info(f"上限: {MAX_PRODUCTS}")
+    logger.info(f"上限: {MAX_PRODUCTS} 个产品 / {MAX_PAGES} 页")
+    logger.info(f"去重: {'跳过' if SKIP_DEDUP else '启用'}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=HEADLESS,
             args=[
                 '--no-sandbox',
                 '--disable-blink-features=AutomationControlled',
@@ -61,158 +73,152 @@ async def run():
         await page.add_init_script(STEALTH_JS)
         logger.info("✅ 防检测脚本已注入")
 
-        # 1. 访问所有产品页面
+        # 初始化组件
+        crawler = ProductListCrawler(page)
+        checker = DedupChecker(enable_api=not SKIP_DEDUP)
+        stats = {"total_links": 0, "dedup_skipped": 0, "success": 0, "failed": 0}
+
+        # 1. 采集产品列表
         product_list_url = f"{STORE_URL}/productlist"
-        logger.info(f"\n1. 访问产品列表: {product_list_url}")
-        await page.goto(product_list_url, wait_until="domcontentloaded", timeout=60000)
-        await page.wait_for_timeout(3000)
+        logger.info(f"\n{'='*60}")
+        logger.info(f"1. 采集产品列表: {product_list_url}")
+        logger.info(f"{'='*60}")
 
-        # 提取所有产品链接
-        product_links = await page.evaluate('''() => {
-            const links = new Set();
-            document.querySelectorAll('a').forEach(a => {
-                const href = a.href;
-                if (href && href.includes('/product-detail/')) links.add(href);
-            });
-            return [...links];
-        }''')
+        product_links = await crawler.get_product_links(
+            list_url=product_list_url,
+            max_products=MAX_PRODUCTS,
+            max_pages=MAX_PAGES,
+            scroll_count=5,
+        )
 
-        if not product_links:
-            logger.warning("❌ 未找到产品链接，尝试翻页后重试...")
-            # 可能页面需要滚动加载
-            for _ in range(5):
-                await page.evaluate('window.scrollBy(0, 1000)')
-                await page.wait_for_timeout(1000)
-            product_links = await page.evaluate('''() => {
-                const links = new Set();
-                document.querySelectorAll('a').forEach(a => {
-                    const href = a.href;
-                    if (href && href.includes('/product-detail/')) links.add(href);
-                });
-                return [...links];
-            }''')
-
-        product_links = list(set(product_links))[:MAX_PRODUCTS]
-        logger.info(f"找到 {len(product_links)} 个产品链接")
+        stats["total_links"] = len(product_links)
+        logger.info(f"\n找到 {len(product_links)} 个产品链接")
 
         if not product_links:
             await browser.close()
             return
 
-        # 2. 逐个访问详情页
-        stats = {"success": 0, "failed": 0}
-        for idx, url in enumerate(product_links, 1):
-            logger.info(f"\n[{idx}/{len(product_links)}] {url[:80]}...")
+        # 2. 逐个采集详情
+        logger.info(f"\n{'='*60}")
+        logger.info(f"2. 逐个采集产品详情")
+        logger.info(f"{'='*60}")
+
+        for idx, link in enumerate(product_links, 1):
+            url = link.get("url", "")
+            title = link.get("title", "") or url[:60]
+            logger.info(f"\n[{idx}/{len(product_links)}] {title[:50]}")
+
+            # Step 2a: 去重检查
+            if not SKIP_DEDUP:
+                try:
+                    dup = await checker.check(url)
+                    if dup.get("exists"):
+                        status = dup.get("pipelineStatus", "unknown")
+                        logger.info(f"  ⏭️ 已存在 (status={status}), 跳过")
+                        stats["dedup_skipped"] += 1
+                        if dup.get("id") != "__just_collected__":
+                            continue
+                except Exception as e:
+                    logger.warning(f"  去重查询失败 ({e}), 继续采集")
+
+            # Step 2b: 访问详情页
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 await page.wait_for_timeout(3000)
-
-                # 提取数据
-                data = await page.evaluate('''() => {
-                    function qs(sels) {
-                        for (const s of sels) {
-                            const el = document.querySelector(s);
-                            if (el) return el;
-                        }
-                        return null;
-                    }
-
-                    const title = qs(['.title-main', '[data-testid="product-title"]', 'h1', '.product-title'])?.textContent?.trim() || '';
-
-                    const priceEl = qs(['.price-range', '[data-testid="price"]', '.product-price', '.price']);
-                    const priceText = priceEl?.textContent?.trim() || '';
-                    const price = (priceText.match(/[\\d.]+/) || [null])[0];
-
-                    const desc = qs(['.detail-description', '[data-testid="description"]', '.product-description', '#description'])?.innerHTML?.trim() || '';
-
-                    const images = [];
-                    const seen = new Set();
-                    document.querySelectorAll('.product-gallery img, [data-testid="gallery"] img, .gallery img, [class*="preview"] img, img[class*="product"]').forEach(img => {
-                        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-                        if (!src || seen.has(src) || src.includes('logo') || src.includes('icon') || src.includes('placeholder')) return;
-                        if (src.startsWith('data:') && src.length < 500) return;
-                        seen.add(src);
-                        images.push({type: images.length === 0 ? 'main' : 'gallery', originalUrl: src.startsWith('//') ? 'https:' + src : src});
-                    });
-
-                    const attrs = [];
-                    const attrSels = ['.attributes-table tr', '[data-testid="attributes"] tr', '.product-attributes tr',
-                        '.props-table tr', '[class*="attr"] tr', '[class*="spec"] tr'];
-                    for (const sel of attrSels) {
-                        document.querySelectorAll(sel).forEach(row => {
-                            const tds = row.querySelectorAll('td, th');
-                            if (tds.length >= 2) {
-                                const n = tds[0].textContent?.replace(/[：:]/g,'').trim();
-                                const v = tds[1].textContent?.trim();
-                                if (n && v && !attrs.find(a => a.name === n)) attrs.push({name: n, value: v});
-                            }
-                        });
-                        if (attrs.length > 0) break;
-                    }
-
-                    const pid = (window.location.href.match(/_(\\d+)\\.html/) || [])[1] || '';
-
-                    return {title, price, description: desc, images, attributes: attrs, productId: pid, url: window.location.href};
-                }''')
-
-                if not data.get("title"):
-                    logger.warning("  ⚠️ 提取数据为空，跳过")
-                    stats["failed"] += 1
-                    continue
-
-                logger.info(f"  标题: {data['title'][:50]}")
-                logger.info(f"  价格: {data.get('price', '?')}")
-                logger.info(f"  图片: {len(data.get('images', []))} 张")
-
-                # 下载图片
-                if data.get("images"):
-                    from lib.image import download_product_images
-                    images = await download_product_images(page, [img["originalUrl"] for img in data["images"]])
-                    logger.info(f"  已下载: {len(images)} 张")
-                else:
-                    images = []
-
-                # 投递到 ERP
-                payload = {
-                    "source": "alibaba",
-                    "sourceUrl": data["url"],
-                    "sourceId": data.get("productId", ""),
-                    "title": data["title"],
-                    "price": float(data["price"]) if data.get("price") else None,
-                    "currency": "USD",
-                    "description": data.get("description", ""),
-                    "images": images,
-                    "attributes": data.get("attributes", []),
-                }
-
-                import httpx
-                async with httpx.AsyncClient(timeout=120) as client:
-                    resp = await client.post(
-                        f"{ERP_URL}/api/external/collect",
-                        json=payload,
-                        headers={"X-API-Token": API_TOKEN, "Content-Type": "application/json"},
-                    )
-                if resp.status_code in (200, 201):
-                    logger.info(f"  ✅ 投递成功")
-                    stats["success"] += 1
-                else:
-                    logger.error(f"  ❌ HTTP {resp.status_code}: {resp.text[:100]}")
-                    stats["failed"] += 1
-
-                await asyncio.sleep(1.5)  # 间隔
-
             except Exception as e:
-                logger.error(f"  ❌ 异常: {e}")
+                logger.error(f"  ❌ 访问详情页失败: {e}")
+                stats["failed"] += 1
+                continue
+
+            # Step 2c: v2 提取
+            try:
+                detail = await extract_product_detail(page)
+                if not detail.get("name"):
+                    # 兜底使用列表页已有的标题
+                    if link.get("title"):
+                        detail["name"] = link["title"]
+                if not detail.get("url"):
+                    detail["url"] = url
+                if not detail.get("price"):
+                    detail["price"] = link.get("price")
+                if not detail.get("productId"):
+                    detail["productId"] = link.get("productId", "")
+            except Exception as e:
+                logger.error(f"  ❌ 提取失败: {e}")
+                stats["failed"] += 1
+                continue
+
+            if not detail.get("name"):
+                logger.warning("  ⚠️ 提取数据为空，跳过")
+                stats["failed"] += 1
+                continue
+
+            logger.info(f"  标题: {detail['name'][:50]}")
+            logger.info(f"  价格: {detail.get('price', '?')}")
+            if detail.get("variants"):
+                logger.info(f"  变体: {len(detail['variants'])} 个")
+            if detail.get("tieredPricing"):
+                logger.info(f"  阶梯价: {len(detail['tieredPricing'])} 档")
+
+            # Step 2d: 下载图片
+            image_urls = [img["url"] for img in detail.get("images", [])]
+            logger.info(f"  图片: {len(image_urls)} 张")
+            images = []
+            if image_urls:
+                try:
+                    images = await download_product_images(page, image_urls)
+                    logger.info(f"  已下载: {len(images)} 张")
+                except Exception as e:
+                    logger.warning(f"  图片下载失败: {e}")
+
+            # Step 2e: 构建 v2 payload 并投递
+            try:
+                payload = build_erp_payload_v2(detail, images)
+                result = await post_to_erp(payload)
+
+                if result:
+                    logger.info(f"  ✅ 投递成功 (ID: {result.get('id', '?')})")
+                    stats["success"] += 1
+                    # 更新去重缓存
+                    checker.mark_collected(url)
+                else:
+                    logger.error(f"  ❌ 投递失败")
+                    stats["failed"] += 1
+            except Exception as e:
+                logger.error(f"  ❌ 投递异常: {e}")
                 stats["failed"] += 1
 
-        # 报告
-        logger.info(f"\n{'='*40}")
-        logger.info(f"完成! 成功: {stats['success']}, 失败: {stats['failed']}")
-        report = {"timestamp": datetime.now().isoformat(), "store": STORE_URL, "stats": stats}
-        report_path = f"/Users/apple/clawd/trade-erp/services/alibaba-collector/output/v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(report_path, "w") as f:
-            json.dump(report, f, indent=2)
-        logger.info(f"报告: {report_path}")
+            # Step 2f: 间隔
+            await asyncio.sleep(DELAY)
+
+        # 3. 报告
+        logger.info(f"\n{'='*60}")
+        logger.info(f"📊 采集报告")
+        logger.info(f"{'='*60}")
+        logger.info(f"  产品列表: {stats['total_links']} 个")
+        logger.info(f"  去重跳过: {stats['dedup_skipped']} 个")
+        logger.info(f"  采集成功: {stats['success']} 个")
+        logger.info(f"  采集失败: {stats['failed']} 个")
+        logger.info(f"  去重缓存: {checker.get_cache_size()} 条")
+        logger.info(f"{'='*60}")
+
+        # 保存报告
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "store": STORE_URL,
+            "stats": stats,
+            "dedup_stats": checker.stats,
+        }
+        output_dir = os.path.join(os.path.dirname(__file__), "output")
+        os.makedirs(output_dir, exist_ok=True)
+        report_path = os.path.join(
+            output_dir,
+            f"v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        logger.info(f"报告已保存: {report_path}")
+
         await browser.close()
 
 

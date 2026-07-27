@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "ERP 采集管理",
-  "version": "1.0.0",
-  "description": "从阿里国际站、1688 采集产品信息到 Trade ERP，支持图片、属性、变体的完整采集。",
+  "version": "2.1.0",
+  "description": "从阿里国际站、1688 采集产品信息到 Trade ERP，支持图片、属性、变体、阶梯定价的完整采集。",
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "downloads"
   ],
   "host_permissions": [
     "https://*.alibaba.com/*",
@@ -40,7 +41,18 @@
         "https://*.alibaba.com/*",
         "https://*.1688.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "parsers/selector-registry.js",
+        "parsers/jsonld-parser.js",
+        "parsers/tiered-price-parser.js",
+        "parsers/variant-parser.js",
+        "parsers/spec-parser.js",
+        "parsers/image-processor.js",
+        "parsers/payload-assembler.js",
+        "parsers/alibaba-v2.js",
+        "parsers/attr-patch.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

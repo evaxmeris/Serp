@@ -58,6 +58,8 @@ interface LogisticsProvider {
   contactPhone: string;
   contactIdFront?: string | null;
   contactIdBack?: string | null;
+  businessCard?: string | null;
+  priceListUrl?: string | null;
   status: string;
   notes?: string | null;
   createdAt: string;
@@ -96,6 +98,7 @@ const emptyForm = {
   contactIdFront: '',
   contactIdBack: '',
   businessCard: '',
+  priceListUrl: '',
   status: 'ACTIVE',
   notes: '',
 };
@@ -194,6 +197,7 @@ export default function LogisticsProvidersPage() {
       contactIdFront: provider.contactIdFront || '',
       contactIdBack: provider.contactIdBack || '',
       businessCard: provider.businessCard || '',
+      priceListUrl: provider.priceListUrl || '',
       status: provider.status || 'ACTIVE',
       notes: provider.notes || '',
     });
@@ -432,6 +436,12 @@ export default function LogisticsProvidersPage() {
                   <div>
                     <Label>名片（选填）</Label>
                     <FileUpload currentUrl={formData.businessCard} onUpload={(url) => updateField('businessCard', url)} accept="image/*" />
+                  </div>
+
+                  {/* 报价表 */}
+                  <div>
+                    <Label>报价表（Excel / PDF）</Label>
+                    <FileUpload currentUrl={formData.priceListUrl} onUpload={(url) => updateField('priceListUrl', url)} accept=".xlsx,.xls,.pdf" />
                   </div>
 
                   {/* 状态 */}

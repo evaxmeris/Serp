@@ -45,6 +45,11 @@ export async function GET(
     return successResponse({
       ...product,
       images: imagesWithDataUrl,
+      // ★ 辅助解析字段（前端可直接展示，无需自己解析 rawData）
+      _tieredPricing: (product.rawData as any)?.tieredPricing || null,
+      _supplierInfo: (product.rawData as any)?.supplier || null,
+      _aggregateRating: (product.rawData as any)?.aggregateRating || null,
+      _moq: (product.rawData as any)?.moq || null,
     });
   } catch (error) {
     console.error('Error fetching collected product:', error);

@@ -137,6 +137,13 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
     },
   });
 
+  // super-admin 角色拥有所有权限
+  const hasSuperAdmin = userRoles.some(ur => ur.role.name === 'super-admin');
+  if (hasSuperAdmin) {
+    setPermissionsToCache(userId, ['*']);
+    return ['*'];
+  }
+
   // 如果用户没有分配角色，检查旧的角色字段（向后兼容）
   if (userRoles.length === 0) {
     const user = await prisma.user.findUnique({
@@ -210,7 +217,7 @@ export async function hasPermission(
     select: { role: true },
   });
 
-  if (user?.role === 'admin') {
+  if (user?.role === 'admin' || user?.role === 'super-admin') {
     return true;
   }
 
@@ -276,6 +283,7 @@ export async function hasAllPermissions(
 function getDefaultPermissionsForRole(role: string): string[] {
   // PERM-004: 统一使用冒号分隔格式 module:action
   switch (role) {
+    case 'super-admin':
     case 'admin':
       return ['*'];
     case 'sales':

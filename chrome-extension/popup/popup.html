@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ERP 采集管理</title>
+  <title>ERP 采集管理 v2</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div id="app" class="popup-container">
-    <!-- 配置界面 -->
+    <!-- ⚙️ 配置界面 -->
     <div id="config-view" class="view hidden">
       <h2 class="title">⚙️ 插件配置</h2>
       <div class="form-group">
@@ -27,69 +27,109 @@
       <button id="back-from-config" class="link-btn">← 返回</button>
     </div>
 
-    <!-- 采集界面 -->
+    <!-- 📦 主采集界面 -->
     <div id="collect-view" class="view">
+
+      <!-- 头部 -->
       <div class="header">
-        <h2 class="title">📦 采集管理</h2>
+        <h2 class="title">📦 采集到 ERP</h2>
         <button id="open-config" class="icon-btn" title="设置">⚙️</button>
       </div>
 
-      <!-- 状态区域 -->
+      <!-- 平台识别 -->
       <div id="status-area">
-        <div id="platform-info" class="platform-info">
+        <div class="platform-info">
           <span id="platform-icon">🌐</span>
           <span id="platform-text">检测中...</span>
         </div>
       </div>
 
-      <!-- 预览区域 -->
-      <div id="preview-area" class="hidden">
-        <div class="preview-card">
-          <div class="preview-row">
-            <span class="label">标题</span>
-            <span id="preview-title" class="value truncate">-</span>
-          </div>
-          <div class="preview-row">
-            <span class="label">价格</span>
-            <span id="preview-price" class="value">-</span>
-          </div>
-          <div class="preview-row">
-            <span class="label">图片</span>
-            <span id="preview-images" class="value">0 张</span>
-          </div>
-          <div class="preview-row">
-            <span class="label">属性</span>
-            <span id="preview-attrs" class="value">0 项</span>
+      <!-- ===== 预览卡片 ===== -->
+      <div id="preview-area" class="preview-card hidden">
+        <div class="preview-row">
+          <span class="label">标题</span>
+          <span id="preview-title" class="value truncate">-</span>
+        </div>
+        <div class="preview-row">
+          <span class="label">价格</span>
+          <span id="preview-price" class="value">-</span>
+        </div>
+        <div class="preview-row preview-stats">
+          <span class="stat-badge"><span class="stat-icon">🖼</span><span id="preview-images">0</span> 图</span>
+          <span class="stat-badge"><span class="stat-icon">🏷</span><span id="preview-attrs">0</span> 属性</span>
+          <span class="stat-badge"><span class="stat-icon">🔀</span><span id="preview-variants">0</span> 变体</span>
+        </div>
+        <div id="duplicate-warning" class="duplicate-warning hidden">
+          🔄 该产品已在 <span id="dup-time">-</span> 前采集过
+        </div>
+        <!-- 详细预览区 -->
+        <div id="detail-preview" class="detail-preview hidden">
+          <div class="section-title">📋 属性列表</div>
+          <div id="attr-table" class="attr-table"></div>
+          <div class="section-title">🖼️ 图片预览</div>
+          <div id="image-thumbs" class="image-thumbs"></div>
+          <div class="section-title">📝 描述预览</div>
+          <div id="desc-preview" class="desc-preview"></div>
+          <div class="btn-row" style="margin-top:8px">
+            <button id="download-btn" class="btn btn-secondary btn-small">💾 下载到本地</button>
+            <button id="confirm-send-btn" class="btn btn-primary btn-small">📤 确认发送到 ERP</button>
           </div>
         </div>
       </div>
 
-      <!-- 操作按钮 -->
-      <button id="collect-btn" class="btn btn-primary btn-large" disabled>
-        ⬇️ 采集到 ERP
-      </button>
-      <button id="select-btn" class="btn btn-secondary btn-large" disabled>
-        👆 手动选择图片/属性
-      </button>
-      <button id="confirm-btn" class="btn btn-primary btn-large" style="display:none;">
-        ✅ 确认采集
-      </button>
-      <button id="debug-btn" class="btn btn-secondary" style="font-size:11px;padding:4px 8px;">
-        🔍 调试页面
-      </button>
+      <!-- ===== 进度条区域 ===== -->
+      <div id="progress-area" class="hidden">
+        <div class="progress-bar-track"><div id="progress-fill" class="progress-bar-fill" style="width:0%"></div></div>
+        <div class="step-indicators">
+          <div class="step" data-step="extract"><span class="step-dot" id="dot-extract">○</span> 提取</div>
+          <div class="step" data-step="capture"><span class="step-dot" id="dot-capture">○</span> 图片</div>
+          <div class="step" data-step="upload"><span class="step-dot" id="dot-upload">○</span> 上传</div>
+          <div class="step" data-step="done"><span class="step-dot" id="dot-done">○</span> 完成</div>
+        </div>
+        <div id="progress-text" class="progress-text">初始化...</div>
+        <div id="sub-progress" class="sub-progress hidden"><span id="sub-progress-text"></span></div>
+      </div>
 
-      <!-- 状态信息 -->
+      <!-- ===== 操作按钮 ===== -->
+      <button id="collect-btn" class="btn btn-primary btn-large" disabled>⬇️ 采集到 ERP</button>
+      <button id="retry-btn" class="btn btn-secondary btn-large hidden">🔄 重试采集</button>
+      <div class="secondary-btn-row">
+        <button id="select-btn" class="btn btn-secondary btn-small" disabled>👆 手动选择</button>
+        <button id="attr-train-btn" class="btn btn-ghost btn-small">🏷️ 属性选择器</button>
+        <button id="debug-btn" class="btn btn-ghost btn-small">🔍 调试预览</button>
+      </div>
+
+      <!-- 属性选择器面板 -->
+      <div id="attr-train-panel" class="hidden">
+        <div class="panel-header"><span class="panel-title">🏷️ 选择属性容器</span></div>
+        <div class="train-hint">点击页面上<b>存放属性的那个大框</b>，选中的会列在下方</div>
+        <div id="selected-containers" class="container-list"></div>
+        <div class="btn-row" style="margin-top:8px">
+          <button id="train-confirm-btn" class="btn btn-primary btn-small">✅ 确认并提取</button>
+          <button id="train-cancel-btn" class="btn btn-secondary btn-small">取消</button>
+        </div>
+        <div id="train-status" class="status-msg"></div>
+      </div>
+      <button id="confirm-btn" class="btn btn-primary btn-large hidden">✅ 确认采集</button>
       <div id="collect-status" class="status-msg"></div>
 
-      <!-- 底部信息 -->
+      <!-- ===== 成功卡片 ===== -->
+      <div id="success-card" class="success-card hidden">
+        <div class="success-icon">✅</div>
+        <div class="success-title">采集成功！</div>
+        <div class="success-sub">已添加到 ERP 梳理后台</div>
+        <a id="view-in-erp-link" class="link-btn" href="#" target="_blank">查看 ERP 详情 ▸</a>
+      </div>
+
       <div class="footer">
-        <span id="erp-status" class="status-dot disconnected"></span>
-        <span id="erp-status-text">未连接</span>
-        <span class="version">v1.0</span>
+        <span class="status-group">
+          <span id="erp-status" class="status-dot disconnected"></span>
+          <span id="erp-status-text">未连接</span>
+        </span>
+        <span class="footer-right"><span class="version">v2.0</span></span>
       </div>
     </div>
   </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

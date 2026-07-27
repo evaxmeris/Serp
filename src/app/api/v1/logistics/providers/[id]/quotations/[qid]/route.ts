@@ -36,7 +36,11 @@ export async function PUT(
 
     const quotation = await prisma.logisticsQuotation.update({
       where: { id: qid },
-      data: v.data,
+      data: {
+        ...v.data,
+        validFrom: v.data.validFrom ? new Date(v.data.validFrom) : null,
+        validUntil: v.data.validUntil ? new Date(v.data.validUntil) : null,
+      },
     });
 
     return successResponse(quotation, '物流报价更新成功');

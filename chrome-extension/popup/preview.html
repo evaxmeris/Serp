@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ERP 采集预览</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; word-break: break-all; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; color: #555; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .info-grid { display: grid; grid-template-columns: 100px 1fr; gap: 6px; font-size: 13px; }
+    .info-grid .lbl { color: #888; }
+    .info-grid .val { font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+    th { color: #888; font-weight: 500; background: #fafafa; position: sticky; top: 0; }
+    tr:hover { background: #f8f8f8; }
+    .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .image-grid .img-box { border: 1px solid #eee; border-radius: 6px; overflow: hidden; background: #fafafa; }
+    .image-grid .img-box img { width: 100%; height: 140px; object-fit: contain; display: block; }
+    .image-grid .img-box .img-label { padding: 4px 6px; font-size: 11px; color: #888; background: #fff; }
+    .desc-box { font-size: 13px; line-height: 1.6; color: #555; max-height: 200px; overflow-y: auto; padding: 8px; background: #fafafa; border-radius: 6px; white-space: pre-wrap; }
+    .actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; }
+    .btn-primary { background: #059669; color: #fff; }
+    .btn-primary:hover { background: #047857; }
+    .btn-secondary { background: #e5e7eb; color: #333; }
+    .btn-secondary:hover { background: #d1d5db; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .empty { color: #aaa; font-size: 13px; padding: 20px; text-align: center; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #dbeafe; color: #1d4ed8; margin-left: 6px; }
+    .missing { color: #dc2626; font-weight: 600; }
+    .present { color: #059669; }
+    #raw-data { font-size: 11px; color: #999; margin-top: 12px; }
+    #raw-data pre { background: #f5f5f5; padding: 8px; border-radius: 4px; max-height: 200px; overflow: auto; font-size: 11px; margin-top: 4px; display: none; }
+    #raw-data a { color: #3b82f6; cursor: pointer; text-decoration: underline; }
+    .status-msg { padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+    .status-msg.success { background: #d1fae5; color: #065f46; }
+    .status-msg.error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>📦 ERP 采集预览</h1>
+  <div class="subtitle" id="page-url">加载中...</div>
+
+  <div id="basic-info" class="card">
+    <h2>📋 基本信息</h2>
+    <div class="info-grid">
+      <span class="lbl">标题</span><span class="val" id="pv-title">-</span>
+      <span class="lbl">价格</span><span class="val" id="pv-price">-</span>
+      <span class="lbl">SKU</span><span class="val" id="pv-sku">-</span>
+      <span class="lbl">品牌</span><span class="val" id="pv-brand">-</span>
+      <span class="lbl">MOQ</span><span class="val" id="pv-moq">-</span>
+    </div>
+  </div>
+
+  <div id="attr-card" class="card">
+    <h2>🏷️ 属性列表 <span id="attr-count" class="badge">0</span></h2>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th style="width:40%">属性名</th><th>属性值</th></tr></thead>
+      <tbody id="attr-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <div id="image-card" class="card">
+    <h2>🖼️ 图片 <span id="img-count" class="badge">0</span></h2>
+    <div id="image-grid" class="image-grid"></div>
+  </div>
+
+  <div id="desc-card" class="card">
+    <h2>📝 描述预览</h2>
+    <div id="desc-box" class="desc-box">-</div>
+  </div>
+
+  <div id="raw-data">
+    <a onclick="var p=this.nextElementSibling; p.style.display=p.style.display==='block'?'none':'block'">📄 查看原始 JSON 数据</a>
+    <pre id="raw-json"></pre>
+  </div>
+
+  <div id="status-msg" class="status-msg hidden"></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="confirmSend()">📤 确认发送到 ERP</button>
+    <button class="btn btn-secondary" onclick="downloadData()">💾 下载到本地</button>
+    <button class="btn btn-secondary" onclick="window.close()">✖ 关闭</button>
+  </div>
+</div>
+<script>
+  var _extractedData = null;
+
+  // 从 session storage 或 URL 参数读取预览数据
+  var params = new URLSearchParams(location.search);
+  var urlData = params.get('data');
+  if (urlData) {
+    try { renderData(JSON.parse(decodeURIComponent(urlData))); }
+    catch(e) { document.getElementById('page-url').textContent = '数据解析失败: ' + e.message; }
+  } else {
+    chrome.storage.session.get('previewData', function(result) {
+      if (result.previewData) {
+        renderData(result.previewData);
+        chrome.storage.session.remove('previewData');
+      } else {
+        document.getElementById('page-url').textContent = '无预览数据，请从插件打开调试预览';
+      }
+    });
+  }
+
+  function renderData(data) {
+    _extractedData = data;
+    document.getElementById('page-url').textContent = data.pageUrl || location.href;
+    
+    // 基本信息
+    setText('pv-title', data.title || '-');
+    setText('pv-price', (data.currency || '') + ' ' + (data.price || '-'));
+    setText('pv-sku', data.sku || '-');
+    setText('pv-brand', data.brand || '-');
+    setText('pv-moq', data.moq || data.minOrderQuantity || '-');
+    
+    // 属性
+    var attrs = data.attributes || [];
+    document.getElementById('attr-count').textContent = attrs.length;
+    var tbody = document.getElementById('attr-tbody');
+    if (attrs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="empty">⚠️ 未检测到属性，请检查页面选择器</td></tr>';
+    } else {
+      tbody.innerHTML = attrs.map(function(a) {
+        var name = a.name || a.nameCn || '';
+        var value = a.value || a.valueCn || '';
+        var missing = !value || value === '-' || value === '';
+        return '<tr><td>' + escHtml(name) + '</td><td class="' + (missing ? 'missing' : 'present') + '">' + escHtml(value) + '</td></tr>';
+      }).join('');
+    }
+    
+    // 图片
+    var imgs = data.images || [];
+    document.getElementById('img-count').textContent = imgs.length;
+    var grid = document.getElementById('image-grid');
+    if (imgs.length === 0) {
+      grid.innerHTML = '<div class="empty">⚠️ 未检测到图片</div>';
+    } else {
+      grid.innerHTML = imgs.map(function(img, idx) {
+        var url = typeof img === 'string' ? img : (img.originalUrl || img.url || '');
+        var hdUrl = url.replace(/_\d+x\d+\./g, '._');
+        return '<div class="img-box"><img src="' + hdUrl + '" onerror="this.src=\'' + url + '\'"><div class="img-label">#' + (idx+1) + '</div></div>';
+      }).join('');
+    }
+    
+    // 描述
+    var desc = data.description || data.descriptionEn || '';
+    document.getElementById('desc-box').textContent = desc.replace(/<[^>]+>/g, '').substring(0, 2000) || '-';
+    
+    // 原始数据
+    document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+  }
+
+  function setText(id, text) { document.getElementById(id).textContent = text; }
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function confirmSend() {
+    if (!_extractedData) return;
+    // 通知 background 发送到 ERP
+    chrome.runtime.sendMessage({
+      type: 'SEND_TO_ERP',
+      data: _extractedData
+    }, function(response) {
+      if (response && response.success) {
+        showStatus('✅ 已发送到 ERP！', 'success');
+        setTimeout(window.close, 2000);
+      } else {
+        showStatus('❌ 发送失败: ' + (response?.error || '未知'), 'error');
+      }
+    });
+  }
+
+  function downloadData() {
+    if (!_extractedData) return;
+    var data = _extractedData;
+    
+    // 生成CSV
+    var attrs = data.attributes || [];
+    var csv = '属性名,属性值\n';
+    attrs.forEach(function(a) { csv += '"' + (a.name||'') + '","' + (a.value||'') + '"\n'; });
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    chrome.downloads.download({ url: url, filename: 'attributes.csv' });
+    
+    showStatus('✅ CSV 已下载，图片请右键单独保存', 'success');
+  }
+
+  function showStatus(msg, type) {
+    var el = document.getElementById('status-msg');
+    el.textContent = msg;
+    el.className = 'status-msg ' + type;
+    el.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>

@@ -14,8 +14,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // CSRF 保护：排除 /api/auth/ 和 /api/external/（Chrome 插件采集接口）
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/external/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  // CSRF 保护：排除 /api/auth/、/api/external/、/api/debug/（Chrome 插件采集和调试接口）
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/external/') && !pathname.startsWith('/api/debug/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
     const host = request.headers.get('host'); // 请求目标主机

@@ -44,6 +44,7 @@ import {
   Plus,
   Edit,
   Trash2,
+  Eye,
   FileText,
 } from 'lucide-react';
 import { useToast, ToastContainer } from '@/components/ui/toast';
@@ -63,6 +64,7 @@ interface LogisticsProvider {
   contactIdFront?: string | null;
   contactIdBack?: string | null;
   businessCard?: string | null;
+  priceListUrl?: string | null;
   status: string;
   notes?: string | null;
   createdAt: string;
@@ -79,10 +81,16 @@ interface LogisticsQuotation {
   providerId: string;
   region: string;
   transportMethod: string;
-  transitDays: number;
+  itemContent?: string | null;
+  weightMin?: number | null;
+  weightMax?: number | null;
+  transitDaysMin?: number | null;
+  transitDaysMax?: number | null;
+  deliveryTerm?: string | null;
   pricePerKg: number;
   pricePerCbm?: number | null;
   minimumCharge?: number;
+  totalCostEstimate?: number | null;
   validFrom?: string | null;
   validUntil?: string | null;
   notes?: string | null;
@@ -116,10 +124,16 @@ const TRANSPORT_METHOD: Record<string, string> = {
 const emptyQuotationForm = {
   region: '',
   transportMethod: 'SEA',
-  transitDays: 3,
+  itemContent: '',
+  weightMin: '',
+  weightMax: '',
+  transitDaysMin: '',
+  transitDaysMax: '',
+  deliveryTerm: '',
   pricePerKg: 0,
   pricePerCbm: '',
   minimumCharge: '',
+  totalCostEstimate: '',
   validFrom: '',
   validUntil: '',
   notes: '',
@@ -144,6 +158,7 @@ export default function LogisticsProviderDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingQuotation, setEditingQuotation] = useState<LogisticsQuotation | null>(null);
   const [deletingQuotation, setDeletingQuotation] = useState<LogisticsQuotation | null>(null);
+  const [viewingQuotation, setViewingQuotation] = useState<LogisticsQuotation | null>(null);
   const [quotationForm, setQuotationForm] = useState(emptyQuotationForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -201,10 +216,16 @@ export default function LogisticsProviderDetailPage() {
     setQuotationForm({
       region: q.region || '',
       transportMethod: q.transportMethod || 'SEA',
-      transitDays: q.transitDays || 3,
+      itemContent: q.itemContent || '',
+      weightMin: q.weightMin != null ? String(q.weightMin) : '',
+      weightMax: q.weightMax != null ? String(q.weightMax) : '',
+      transitDaysMin: q.transitDaysMin != null ? String(q.transitDaysMin) : '',
+      transitDaysMax: q.transitDaysMax != null ? String(q.transitDaysMax) : '',
+      deliveryTerm: q.deliveryTerm || '',
       pricePerKg: q.pricePerKg || 0,
       pricePerCbm: q.pricePerCbm != null ? String(q.pricePerCbm) : '',
       minimumCharge: q.minimumCharge != null ? String(q.minimumCharge) : '',
+      totalCostEstimate: q.totalCostEstimate != null ? String(q.totalCostEstimate) : '',
       validFrom: q.validFrom ? q.validFrom.slice(0, 10) : '',
       validUntil: q.validUntil ? q.validUntil.slice(0, 10) : '',
       notes: q.notes || '',
@@ -217,13 +238,10 @@ export default function LogisticsProviderDetailPage() {
   const validateQuotationForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!quotationForm.region.trim()) {
-      newErrors.region = '区域不能为空';
+      newErrors.region = '目的地/区域不能为空';
     }
     if (!quotationForm.transportMethod) {
       newErrors.transportMethod = '运输方式不能为空';
-    }
-    if (!quotationForm.transitDays || Number(quotationForm.transitDays) <= 0) {
-      newErrors.transitDays = '运输天数必须大于 0';
     }
     if (!quotationForm.pricePerKg || Number(quotationForm.pricePerKg) <= 0) {
       newErrors.pricePerKg = '单价(元/kg)必须大于 0';
@@ -243,10 +261,14 @@ export default function LogisticsProviderDetailPage() {
     try {
       const payload = {
         ...quotationForm,
-        transitDays: Number(quotationForm.transitDays),
         pricePerKg: Number(quotationForm.pricePerKg),
         pricePerCbm: quotationForm.pricePerCbm ? Number(quotationForm.pricePerCbm) : undefined,
         minimumCharge: quotationForm.minimumCharge ? Number(quotationForm.minimumCharge) : undefined,
+        weightMin: quotationForm.weightMin ? Number(quotationForm.weightMin) : undefined,
+        weightMax: quotationForm.weightMax ? Number(quotationForm.weightMax) : undefined,
+        transitDaysMin: quotationForm.transitDaysMin ? Number(quotationForm.transitDaysMin) : undefined,
+        transitDaysMax: quotationForm.transitDaysMax ? Number(quotationForm.transitDaysMax) : undefined,
+        totalCostEstimate: quotationForm.totalCostEstimate ? Number(quotationForm.totalCostEstimate) : undefined,
       };
 
       const url = editingQuotation
@@ -474,6 +496,24 @@ export default function LogisticsProviderDetailPage() {
             </div>
           )}
 
+          {/* 报价表 */}
+          {provider.priceListUrl && (
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-gray-500 uppercase mb-2">报价表</h4>
+              <a
+                href={provider.priceListUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 hover:bg-emerald-100 text-sm"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                查看报价表
+              </a>
+            </div>
+          )}
+
           {/* 备注 */}
           {provider.notes && (
             <div className="mt-4 p-3 bg-gray-50 rounded-md">
@@ -546,25 +586,59 @@ export default function LogisticsProviderDetailPage() {
                       )}
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="transitDaysMin">时效(天) 从</Label>
+                      <Input id="transitDaysMin" type="number" min={0} placeholder="10"
+                        value={quotationForm.transitDaysMin}
+                        onChange={(e) => updateQuotationField('transitDaysMin', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="transitDaysMax">时效(天) 到</Label>
+                      <Input id="transitDaysMax" type="number" min={0} placeholder="15"
+                        value={quotationForm.transitDaysMax}
+                        onChange={(e) => updateQuotationField('transitDaysMax', Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="deliveryTerm">交货方式</Label>
+                      <Select value={quotationForm.deliveryTerm}
+                        onValueChange={(v) => updateQuotationField('deliveryTerm', v)}
+                      >
+                        <SelectTrigger id="deliveryTerm"><SelectValue placeholder="选择" /></SelectTrigger>
+                        <SelectContent>
+                          {['DAP', 'DDP', 'EXPRESS', 'COURIER', 'FOB', 'CIF', 'FCA'].map(v => (
+                            <SelectItem key={v} value={v}>{v}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="transitDays">运输天数 *</Label>
-                      <Input
-                        id="transitDays"
-                        type="number"
-                        min={1}
-                        value={quotationForm.transitDays}
-                        onChange={(e) =>
-                          updateQuotationField('transitDays', Number(e.target.value))
-                        }
-                        className={quotationErrors.transitDays ? 'border-red-500' : ''}
+                      <Label htmlFor="itemContent">物品内容（选填）</Label>
+                      <Input id="itemContent" placeholder="如：化妆品、电子产品"
+                        value={quotationForm.itemContent}
+                        onChange={(e) => updateQuotationField('itemContent', e.target.value)}
                       />
-                      {quotationErrors.transitDays && (
-                        <p className="text-red-500 text-xs mt-1">
-                          {quotationErrors.transitDays}
-                        </p>
-                      )}
                     </div>
+                    <div>
+                      <Label htmlFor="deliveryTerm">计费重量(kg)</Label>
+                      <div className="flex items-center gap-2">
+                        <Input id="weightMin" type="number" min={0} step="0.1" placeholder="0"
+                          value={quotationForm.weightMin}
+                          onChange={(e) => updateQuotationField('weightMin', Number(e.target.value))}
+                        />
+                        <span className="text-gray-400">~</span>
+                        <Input id="weightMax" type="number" min={0} step="0.1" placeholder="不限"
+                          value={quotationForm.weightMax}
+                          onChange={(e) => updateQuotationField('weightMax', Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="pricePerKg">单价(元/kg) *</Label>
                       <Input
@@ -611,6 +685,13 @@ export default function LogisticsProviderDetailPage() {
                       />
                     </div>
                   </div>
+                  <div>
+                    <Label htmlFor="totalCostEstimate">预估总费用（选填）</Label>
+                    <Input id="totalCostEstimate" type="number" min={0} step="0.01" placeholder="如一笔100kg货大概多少钱"
+                      value={quotationForm.totalCostEstimate}
+                      onChange={(e) => updateQuotationField('totalCostEstimate', Number(e.target.value))}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="validFrom">生效日期</Label>
@@ -633,9 +714,11 @@ export default function LogisticsProviderDetailPage() {
                   </div>
                   <div>
                     <Label htmlFor="quotationNotes">备注</Label>
-                    <Input
+                    <textarea
                       id="quotationNotes"
                       placeholder="备注信息"
+                      rows={5}
+                      className="w-full px-3 py-2 border rounded-md text-sm resize-y min-h-[100px] whitespace-pre-wrap break-words"
                       value={quotationForm.notes}
                       onChange={(e) => updateQuotationField('notes', e.target.value)}
                     />
@@ -667,13 +750,14 @@ export default function LogisticsProviderDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>线路/区域</TableHead>
+                    <TableHead>目的地/区域</TableHead>
                     <TableHead>运输方式</TableHead>
-                    <TableHead>运输天数</TableHead>
-                    <TableHead>单价(元/kg)</TableHead>
-                    <TableHead>单价(元/m³)</TableHead>
-                    <TableHead>最低收费</TableHead>
-                    <TableHead>有效期</TableHead>
+                    <TableHead>物品</TableHead>
+                    <TableHead>重量(kg)</TableHead>
+                    <TableHead>单价</TableHead>
+                    <TableHead>总费用</TableHead>
+                    <TableHead>时效</TableHead>
+                    <TableHead>交货方式</TableHead>
                     <TableHead>操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -686,31 +770,40 @@ export default function LogisticsProviderDetailPage() {
                           {TRANSPORT_METHOD[q.transportMethod] || q.transportMethod}
                         </Badge>
                       </TableCell>
-                      <TableCell>{q.transitDays} 天</TableCell>
-                      <TableCell>¥{q.pricePerKg?.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {q.pricePerCbm != null ? `¥${q.pricePerCbm.toFixed(2)}` : '-'}
+                      <TableCell className="text-sm">{q.itemContent || '-'}</TableCell>
+                      <TableCell className="text-sm">
+                        {q.weightMin != null ? Number(q.weightMin).toFixed(1) : '0'}~
+                        {q.weightMax != null ? Number(q.weightMax).toFixed(1) : '不限'}
                       </TableCell>
-                      <TableCell>
-                        {q.minimumCharge != null ? `¥${q.minimumCharge.toFixed(2)}` : '-'}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {q.validFrom || q.validUntil ? (
-                          <>
-                            {q.validFrom
-                              ? new Date(q.validFrom).toLocaleDateString('zh-CN')
-                              : '不限'}
-                            {' ~ '}
-                            {q.validUntil
-                              ? new Date(q.validUntil).toLocaleDateString('zh-CN')
-                              : '不限'}
-                          </>
-                        ) : (
-                          '永久有效'
+                      <TableCell className="text-sm">
+                        ¥{typeof q.pricePerKg === 'number' ? Number(q.pricePerKg).toFixed(2) : q.pricePerKg || '-'}/kg
+                        {q.minimumCharge != null && Number(q.minimumCharge) > 0 && (
+                          <span className="text-xs text-gray-400 block">最低 ¥{Number(q.minimumCharge).toFixed(2)}</span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {q.totalCostEstimate != null ? `¥${Number(q.totalCostEstimate).toFixed(2)}` : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {q.transitDaysMin || q.transitDaysMax
+                          ? `${q.transitDaysMin || '?'}~${q.transitDaysMax || '?'} 天`
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {q.deliveryTerm ? (
+                          <Badge variant="secondary">{q.deliveryTerm}</Badge>
+                        ) : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewingQuotation(q)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            查看
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -748,6 +841,38 @@ export default function LogisticsProviderDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 查看报价详情 Dialog */}
+      <Dialog open={!!viewingQuotation} onOpenChange={(open) => !open && setViewingQuotation(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>报价详情</DialogTitle>
+          </DialogHeader>
+          {viewingQuotation && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><Label className="text-gray-400">目的地/区域</Label><p className="font-medium">{viewingQuotation.region}</p></div>
+                <div><Label className="text-gray-400">运输方式</Label><p className="font-medium">{TRANSPORT_METHOD[viewingQuotation.transportMethod] || viewingQuotation.transportMethod}</p></div>
+                {viewingQuotation.itemContent && <div><Label className="text-gray-400">物品</Label><p>{viewingQuotation.itemContent}</p></div>}
+                <div><Label className="text-gray-400">计费重量</Label><p>{viewingQuotation.weightMin != null ? Number(viewingQuotation.weightMin).toFixed(1) : '0'} ~ {viewingQuotation.weightMax != null ? Number(viewingQuotation.weightMax).toFixed(1) : '不限'} kg</p></div>
+                {viewingQuotation.deliveryTerm && <div><Label className="text-gray-400">交货方式</Label><p>{viewingQuotation.deliveryTerm}</p></div>}
+                <div><Label className="text-gray-400">单价</Label><p>¥{typeof viewingQuotation.pricePerKg === 'number' ? Number(viewingQuotation.pricePerKg).toFixed(2) : viewingQuotation.pricePerKg}/kg</p></div>
+                {viewingQuotation.minimumCharge != null && Number(viewingQuotation.minimumCharge) > 0 && <div><Label className="text-gray-400">最低收费</Label><p>¥{Number(viewingQuotation.minimumCharge).toFixed(2)}</p></div>}
+                {viewingQuotation.totalCostEstimate != null && <div><Label className="text-gray-400">预估总费用</Label><p>¥{Number(viewingQuotation.totalCostEstimate).toFixed(2)}</p></div>}
+                {(viewingQuotation.transitDaysMin || viewingQuotation.transitDaysMax) && <div><Label className="text-gray-400">时效</Label><p>{viewingQuotation.transitDaysMin || '?'} ~ {viewingQuotation.transitDaysMax || '?'} 天</p></div>}
+                {viewingQuotation.validFrom && <div><Label className="text-gray-400">生效日期</Label><p>{new Date(viewingQuotation.validFrom).toLocaleDateString('zh-CN')}</p></div>}
+                {viewingQuotation.validUntil && <div><Label className="text-gray-400">失效日期</Label><p>{new Date(viewingQuotation.validUntil).toLocaleDateString('zh-CN')}</p></div>}
+              </div>
+              {viewingQuotation.notes && (
+                <div><Label className="text-gray-400">备注</Label><p className="text-sm whitespace-pre-wrap mt-1">{viewingQuotation.notes}</p></div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingQuotation(null)}>关闭</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 删除报价确认 Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

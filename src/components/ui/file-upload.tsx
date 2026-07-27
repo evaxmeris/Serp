@@ -36,12 +36,15 @@ export function FileUpload({ currentUrl, onUpload, accept = 'image/*' }: FileUpl
     if (!file) return;
 
     // 客户端校验
-    if (file.size > 500 * 1024) {
-      setError('文件不能超过 500KB');
+    if (file.size > 10 * 1024 * 1024) {
+      setError('文件不能超过 10MB');
       return;
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('仅支持 JPG/PNG/WebP 格式');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('仅支持 JPG/PNG/WebP/PDF/Excel 格式');
       return;
     }
 

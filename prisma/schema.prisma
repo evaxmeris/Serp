@@ -1804,6 +1804,7 @@ model LogisticsProvider {
   contactIdFront  String? // 联系人身份证正面
   contactIdBack   String? // 联系人身份证反面
   businessCard    String? // 名片
+  priceListUrl    String? // 报价表文件（Excel/PDF）
   status          String  @default("ACTIVE") // ACTIVE | INACTIVE
   notes           String? // 备注
 
@@ -1820,24 +1821,29 @@ model LogisticsProvider {
 
 /// 物流报价 — 按区域+运输方式的报价单
 model LogisticsQuotation {
-  id              String    @id @default(cuid())
-  providerId      String // 关联物流服务商
-  region          String // 专线区域 (如: 北美, 欧洲, 东南亚)
-  transportMethod String // 运输方式 (SEA_FREIGHT | AIR_FREIGHT | RAIL | EXPRESS | TRUCK)
-  transitDays     Int // 运输时效(天)
-  pricePerKg      Decimal   @db.Decimal(10, 2) // 每公斤价格
-  pricePerCbm     Decimal?  @db.Decimal(10, 2) // 每立方米价格
-  minimumCharge   Decimal   @default(0) @db.Decimal(10, 2) // 最低收费
-  validFrom       DateTime? // 有效期起
-  validUntil      DateTime? // 有效期止
-  notes           String? // 备注
+  id                String    @id @default(cuid())
+  providerId        String // 关联物流服务商
+  region            String // 专线区域/目的地 (如: 北美, 欧洲, 东南亚)
+  transportMethod   String // 运输方式 (SEA | AIR | LAND | RAIL | EXPRESS)
+  itemContent       String? // 物品内容
+  weightMin         Decimal?  @db.Decimal(10, 2) // 计费重量下限(kg)
+  weightMax         Decimal?  @db.Decimal(10, 2) // 计费重量上限(kg)
+  transitDaysMin    Int? // 运输时效下限(天)
+  transitDaysMax    Int? // 运输时效上限(天)
+  deliveryTerm      String? // 交货方式 (DAP | DDP | EXPRESS | COURIER 等)
+  pricePerKg        Decimal   @db.Decimal(10, 2) // 每公斤价格
+  pricePerCbm       Decimal?  @db.Decimal(10, 2) // 每立方米价格
+  minimumCharge     Decimal   @default(0) @db.Decimal(10, 2) // 最低收费
+  totalCostEstimate Decimal?  @db.Decimal(10, 2) // 预估总费用
+  validFrom         DateTime? // 有效期起
+  validUntil        DateTime? // 有效期止
+  notes             String? // 备注
 
   provider LogisticsProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([providerId, region, transportMethod])
   @@index([providerId])
   @@index([region])
   @@map("logistics_quotations")

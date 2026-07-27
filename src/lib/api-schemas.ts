@@ -533,6 +533,7 @@ export const CreateLogisticsProviderSchema = z.object({
   contactIdFront: z.string().max(200).optional(),
   contactIdBack: z.string().max(200).optional(),
   businessCard: z.string().max(500).optional(),
+  priceListUrl: z.string().max(500).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -542,15 +543,21 @@ export const UpdateLogisticsProviderSchema = CreateLogisticsProviderSchema.parti
 
 /** 创建物流报价 */
 export const CreateLogisticsQuotationSchema = z.object({
-  region: z.string().min(1, '专线区域不能为空').max(100, '专线区域过长'),
+  region: z.string().min(1, '目的地/区域不能为空').max(100, '目的地/区域过长'),
   transportMethod: TransportMethod,
-  transitDays: z.number().int().min(1, '运输时效必须大于 0'),
+  itemContent: z.string().max(200).optional().default(''),
+  weightMin: z.number().min(0).optional().nullable(),
+  weightMax: z.number().min(0).optional().nullable(),
+  transitDaysMin: z.number().int().min(0).optional().nullable(),
+  transitDaysMax: z.number().int().min(0).optional().nullable(),
+  deliveryTerm: z.string().max(50).optional().default(''),
   pricePerKg: z.number().min(0, '每公斤价格不能为负'),
-  pricePerCbm: z.number().min(0).optional(),
+  pricePerCbm: z.number().min(0).optional().nullable(),
   minimumCharge: z.number().min(0).default(0),
+  totalCostEstimate: z.number().min(0).optional().nullable(),
   validFrom: z.string().optional().default(''),
   validUntil: z.string().optional().default(''),
-  notes: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional().default(''),
 });
 
 /** 更新物流报价 */

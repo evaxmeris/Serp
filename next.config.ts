@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // 允许通过 cpolar 域名访问开发服务器
   allowedDevOrigins: ['derp.cpolar.cn', 'serp.cpolar.cn'],
+  // 增大上传文件限制：默认 10MB 不够（multipart 开销），设为 30MB
+  experimental: {
+    proxyClientMaxBodySize: 30 * 1024 * 1024, // 30MB
+  },
   // TypeScript 类型检查 — 已修复真实代码错误（原有 6 个 bug），
   // 剩余错误均为 Next.js 16 + Zod v4 类型兼容性/Prisma JSON 类型推断问题，不影响运行
   typescript: {

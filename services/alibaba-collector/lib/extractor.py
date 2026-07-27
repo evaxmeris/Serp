@@ -258,10 +258,32 @@ async def extract_product_detail(page: Page) -> dict:
     if images:
         product["images"] = images
 
-    # Specifications
-    specs = await _extract_specs(page)
+    # Variants (v2 enhancement)
+    variants = await _extract_variants(page)
+    if variants:
+        product["variants"] = variants
+
+    # Tiered pricing (v2 enhancement)
+    tiered_pricing = await _extract_tiered_pricing(page)
+    if tiered_pricing:
+        product["tieredPricing"] = tiered_pricing
+
+    # Specifications (v2 enhancement: full specs with unit separation)
+    specs = await _extract_specs_full(page)
+    if not specs:
+        specs = await _extract_specs(page)
     if specs:
         product["specifications"] = specs
+
+    # Shipping / logistics info (v2 enhancement)
+    shipping = await _extract_shipping_info(page)
+    if shipping:
+        product.update(shipping)
+
+    # MOQ (v2 enhancement)
+    moq = await _extract_moq(page)
+    if moq:
+        product["moq"] = moq
 
     # Seller
     if not product.get("seller"):
@@ -279,6 +301,21 @@ async def extract_product_detail(page: Page) -> dict:
 
 
 async def _extract_jsonld(page) -> Optional[dict]:
+    """从 JSON-LD script 标签 + window.detailData 双路径提取产品数据"""
+    # 路径 A: JSON-LD script tag
+    result = await _extract_jsonld_from_scripts(page)
+    if result:
+        return result
+
+    # 路径 B: window.detailData (兜底)
+    result = await _extract_window_data(page)
+    if result:
+        return result
+
+    return None
+
+
+async def _extract_jsonld_from_scripts(page) -> Optional[dict]:
     """从 JSON-LD script 标签提取产品数据"""
     js_code = """
     () => {
@@ -435,3 +472,416 @@ async def _extract_specs(page) -> list[dict]:
             pass
 
     return specs
+
+
+# ===== v2 Enhanced Extractors =====
+
+UNIT_PATTERN = re.compile(
+    r'^(.*?)\s+('
+    r'cm|mm|m|inch|inches|in|'
+    r'kg|g|mg|lb|lbs|oz|'
+    r'ml|l|cl|fl\.oz|gal|'
+    r'%|ppm|'
+    r'pieces|pcs|sets|pair|boxes|cases|cartons|'
+    r'v|w|a|hz|'
+    r'mm\b|cm\b|m\b|km\b'
+    r')\s*$',
+    re.I
+)
+
+
+async def _extract_window_data(page) -> Optional[dict]:
+    """从 window.detailData 全局变量提取产品数据（兜底路径）"""
+    js_code = """
+    () => {
+        try {
+            // 尝试多种已知全局变量名
+            const candidates = [
+                window.detailData,
+                window.__NUXT__,
+                window.__INITIAL_STATE__,
+                window.pageData,
+                window.productData,
+            ];
+            for (const data of candidates) {
+                if (!data) continue;
+
+                // detailData 可能是数组
+                const items = Array.isArray(data) ? data : [data];
+
+                // 尝试找到产品信息
+                for (const item of items) {
+                    // 标准 detailData 结构
+                    if (item.productInfo || item.product) {
+                        const p = item.productInfo || item.product;
+                        return {
+                            title: p.title || p.name || p.subject || '',
+                            price: p.price || p.minPrice || null,
+                            currency: p.currencyCode || p.currency || 'USD',
+                            sku: p.sku || p.productId || '',
+                            brand: p.brand || '',
+                            description: p.description || '',
+                            shortDescription: p.shortDescription || p.summary || '',
+                        };
+                    }
+                    // 扁平结构
+                    if (item.title || item.name) {
+                        return {
+                            title: item.title || item.name || '',
+                            price: item.price || item.minPrice || null,
+                            currency: item.currencyCode || item.currency || 'USD',
+                            sku: item.sku || item.productId || '',
+                            brand: item.brand || '',
+                            description: item.description || '',
+                            shortDescription: item.shortDescription || item.summary || '',
+                        };
+                    }
+                }
+            }
+        } catch(e) {}
+        return null;
+    }
+    """
+    try:
+        return await page.evaluate(js_code)
+    except Exception as e:
+        logger.warning(f"window.detailData 提取失败: {e}")
+        return None
+
+
+async def _extract_variants(page) -> list[dict]:
+    """从 DOM 或 window.detailData 提取变体信息"""
+    js_code = """
+    () => {
+        const variants = [];
+
+        // 路径 A: 从 window.detailData 提取变体
+        try {
+            const data = window.detailData;
+            if (data) {
+                const items = Array.isArray(data) ? data : [data];
+                for (const item of items) {
+                    // skuList / skuItems / variants
+                    const skuLists = [item.skuList, item.skuItems, item.variants, item.productSKUList];
+                    for (const sl of skuLists) {
+                        if (Array.isArray(sl) && sl.length > 0) {
+                            for (const sku of sl) {
+                                const options = [];
+                                // 解析规格选项
+                                const specs = sku.specAttrs || sku.attributes || sku.specs || [];
+                                // 也可能是 {颜色: "红色", 尺寸: "M"} 格式
+                                for (const [key, val] of Object.entries(sku)) {
+                                    if (['specId', 'skuId', 'price', 'stock', 'inventory', 'image'].includes(key)) continue;
+                                    if (typeof val === 'string' && val.length < 50) {
+                                        options.push({name: key, value: val});
+                                    }
+                                }
+                                // 数组格式
+                                if (Array.isArray(specs)) {
+                                    for (const spec of specs) {
+                                        if (typeof spec === 'object' && spec.name && spec.value) {
+                                            options.push({name: spec.name, value: spec.value});
+                                        }
+                                    }
+                                }
+                                variants.push({
+                                    sku: sku.skuCode || sku.sku || sku.specId || null,
+                                    price: parseFloat(sku.price || sku.salePrice || sku.discountPrice) || null,
+                                    stock: parseInt(sku.stock || sku.inventory || sku.quantity) || null,
+                                    options: options.length > 0 ? options : null,
+                                });
+                            }
+                            if (variants.length > 0) return JSON.parse(JSON.stringify(variants));
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 路径 B: DOM 选择器 — 变体选择器按钮
+        try {
+            const selContainer = document.querySelector('[data-role="sku-selector"], .sku-selector, [class*="sku"], [class*="spec-select"]');
+            if (selContainer) {
+                const btnGroups = selContainer.querySelectorAll('[class*="attr-group"], [data-role="group"], [class*="prop-group"]');
+                // 如果 DOM 太复杂无法解析，标记为 presence 即可
+                if (btnGroups.length > 0) {
+                    variants.push({sku: null, price: null, stock: null, options: null, _hasVariants: true});
+                }
+            }
+        } catch(e) {}
+
+        return variants.length > 0 ? variants : [];
+    }
+    """
+    try:
+        result = await page.evaluate(js_code)
+        return result if isinstance(result, list) else []
+    except Exception as e:
+        logger.warning(f"变体提取失败: {e}")
+        return []
+
+
+async def _extract_tiered_pricing(page) -> list[dict]:
+    """从 DOM 提取阶梯定价信息"""
+    js_code = """
+    () => {
+        const tiers = [];
+
+        // 路径 A: window.detailData 的 priceList
+        try {
+            const data = window.detailData;
+            if (data) {
+                const items = Array.isArray(data) ? data : [data];
+                for (const item of items) {
+                    const priceLists = [item.priceList, item.tieredPriceList, item.tierPriceInfo, item.priceRange];
+                    for (const pl of priceLists) {
+                        if (Array.isArray(pl) && pl.length > 0) {
+                            for (const tier of pl) {
+                                const minQty = parseInt(tier.minQuantity || tier.minQty || tier.from || tier.min || 0);
+                                const maxQty = tier.maxQuantity || tier.maxQty || tier.to || null;
+                                let price = parseFloat(tier.price || tier.unitPrice || tier.discountPrice || tier.value);
+                                if (!price) price = parseFloat(tier.priceValue);
+                                tiers.push({
+                                    minQty: minQty,
+                                    maxQty: maxQty ? parseInt(maxQty) : null,
+                                    price: price || 0,
+                                    unit: 'USD'
+                                });
+                            }
+                            if (tiers.length > 0) return tiers;
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 路径 B: DOM 中的阶梯价格表格
+        try {
+            const tables = document.querySelectorAll('.price-range-table, [data-testid="tiered-price"], table[class*="price"], .price-table, [class*="tier"] table');
+            for (const table of tables) {
+                const rows = table.querySelectorAll('tr');
+                for (let i = 1; i < rows.length; i++) {  // 跳过表头
+                    const cells = rows[i].querySelectorAll('td, th');
+                    if (cells.length >= 2) {
+                        // 第一列: 数量范围 (如 "1-99" "100+")
+                        const qtyText = cells[0].textContent.trim();
+                        const qtyMatch = qtyText.match(/(\\d+)\\s*-\\s*(\\d+)/);
+                        const singleMatch = qtyText.match(/^(\\d+)\\+?$/);
+                        let minQty = 0, maxQty = null;
+                        if (qtyMatch) {
+                            minQty = parseInt(qtyMatch[1]);
+                            maxQty = parseInt(qtyMatch[2]);
+                        } else if (singleMatch) {
+                            minQty = parseInt(singleMatch[1]);
+                        }
+                        // 第二列: 价格
+                        const priceText = cells[1].textContent.trim();
+                        const price = parseFloat(priceText.replace(/[^\\d.]/g, '')) || 0;
+                        tiers.push({minQty, maxQty, price, unit: 'USD'});
+                    }
+                }
+                if (tiers.length > 0) break;
+            }
+        } catch(e) {}
+
+        // 简单去重
+        const seen = new Set();
+        return tiers.filter(t => {
+            const key = `${t.minQty}-${t.maxQty}-${t.price}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+    """
+    try:
+        result = await page.evaluate(js_code)
+        return result if isinstance(result, list) else []
+    except Exception as e:
+        logger.warning(f"阶梯定价提取失败: {e}")
+        return []
+
+
+async def _extract_specs_full(page) -> list[dict]:
+    """全量规格提取，含单位分离"""
+    js_code = """
+    () => {
+        const specs = [];
+
+        // 常用单位正则
+        const unitRegex = /^(.*?)\\s+(cm|mm|m|inch|inches|in|kg|g|mg|lb|lbs|oz|ml|l|cl|%|ppm|pieces|pcs|sets|pair|pairs|boxes|cases|carton|v|w|a|hz)\\s*$/i;
+
+        // 路径 A: #key-attributes 标准属性行 (阿里国际站)
+        try {
+            // 尝试多种选择器
+            const selectors = [
+                '#key-attributes .id-grid-cols-\\\\[2fr_3fr\\\\]',
+                '#key-attributes [class*=\"grid\"] > div',
+                '#key-attributes .attr-row',
+                '#key-attributes tr',
+                '[data-testid=\"attributes\"] tr',
+                '.product-attributes tr',
+                '.props-table tr',
+                '[class*=\"spec\"] tr',
+                '[class*=\"attr\"] tr',
+            ];
+            for (const sel of selectors) {
+                const elements = document.querySelectorAll(sel);
+                if (elements.length > 0) {
+                    for (const el of elements) {
+                        let name = '', value = '';
+                        const cells = el.querySelectorAll('div, td, th, span');
+                        if (cells.length >= 2) {
+                            name = cells[0].textContent.replace(/[：:]/g, '').trim();
+                            value = cells[1].textContent.trim();
+                        } else {
+                            // 可能是扁平结构
+                            const text = el.textContent.trim();
+                            const sep = text.match(/[：:]/);
+                            if (sep) {
+                                name = text.substring(0, sep.index).trim();
+                                value = text.substring(sep.index + 1).trim();
+                            }
+                        }
+                        if (name && value && name !== value) {
+                            // 尝试分离单位和数值
+                            let unit = null;
+                            const uMatch = value.match(unitRegex);
+                            if (uMatch) {
+                                value = uMatch[1].trim();
+                                unit = uMatch[2].toLowerCase();
+                            }
+                            if (!specs.find(s => s.name === name)) {
+                                specs.push({name, value, unit});
+                            }
+                        }
+                    }
+                    if (specs.length > 0) break;
+                }
+            }
+        } catch(e) {}
+
+        // 路径 B: 属性表格中查找特定行 (Brand, Model Number, etc.)
+        if (specs.length === 0) {
+            try {
+                const rows = document.querySelectorAll('#key-attributes .id-grid-cols-\\\\[2fr_3fr\\\\] > div, #key-attributes .attr-list > div');
+                for (const row of rows) {
+                    const children = row.querySelectorAll('div');
+                    if (children.length >= 2) {
+                        const name = children[0].textContent.replace(/[：:]/g, '').trim();
+                        const value = children[1].textContent.trim();
+                        if (name && value && name !== value) {
+                            let unit = null;
+                            const uMatch = value.match(unitRegex);
+                            if (uMatch) {
+                                // value = uMatch[1].trim();
+                                // unit = uMatch[2].toLowerCase();
+                            }
+                            specs.push({name, value, unit});
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+
+        return specs;
+    }
+    """
+    try:
+        result = await page.evaluate(js_code)
+        return result if isinstance(result, list) else []
+    except Exception as e:
+        logger.warning(f"全量规格提取失败: {e}")
+        return []
+
+
+async def _extract_shipping_info(page) -> dict:
+    """提取物流信息 (weight/length/width/height/shippingClass/hsCode)"""
+    js_code = """
+    () => {
+        const info = {};
+
+        // 从 #key-attributes 中查找物流相关行
+        try {
+            const attrContainer = document.querySelector('#key-attributes');
+            if (attrContainer) {
+                const rows = attrContainer.querySelectorAll('.id-grid-cols-\\\\[2fr_3fr\\\\], .attr-row, [class*=\"grid\"] > div, tr');
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('div, td, th');
+                    if (cells.length >= 2) {
+                        const name = cells[0].textContent.trim().toLowerCase();
+                        const value = cells[1].textContent.trim();
+                        const num = parseFloat(value.replace(/[^\\d.]/g, ''));
+                        if (name.includes('weight') && !isNaN(num)) info.weight = num;
+                        if (name.includes('length') && !isNaN(num)) info.length = num;
+                        if (name.includes('width') && !isNaN(num)) info.width = num;
+                        if (name.includes('height') && !isNaN(num)) info.height = num;
+                        if (name.includes('shipping') || name.includes('freight')) info.shippingClass = value;
+                        if (name.includes('hs code') || name.includes('customs') || name.includes('harmonized')) info.hsCode = value;
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 从 package-dimensions 区域提取
+        try {
+            const dimEl = document.querySelector('.package-dimensions, [data-testid=\"dimension\"], [class*=\"dimension\"]');
+            if (dimEl) {
+                const text = dimEl.textContent.trim();
+                const dims = text.match(/([\\d.]+)\\s*[x×*]\\s*([\\d.]+)\\s*[x×*]\\s*([\\d.]+)/);
+                if (dims) {
+                    if (!info.length) info.length = parseFloat(dims[1]);
+                    if (!info.width) info.width = parseFloat(dims[2]);
+                    if (!info.height) info.height = parseFloat(dims[3]);
+                }
+                const wMatch = text.match(/([\\d.]+)\\s*(kg|g|lb)/i);
+                if (wMatch && !info.weight) info.weight = parseFloat(wMatch[1]);
+            }
+        } catch(e) {}
+
+        return info;
+    }
+    """
+    try:
+        result = await page.evaluate(js_code)
+        return result if isinstance(result, dict) else {}
+    except Exception as e:
+        logger.warning(f"物流信息提取失败: {e}")
+        return {}
+
+
+async def _extract_moq(page) -> Optional[int]:
+    """提取最小起订量 (MOQ)"""
+    js_code = """
+    () => {
+        try {
+            const selectors = ['.min-order', '.moq', '[data-testid=\"moq\"]', '[class*=\"moq\"]',
+                '[class*=\"min-order\"]', '[class*=\"min-quantity\"]', '.min-quantity'];
+            for (const sel of selectors) {
+                const el = document.querySelector(sel);
+                if (el) {
+                    const text = el.textContent.trim();
+                    const m = text.match(/(\\d+)/);
+                    if (m) return parseInt(m[1]);
+                }
+            }
+            // 从 detailData 提取
+            const data = window.detailData;
+            if (data) {
+                const items = Array.isArray(data) ? data : [data];
+                for (const item of items) {
+                    const moq = item.moq || item.minOrderQuantity || item.minQuantity || item.minOrder;
+                    if (moq) return parseInt(moq);
+                }
+            }
+        } catch(e) {}
+        return null;
+    }
+    """
+    try:
+        result = await page.evaluate(js_code)
+        return result if isinstance(result, int) else None
+    except Exception as e:
+        logger.warning(f"MOQ 提取失败: {e}")
+        return None
+

@@ -10,11 +10,27 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // 监听来自 popup 或 content script 的消息
+// 预览数据暂存
+var _previewData = null;
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case 'COLLECT_PRODUCT':
       handleCollect(message.data, sendResponse);
       return true;
+
+    case 'SEND_TO_ERP':
+      sendToErp(message.data, sendResponse);
+      return true;
+
+    case 'STORE_PREVIEW_DATA':
+      _previewData = message.data;
+      sendResponse({ success: true });
+      break;
+
+    case 'GET_PREVIEW_DATA':
+      sendResponse({ data: _previewData });
+      break;
 
     case 'GET_CONFIG':
       // 优先返回用户保存的配置，如果没有则用 config.js 的默认值
@@ -80,6 +96,43 @@ async function handleCollect(data, sendResponse) {
     }
   } catch (e) {
     sendResponse({ success: false, error: '网络错误: ' + (e.message || '未知') });
+  }
+}
+
+/** 从预览页面确认发送到 ERP */
+async function sendToErp(data, sendResponse) {
+  try {
+    const erpUrl = ERP_CONFIG.erpUrl;
+    const apiToken = ERP_CONFIG.apiToken;
+    const apiEndpoint = `${erpUrl.replace(/\/$/, '')}/api/external/collect`;
+
+    // 清理图片，只传 URL
+    var body = JSON.parse(JSON.stringify(data));
+    if (body.images) {
+      body.images = body.images.map(function(img, idx) {
+        return {
+          url: img.originalUrl || img.url || '',
+          originalUrl: img.originalUrl || img.url || '',
+          type: img.type || 'gallery',
+          sortOrder: idx,
+        };
+      });
+    }
+
+    const resp = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Token': apiToken },
+      body: JSON.stringify(body),
+    });
+
+    const result = await resp.json();
+    if (resp.ok && result.success) {
+      sendResponse({ success: true, id: result.data?.id });
+    } else {
+      sendResponse({ success: false, error: result.error || result.message || 'HTTP ' + resp.status });
+    }
+  } catch (e) {
+    sendResponse({ success: false, error: e.message });
   }
 }
 

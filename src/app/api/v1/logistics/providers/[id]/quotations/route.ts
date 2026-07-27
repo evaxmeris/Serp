@@ -76,36 +76,36 @@ export async function POST(
     const {
       region,
       transportMethod,
-      transitDays,
+      itemContent,
+      weightMin,
+      weightMax,
+      transitDaysMin,
+      transitDaysMax,
+      deliveryTerm,
       pricePerKg,
       pricePerCbm,
       minimumCharge,
+      totalCostEstimate,
       validFrom,
       validUntil,
       notes,
     } = v.data;
-
-    // 检查同一服务商、同一区域、同一运输方式的报价是否已存在
-    const existing = await prisma.logisticsQuotation.findFirst({
-      where: { providerId, region, transportMethod },
-    });
-    if (existing) {
-      return errorResponse(
-        `该服务商已存在 ${region} - ${transportMethod} 的报价`,
-        'CONFLICT',
-        409
-      );
-    }
 
     const quotation = await prisma.logisticsQuotation.create({
       data: {
         providerId,
         region,
         transportMethod,
-        transitDays,
+        itemContent,
+        weightMin: weightMin ?? null,
+        weightMax: weightMax ?? null,
+        transitDaysMin: transitDaysMin ?? null,
+        transitDaysMax: transitDaysMax ?? null,
+        deliveryTerm,
         pricePerKg,
         pricePerCbm,
         minimumCharge: minimumCharge ?? 0,
+        totalCostEstimate: totalCostEstimate ?? null,
         validFrom: validFrom ? new Date(validFrom) : null,
         validUntil: validUntil ? new Date(validUntil) : null,
         notes,

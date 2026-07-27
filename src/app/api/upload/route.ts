@@ -1,7 +1,7 @@
 /**
  * 文件上传 API
- * POST /api/upload — 上传图片（营业执照、身份证等）
- * 限制：单文件 ≤ 500KB，仅允许图片格式
+ * POST /api/upload — 上传文件（图片/PDF/Excel）
+ * 限制：单文件 ≤ 10MB
  * 安全：MIME 检查 + 文件头部魔数验证
  */
 
@@ -13,17 +13,23 @@ import path from 'path';
 import crypto from 'crypto';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-const MAX_SIZE = 500 * 1024; // 500KB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/jpg',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+];
 
 // 魔数签名定义（文件头部字节）
 const MAGIC_SIGNATURES: Record<string, Uint8Array[]> = {
   'image/jpeg': [new Uint8Array([0xFF, 0xD8, 0xFF])],
   'image/jpg': [new Uint8Array([0xFF, 0xD8, 0xFF])],
   'image/png': [new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])],
-  'image/webp': [new Uint8Array([0x52, 0x49, 0x46, 0x46])], // RIFF header
+  'image/webp': [new Uint8Array([0x52, 0x49, 0x46, 0x46])],
+  'application/pdf': [new Uint8Array([0x25, 0x50, 0x44, 0x46])],
 };
-
 /**
  * 验证文件头部魔数是否匹配声明的 MIME 类型
  */
@@ -55,11 +61,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return errorResponse('仅支持 JPG/PNG/WebP 格式', 'INVALID_TYPE', 400);
+      return errorResponse('仅支持 JPG/PNG/WebP/PDF/Excel 格式', 'INVALID_TYPE', 400);
     }
 
     if (file.size > MAX_SIZE) {
-      return errorResponse('文件不能超过 500KB', 'FILE_TOO_LARGE', 400);
+      return errorResponse('文件不能超过 10MB', 'FILE_TOO_LARGE', 400);
     }
 
     // 文件头部魔数验证（防止 MIME 类型伪造）

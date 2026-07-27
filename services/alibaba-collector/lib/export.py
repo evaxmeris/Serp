@@ -94,3 +94,122 @@ def build_erp_payload(product_detail: dict, images: list[dict]) -> dict:
         ]
 
     return payload
+
+
+def build_erp_payload_v2(product_detail: dict, images: list[dict]) -> dict:
+    """
+    v2 全字段映射 — 将提取的产品数据映射为 ERP API 接收的完整格式
+
+    支持字段:
+    - 基本信息: titleEn, shortDescription, brand, sku
+    - 价格: price, compareAtPrice, currency, stockQuantity
+    - 物流: weight, length, width, height, shippingClass, hsCode
+    - 子表: images, variants, attributes
+    - rawData: tieredPricing, supplier, aggregateRating, moq
+    """
+    payload = {
+        "source": "alibaba",
+        "sourceUrl": product_detail.get("url", ""),
+        "sourceId": product_detail.get("productId", ""),
+        "title": product_detail.get("name", ""),
+        "titleEn": product_detail.get("nameEn") or product_detail.get("titleEn") or None,
+        "shortDescription": product_detail.get("shortDescription") or None,
+        "description": product_detail.get("description", ""),
+        "descriptionEn": product_detail.get("descriptionEn") or None,
+        "brand": product_detail.get("brand") or None,
+        "sku": product_detail.get("sku") or product_detail.get("productId") or None,
+        "price": product_detail.get("price"),
+        "compareAtPrice": product_detail.get("compareAtPrice") or product_detail.get("compareAt"),
+        "currency": product_detail.get("currency", "USD"),
+        "stockQuantity": product_detail.get("stockQuantity") or None,
+        # 物流信息
+        "weight": product_detail.get("weight") or None,
+        "length": product_detail.get("length") or None,
+        "width": product_detail.get("width") or None,
+        "height": product_detail.get("height") or None,
+        "shippingClass": product_detail.get("shippingClass") or None,
+        "hsCode": product_detail.get("hsCode") or None,
+        "images": images,
+        "variants": [],
+        "attributes": [],
+    }
+
+    # 映射 variants
+    variants = product_detail.get("variants", [])
+    if variants:
+        payload["variants"] = [
+            {
+                "sku": v.get("sku"),
+                "price": v.get("price"),
+                "stock": v.get("stock"),
+                "options": v.get("options"),
+            }
+            for v in variants
+            if isinstance(v, dict)
+        ]
+
+    # 映射 attributes (含 unit 分离)
+    specs = product_detail.get("specifications", [])
+    if specs:
+        payload["attributes"] = [
+            {
+                "name": s.get("key") or s.get("name", ""),
+                "value": s.get("value", ""),
+                "unit": s.get("unit") or None,
+            }
+            for s in specs
+            if s.get("key") or s.get("name")
+        ]
+
+    # 映射 attributes 变体写法（当 specifications 为空时）
+    if not payload["attributes"]:
+        attrs = product_detail.get("attributes", [])
+        if attrs:
+            payload["attributes"] = [
+                {
+                    "name": a.get("name", a.get("key", "")),
+                    "value": a.get("value", ""),
+                    "unit": a.get("unit") or None,
+                }
+                for a in attrs
+                if a.get("name") or a.get("key")
+            ]
+
+    # 构建 rawData
+    raw_data = {
+        "url": product_detail.get("url", ""),
+        "capturedAt": __import__("datetime").datetime.now().isoformat(),
+    }
+
+    # tieredPricing
+    tiered = product_detail.get("tieredPricing")
+    if tiered:
+        raw_data["tieredPricing"] = tiered
+
+    # supplier
+    seller = product_detail.get("seller")
+    if seller:
+        raw_data["supplier"] = {
+            "name": seller.get("name", ""),
+            "url": seller.get("url", ""),
+            "verified": seller.get("verified", False),
+            "rating": seller.get("rating"),
+            "responseRate": seller.get("responseRate"),
+        }
+
+    # aggregateRating
+    rating = product_detail.get("aggregateRating")
+    if rating:
+        raw_data["aggregateRating"] = {
+            "ratingValue": rating.get("ratingValue"),
+            "reviewCount": rating.get("reviewCount"),
+        }
+
+    # moq
+    moq = product_detail.get("moq")
+    if moq is not None:
+        raw_data["moq"] = int(moq)
+
+    payload["rawData"] = raw_data
+
+    return payload
