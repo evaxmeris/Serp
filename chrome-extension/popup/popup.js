@@ -739,6 +739,14 @@ trainBtn.addEventListener('click', async function() {
     trainingContainers = [];
     attrResultData = [];
     
+    // 从 storage 读取之前 Shift+click 选中的容器（弹窗关闭期间的）
+    try {
+      var saved = await chrome.storage.local.get('trainingContainers');
+      if (saved.trainingContainers && saved.trainingContainers.length > 0) {
+        trainingContainers = saved.trainingContainers;
+      }
+    } catch(e) {}
+    
     // 隐藏结果面板（如果有之前的）
     attrResultPanel.classList.add('hidden');
     trainPanel.classList.remove('hidden');
@@ -746,27 +754,31 @@ trainBtn.addEventListener('click', async function() {
     renderContainerList();
     
     await chrome.tabs.sendMessage(tabs[0].id, { type: 'ENTER_SELECT_MODE' });
-    showStatus(trainStatus, '🖱️ 点击页面上的属性容器框', 'success');
+    showStatus(trainStatus, trainingContainers.length > 0
+      ? '✅ 已有 ' + trainingContainers.length + ' 个选中容器，可继续添加或点确认'
+      : '🖱️ 按住 Shift + 点击属性容器框', 'success');
   }
 });
 
 // 监听页面点击选择的结果
 chrome.runtime.onMessage.addListener(function(msg, sender) {
   if (msg.type === 'CONTAINER_SELECTED' && msg.selector) {
+    var selStr = msg.selector.containerSelector || msg.selector;
     var idx = trainingContainers.length + 1;
     trainingContainers.push({ id: 'c' + Date.now(), name: '框' + idx, selector: msg.selector });
     renderContainerList();
-    showStatus(trainStatus, '✅ 已添加 ' + msg.selector.substring(0,40), 'success');
+    showStatus(trainStatus, '✅ 已添加 ' + selStr.substring(0,40), 'success');
   }
 });
 
 function renderContainerList() {
   if (trainingContainers.length === 0) {
-    containerList.innerHTML = '<div class="train-hint">还没有选中容器，点击页面上属性所在的框</div>';
+    containerList.innerHTML = '<div class="train-hint">还没有选中容器，在页面上按住 Shift 点击属性框</div>';
     return;
   }
   containerList.innerHTML = trainingContainers.map(function(c, i) {
-    return '<div class="container-item"><span>#' + (i+1) + ' ' + c.name + '</span><span class="del-btn" data-id="' + c.id + '">✕</span></div>';
+    var selStr = c.selector && c.selector.containerSelector ? c.selector.containerSelector : (c.selector || '');
+    return '<div class="container-item"><span>#' + (i+1) + ' ' + c.name + '<br><span style="color:#9ca3af;font-size:10px">' + selStr.substring(0,50) + '</span></span><span class="del-btn" data-id="' + c.id + '">✕</span></div>';
   }).join('');
   containerList.querySelectorAll('.del-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -886,6 +898,8 @@ document.getElementById('attr-save-btn').addEventListener('click', async functio
   };
   
   await chrome.storage.local.set({ trainedAttrPattern: pattern });
+  // 清理临时容器列表
+  await chrome.storage.local.remove('trainingContainers');
   
   // 通知当前页面
   if (tabs[0]?.id) {
@@ -930,6 +944,7 @@ trainCancelBtn.addEventListener('click', async function() {
   trainActive = false;
   trainingContainers = [];
   attrResultData = [];
+  await chrome.storage.local.remove('trainingContainers');
 });
 
 // ===== 工具 =====

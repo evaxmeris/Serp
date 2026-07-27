@@ -902,17 +902,29 @@
     el.classList.remove('__erp_hover');
 
     // 如果按住 Shift 键点击，标记为属性容器
-    // 如果按住 Shift 键点击，标记为属性容器
     if (e.shiftKey) {
-      var container = el.closest('[data-testid="three-column-key-attributes"], [data-module-name*="key_attribute"], .module_3_tab_key_attribute') || el;
+      var container = el.closest('[data-testid="three-column-key-attributes"], [data-module-name*="key_attribute"], .module_3_tab_key_attribute, [class*="attribute"], [class*="specification"]') || el;
       var sel = getElementSelector(container);
-      selectedSelector = { containerSelector: sel, nameIndex: 0, valueIndex: 1 };
+      var entry = { containerSelector: sel, nameIndex: 0, valueIndex: 1 };
+      selectedSelector = entry;
       document.querySelectorAll('.__erp_selected').forEach(function(s) { s.classList.remove('__erp_selected'); });
       container.classList.add('__erp_selected');
       container.style.outline = '3px solid #059669';
-      showFloatingHint('✅ 已标记属性容器: ' + sel.substring(0, 60) + '...  点插件「确认采集」保存');
-      // 通知 popup
-      try { chrome.runtime.sendMessage({ type: 'CONTAINER_SELECTED', selector: selectedSelector }); } catch(e) {}
+      // 保存到 storage（弹窗关闭后再打开也能读到）
+      try {
+        chrome.storage.local.get('trainingContainers', function(res) {
+          var list = res.trainingContainers || [];
+          // 去重：如果已有相同选择器则不重复添加
+          var exists = list.some(function(c) { return c.selector === sel; });
+          if (!exists) {
+            list.push({ id: 'c' + Date.now() + '_' + list.length, name: '框' + (list.length + 1), selector: entry });
+            chrome.storage.local.set({ trainingContainers: list });
+          }
+        });
+      } catch(e) {}
+      showFloatingHint('✅ 已选中属性容器! 回插件查看列表 → 确认');
+      // 通知 popup（如果还开着）
+      try { chrome.runtime.sendMessage({ type: 'CONTAINER_SELECTED', selector: entry }); } catch(e) {}
       return;
     }
 
@@ -963,7 +975,13 @@
       }
     }
 
-    showFloatingHint('ℹ️ 未识别到可采集内容');
+    // 不满足任何采集条件
+    // 检查是否点击在属性容器区域内，引导用户 Shift+点击
+    if (el.closest('[data-testid*="attribute"], [class*="attribute"], [data-module-name*="key_attribute"], [class*="spec"]')) {
+      showFloatingHint('⚠️ 这是属性区域，请按住 Shift 再点击来框选整个容器');
+    } else {
+      showFloatingHint('ℹ️ 未识别到可采集内容' + (selectedImages.size > 0 || selectedAttrs.length > 0 || selectedDescription ? '' : '（点击图片或带冒号的文字）'));
+    }
     setTimeout(updateFloatingCount, 2000);
   }
 
