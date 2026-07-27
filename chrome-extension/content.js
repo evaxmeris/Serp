@@ -912,13 +912,16 @@
       container.style.outline = '3px solid #059669';
       // 保存到 storage（弹窗关闭后再打开也能读到）
       try {
-        chrome.storage.local.get('trainingContainers', function(res) {
-          var list = res.trainingContainers || [];
-          // 去重：如果已有相同选择器则不重复添加
-          var exists = list.some(function(c) { return c.selector === sel; });
-          if (!exists) {
-            list.push({ id: 'c' + Date.now() + '_' + list.length, name: '框' + (list.length + 1), selector: entry });
-            chrome.storage.local.set({ trainingContainers: list });
+        var saveKey = 'tc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        var saveData = {};
+        saveData[saveKey] = { selector: entry, name: '框' + Date.now(), createdAt: Date.now() };
+        chrome.storage.local.set(saveData);
+        // 也保存一份索引列表，方便读取
+        chrome.storage.local.get('tc_keys', function(res) {
+          var keys = res.tc_keys || [];
+          if (keys.indexOf(saveKey) < 0) {
+            keys.push(saveKey);
+            chrome.storage.local.set({ tc_keys: keys });
           }
         });
       } catch(e) {}

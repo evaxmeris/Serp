@@ -741,9 +741,20 @@ trainBtn.addEventListener('click', async function() {
     
     // 从 storage 读取之前 Shift+click 选中的容器（弹窗关闭期间的）
     try {
-      var saved = await chrome.storage.local.get('trainingContainers');
-      if (saved.trainingContainers && saved.trainingContainers.length > 0) {
-        trainingContainers = saved.trainingContainers;
+      var allItems = await chrome.storage.local.get(null);
+      var loaded = [];
+      // 从 tc_ 开头的 key 读取每个容器
+      Object.keys(allItems).forEach(function(k) {
+        if (k.startsWith('tc_') && allItems[k] && allItems[k].selector) {
+          loaded.push({
+            id: k,
+            name: allItems[k].name || ('框' + (loaded.length + 1)),
+            selector: allItems[k].selector,
+          });
+        }
+      });
+      if (loaded.length > 0) {
+        trainingContainers = loaded;
       }
     } catch(e) {}
     
@@ -898,8 +909,12 @@ document.getElementById('attr-save-btn').addEventListener('click', async functio
   };
   
   await chrome.storage.local.set({ trainedAttrPattern: pattern });
-  // 清理临时容器列表
-  await chrome.storage.local.remove('trainingContainers');
+  // 清理临时容器 storage
+  try {
+    var all = await chrome.storage.local.get(null);
+    var removeKeys = Object.keys(all).filter(function(k) { return k.startsWith('tc_') || k === 'tc_keys'; });
+    if (removeKeys.length > 0) await chrome.storage.local.remove(removeKeys);
+  } catch(e) {}
   
   // 通知当前页面
   if (tabs[0]?.id) {
@@ -944,7 +959,12 @@ trainCancelBtn.addEventListener('click', async function() {
   trainActive = false;
   trainingContainers = [];
   attrResultData = [];
-  await chrome.storage.local.remove('trainingContainers');
+  // 清理临时容器 storage
+  try {
+    var all = await chrome.storage.local.get(null);
+    var removeKeys = Object.keys(all).filter(function(k) { return k.startsWith('tc_') || k === 'tc_keys'; });
+    if (removeKeys.length > 0) await chrome.storage.local.remove(removeKeys);
+  } catch(e) {}
 });
 
 // ===== 工具 =====
