@@ -837,7 +837,12 @@
       return false;
     }
     if (message.type === 'GET_SELECTED') {
-      sendResponse({ success: true, data: getSelectedData(), selector: selectedSelector });
+      try {
+        var selData = getSelectedData();
+        sendResponse({ success: true, data: selData, selector: typeof selectedSelector !== 'undefined' ? selectedSelector : null });
+      } catch(e) {
+        sendResponse({ success: false, error: e.message });
+      }
       return false;
     }
     if (message.type === 'EXIT_SELECT_MODE') {
@@ -855,9 +860,13 @@
   var selectedImages = new Set();
   var selectedAttrs = [];
   var selectedDescription = null;
+  var selectedSelector = null;
 
   function enterSelectMode() {
-    if (selectModeActive) return;
+    if (selectModeActive) {
+      // 重新触发：先清理旧的，再重建
+      exitSelectMode();
+    }
     selectModeActive = true;
     selectedImages = new Set();
     selectedAttrs = [];
