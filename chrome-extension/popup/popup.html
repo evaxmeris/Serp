@@ -110,6 +110,33 @@
         </div>
         <div id="train-status" class="status-msg"></div>
       </div>
+
+      <!-- 属性编辑表格（训练器第三步） -->
+      <div id="attr-result-panel" class="hidden">
+        <div class="panel-header">
+          <span class="panel-title">📋 属性提取结果</span>
+          <span id="attr-count-badge" class="stat-badge">0 项</span>
+        </div>
+        <div class="train-hint">勾选要保留的属性行，取消勾选即删除</div>
+        <div id="attr-result-table-wrap" class="attr-table-wrap">
+          <table id="attr-result-table" class="result-table">
+            <thead>
+              <tr>
+                <th style="width:32px"><input type="checkbox" id="attr-select-all" checked></th>
+                <th style="width:36px">#</th>
+                <th>属性名</th>
+                <th>属性值</th>
+              </tr>
+            </thead>
+            <tbody id="attr-result-tbody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin-top:8px">
+          <button id="attr-save-btn" class="btn btn-primary btn-small">💾 保存此模式</button>
+          <button id="attr-retry-btn" class="btn btn-secondary btn-small">🔄 重新选择</button>
+        </div>
+        <div id="attr-result-status" class="status-msg"></div>
+      </div>
       <button id="confirm-btn" class="btn btn-primary btn-large hidden">✅ 确认采集</button>
       <div id="collect-status" class="status-msg"></div>
 

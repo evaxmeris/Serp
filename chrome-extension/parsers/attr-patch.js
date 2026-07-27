@@ -8,10 +8,16 @@
     try {
       if (!window.__ERP_PARSERS__ || !window.__ERP_PARSERS__.SpecParser) return;
       
-      // 加载已训练的选择器
+      // 加载已训练的选择器/模式
       try {
-        chrome.storage.local.get('trainedAttrSelector', function(result) {
-          if (result.trainedAttrSelector) {
+        chrome.storage.local.get(['trainedAttrSelector', 'trainedAttrPattern'], function(result) {
+          if (result.trainedAttrPattern) {
+            window.__trainedAttrPattern = result.trainedAttrPattern;
+            if (result.trainedAttrPattern.containerSelectors && result.trainedAttrPattern.containerSelectors.length > 0) {
+              window.__trainedAttrSelector = result.trainedAttrPattern.containerSelectors[0];
+            }
+            console.log('[AttrPatch] 已加载训练模式:', result.trainedAttrPattern.attributeNames?.length || 0, '个属性');
+          } else if (result.trainedAttrSelector) {
             window.__trainedAttrSelector = result.trainedAttrSelector;
             console.log('[AttrPatch] 已加载训练选择器');
           }
@@ -21,6 +27,10 @@
       window.__ERP_PARSERS__.SpecParser.extractAttributes = function() {
         var seen = {};
         var attrs = [];
+        
+        // 从已保存的模式读取白名单
+        var pattern = window.__trainedAttrPattern || null;
+        var nameWhitelist = pattern ? (pattern.attributeNames || null) : null;
         
         // 优先使用训练好的选择器
         try {
@@ -74,6 +84,13 @@
               }
             }
           } catch(e) {}
+        }
+        
+        // 如果有属性名白名单，只保留白名单中的属性
+        if (nameWhitelist && nameWhitelist.length > 0) {
+          attrs = attrs.filter(function(a) {
+            return nameWhitelist.indexOf(a.name) >= 0;
+          });
         }
         
         return attrs;

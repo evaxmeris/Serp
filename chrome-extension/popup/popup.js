@@ -727,6 +727,7 @@ debugBtn.addEventListener('click', async function () {
 // ===== 属性选择器 =====
 var trainingContainers = [];
 var trainActive = false;
+var attrResultData = []; // { rowId, name, value, kept }
 
 trainBtn.addEventListener('click', async function() {
   var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -735,10 +736,14 @@ trainBtn.addEventListener('click', async function() {
   if (!trainActive) {
     trainActive = true;
     trainingContainers = [];
+    attrResultData = [];
+    
+    // 隐藏结果面板（如果有之前的）
+    attrResultPanel.classList.add('hidden');
     trainPanel.classList.remove('hidden');
+    
     renderContainerList();
     
-    // 进入选择模式（用已有的手动选择 UI）
     await chrome.tabs.sendMessage(tabs[0].id, { type: 'ENTER_SELECT_MODE' });
     showStatus(trainStatus, '🖱️ 点击页面上的属性容器框', 'success');
   }
@@ -762,7 +767,6 @@ function renderContainerList() {
   containerList.innerHTML = trainingContainers.map(function(c, i) {
     return '<div class="container-item"><span>#' + (i+1) + ' ' + c.name + '</span><span class="del-btn" data-id="' + c.id + '">✕</span></div>';
   }).join('');
-  // 删除按钮
   containerList.querySelectorAll('.del-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var id = this.getAttribute('data-id');
@@ -772,7 +776,7 @@ function renderContainerList() {
   });
 }
 
-// 确认
+// 确认容器选择 → 提取属性 → 显示表格
 trainConfirmBtn.addEventListener('click', async function() {
   if (trainingContainers.length === 0) {
     showStatus(trainStatus, '⚠️ 请至少选择一个属性容器', 'error');
@@ -785,16 +789,134 @@ trainConfirmBtn.addEventListener('click', async function() {
   // 退出选择模式
   await chrome.tabs.sendMessage(tabs[0].id, { type: 'EXIT_SELECT_MODE' }).catch(function(){});
   
-  // 保存选择器（用第一个容器的）
-  var sel = trainingContainers[0].selector;
-  await chrome.storage.local.set({ trainedAttrSelector: sel });
-  await chrome.tabs.sendMessage(tabs[0].id, { type: 'SET_TRAINED_SELECTOR', selector: sel });
+  showStatus(trainStatus, '⏳ 正在提取属性...', 'loading');
   
-  showStatus(trainStatus, '✅ 已保存！现在用「调试预览」验证', 'success');
+  // 发送提取请求
+  var selectors = trainingContainers.map(function(c) { return c.selector; });
+  var resp;
+  try {
+    resp = await chrome.tabs.sendMessage(tabs[0].id, {
+      type: 'EXTRACT_ATTRS_FROM_CONTAINERS',
+      selectors: selectors
+    });
+  } catch(e) {
+    showStatus(trainStatus, '❌ 提取失败: ' + e.message, 'error');
+    return;
+  }
+  
+  if (!resp || !resp.success) {
+    showStatus(trainStatus, '❌ 提取失败: ' + (resp?.error || '无响应'), 'error');
+    return;
+  }
+  
+  var attrs = resp.data.attributes || [];
+  if (attrs.length === 0) {
+    showStatus(trainStatus, '⚠️ 未从容器中提取到属性，尝试重新选择', 'error');
+    return;
+  }
+  
+  attrResultData = attrs.map(function(a) {
+    return { rowId: a.rowId, name: a.name, value: a.value, kept: true };
+  });
+  
+  // 隐藏容器选择面板，显示结果表格
+  trainPanel.classList.add('hidden');
+  renderAttrResultTable();
+  document.getElementById('attr-result-panel').classList.remove('hidden');
+  showStatus(trainStatus, ''); // 清空旧状态
+});
+
+function renderAttrResultTable() {
+  var tbody = document.getElementById('attr-result-tbody');
+  var badge = document.getElementById('attr-count-badge');
+  var kept = attrResultData.filter(function(a) { return a.kept; }).length;
+  
+  badge.textContent = kept + '/' + attrResultData.length + ' 项';
+  
+  tbody.innerHTML = attrResultData.map(function(a, i) {
+    var checked = a.kept ? 'checked' : '';
+    var cls = a.kept ? '' : 'removed';
+    return '<tr class="' + cls + '" data-rowid="' + a.rowId + '">' +
+      '<td><input type="checkbox" class="attr-row-cb" ' + checked + ' data-rowid="' + a.rowId + '"></td>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(a.name) + '</td>' +
+      '<td>' + escHtml(a.value) + '</td>' +
+    '</tr>';
+  }).join('');
+  
+  // 各行的 checkbox 事件
+  tbody.querySelectorAll('.attr-row-cb').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var rowId = this.getAttribute('data-rowid');
+      var kept = this.checked;
+      for (var j = 0; j < attrResultData.length; j++) {
+        if (attrResultData[j].rowId === rowId) {
+          attrResultData[j].kept = kept;
+          break;
+        }
+      }
+      renderAttrResultTable();
+    });
+  });
+}
+
+// 全选/取消
+document.getElementById('attr-select-all').addEventListener('change', function() {
+  var checked = this.checked;
+  attrResultData.forEach(function(a) { a.kept = checked; });
+  renderAttrResultTable();
+});
+
+// 保存模式
+document.getElementById('attr-save-btn').addEventListener('click', async function() {
+  var keptAttrs = attrResultData.filter(function(a) { return a.kept; });
+  if (keptAttrs.length === 0) {
+    showStatus(document.getElementById('attr-result-status'), '⚠️ 请至少保留一个属性', 'error');
+    return;
+  }
+  
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  // 保存容器选择器 + 保留的属性名列表
+  var pattern = {
+    containerSelectors: trainingContainers.map(function(c) { return c.selector; }),
+    attributeNames: keptAttrs.map(function(a) { return a.name; }),
+    savedAt: Date.now()
+  };
+  
+  await chrome.storage.local.set({ trainedAttrPattern: pattern });
+  
+  // 通知当前页面
+  if (tabs[0]?.id) {
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'SET_TRAINED_PATTERN', pattern: pattern }).catch(function(){});
+  }
+  
+  showStatus(document.getElementById('attr-result-status'), '✅ 已保存！共保留 ' + keptAttrs.length + ' 个属性', 'success');
+  
   setTimeout(function() {
-    trainPanel.classList.add('hidden');
+    document.getElementById('attr-result-panel').classList.add('hidden');
     trainActive = false;
+    trainingContainers = [];
   }, 1500);
+});
+
+// 重新选择
+document.getElementById('attr-retry-btn').addEventListener('click', async function() {
+  document.getElementById('attr-result-panel').classList.add('hidden');
+  trainActive = false;
+  trainingContainers = [];
+  
+  // 重新进入选择模式
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]?.id) {
+    trainActive = true;
+    trainingContainers = [];
+    attrResultData = [];
+    trainPanel.classList.remove('hidden');
+    renderContainerList();
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'ENTER_SELECT_MODE' });
+    showStatus(trainStatus, '🖱️ 重新选择属性容器', 'success');
+  }
 });
 
 // 取消
@@ -806,9 +928,14 @@ trainCancelBtn.addEventListener('click', async function() {
   trainPanel.classList.add('hidden');
   trainActive = false;
   trainingContainers = [];
+  attrResultData = [];
 });
 
 // ===== 工具 =====
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function showStatus(el, msg, type) {
   el.textContent = msg;

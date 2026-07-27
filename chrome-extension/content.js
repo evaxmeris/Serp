@@ -710,9 +710,106 @@
       return false;
     }
 
+    // 设置训练好的属性提取模式（容器选择器 + 属性名白名单）
+    if (message.type === 'SET_TRAINED_PATTERN') {
+      if (message.pattern) {
+        window.__trainedAttrPattern = message.pattern;
+        // 向前兼容旧的 trainedAttrSelector
+        if (message.pattern.containerSelectors && message.pattern.containerSelectors.length > 0) {
+          window.__trainedAttrSelector = message.pattern.containerSelectors[0];
+        }
+      }
+      sendResponse({ success: true });
+      return false;
+    }
+
+    // 获取训练模式
+    if (message.type === 'GET_TRAINED_PATTERN') {
+      sendResponse({ success: true, pattern: window.__trainedAttrPattern || null });
+      return false;
+    }
+
     // 获取训练结果
     if (message.type === 'GET_TRAINED_SELECTOR') {
       sendResponse(getTrainedSelector());
+      return false;
+    }
+
+    // 从指定容器提取属性列表 (属性训练器第二步)
+    if (message.type === 'EXTRACT_ATTRS_FROM_CONTAINERS') {
+      try {
+        var selectors = message.selectors || [];
+        var allAttrs = [];
+        var seenNames = {};
+
+        selectors.forEach(function(selStr) {
+          try {
+            var containers = document.querySelectorAll(selStr);
+            containers.forEach(function(c) {
+              // 策略1: :scope > div 成对提取
+              var childDivs = c.querySelectorAll(':scope > div');
+              if (childDivs.length >= 2) {
+                for (var di = 0; di < childDivs.length - 1; di += 2) {
+                  var nm = childDivs[di].textContent.replace(/[：:]/g,'').trim();
+                  var vl = childDivs[di+1].textContent.replace(/[：:]/g,'').trim();
+                  if (nm && vl && nm.length < 100 && !seenNames[nm]) {
+                    seenNames[nm] = true;
+                    allAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                  }
+                }
+                return; // 跳过后面的策略
+              }
+
+              // 策略2: :scope > span
+              var spans = c.querySelectorAll(':scope > span');
+              if (spans.length >= 2) {
+                for (var si = 0; si < spans.length - 1; si += 2) {
+                  var nm2 = spans[si].textContent.replace(/[：:]/g,'').trim();
+                  var vl2 = spans[si+1].textContent.replace(/[：:]/g,'').trim();
+                  if (nm2 && vl2 && nm2.length < 100 && !seenNames[nm2]) {
+                    seenNames[nm2] = true;
+                    allAttrs.push({ name: nm2, value: vl2, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                  }
+                }
+                return;
+              }
+
+              // 策略3: 所有 <p> 标签成对
+              var pTags = c.querySelectorAll('p');
+              if (pTags.length >= 2) {
+                var texts = [];
+                pTags.forEach(function(p) { texts.push(p.textContent.trim()); });
+                for (var pi = 0; pi < texts.length - 1; pi += 2) {
+                  if (texts[pi] && texts[pi+1] && texts[pi].length < 80 && !seenNames[texts[pi]]) {
+                    seenNames[texts[pi]] = true;
+                    allAttrs.push({ name: texts[pi], value: texts[pi+1], rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                  }
+                }
+                return;
+              }
+
+              // 策略4: 所有文本节点，找包含冒号的
+              var allText = c.textContent.trim();
+              var lines = allText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+              for (var li2 = 0; li2 < lines.length; li2++) {
+                var colonIdx = lines[li2].indexOf(':');
+                if (colonIdx > 0 && colonIdx < 50) {
+                  var nm3 = lines[li2].substring(0, colonIdx).trim();
+                  var vl3 = lines[li2].substring(colonIdx + 1).trim();
+                  if (nm3 && vl3 && !seenNames[nm3]) {
+                    seenNames[nm3] = true;
+                    allAttrs.push({ name: nm3, value: vl3, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                  }
+                }
+              }
+            });
+          } catch(e) { /* 单个选择器失败不影响其他 */ }
+        });
+
+        sendResponse({ success: true, data: { attributes: allAttrs, containerCount: selectors.length, totalAttrs: allAttrs.length } });
+      } catch(e) {
+        sendResponse({ success: false, error: e.message });
+      }
       return false;
     }
 

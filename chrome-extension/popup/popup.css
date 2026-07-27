@@ -423,3 +423,13 @@ body {
 .container-list { max-height:200px; overflow-y:auto; margin-bottom:6px; }
 .container-item { display:flex; justify-content:space-between; align-items:center; padding:4px 6px; background:#f9fafb; border-radius:4px; margin-bottom:4px; font-size:11px; }
 .container-item .del-btn { color:#dc2626; cursor:pointer; font-size:13px; padding:0 4px; }
+
+/* 属性结果表格 */
+.attr-table-wrap { max-height:220px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:6px; }
+.result-table { width:100%; border-collapse:collapse; font-size:12px; }
+.result-table th { background:#f9fafb; padding:4px 6px; text-align:left; font-weight:500; color:#6b7280; border-bottom:1px solid #e5e7eb; position:sticky; top:0; }
+.result-table td { padding:4px 6px; border-bottom:1px solid #f3f4f6; color:#1f2937; }
+.result-table tr:last-child td { border-bottom:none; }
+.result-table tr.removed td { color:#d1d5db; text-decoration:line-through; }
+.result-table input[type="checkbox"] { cursor:pointer; }
+.result-table .row-del { color:#ef4444; cursor:pointer; font-size:13px; padding:0 4px; }
