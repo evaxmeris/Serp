@@ -1832,20 +1832,15 @@
         });
 
         function finishLoad() {
-          // 加载属性列表
-          if (cfg.attributes && cfg.attributes.length > 0) {
-            __panelAttrs = cfg.attributes.map(function(a, idx) {
-              return { name: a.name, value: a.value, rowId: 'ar_' + Date.now() + '_' + idx };
-            });
-          } else {
-            __panelAttrs = [];
-          }
+          // 清空属性列表（每个页面需要重新提取验证）
+          __panelAttrs = [];
           renderPanelContainers();
           renderPanelAttributes();
           savePanelState();
-          panelToast('✅ 已加载配置: ' + cfg.name);
+          panelToast('✅ 已加载配置: ' + cfg.name + '，点「确认提取」验证', 3000);
+          // 自动提取属性
+          setTimeout(function() { handleExtractAttrs(); }, 500);
         }
-        panelToast('✅ 已加载配置: ' + cfg.name);
       });
     });
 
@@ -2474,15 +2469,12 @@
           }
         });
         cfg.containerSelectors = containerSelectors;
-        cfg.attributes = __panelAttrs.map(function(a) {
-          return { name: a.name, value: a.value };
-        });
-        cfg.attributeNames = __panelAttrs.map(function(a) { return a.name; }).filter(function(n) { return n; });
+        // 不保存属性值（属性列表只是验证规则的预览，每个页面应重新提取）
 
-        panelToast('💾 保存中: 容器=' + containerSelectors.length + ' 属性=' + cfg.attributes.length, 1500);
+        panelToast('💾 保存中: ' + containerSelectors.length + ' 个容器选择器', 1500);
         configs[targetId] = cfg;
         chrome.storage.local.set({ configs: configs }, function() {
-          panelToast('✅ 配置已保存: ' + name + ' (' + containerSelectors.length + '容器, ' + cfg.attributes.length + '属性)');
+          panelToast('✅ 配置已保存: ' + name + ' (' + containerSelectors.length + ' 个容器选择器)');
           renderPanelConfigs();
         });
       });
