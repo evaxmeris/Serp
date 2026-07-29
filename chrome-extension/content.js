@@ -1053,8 +1053,9 @@
 
   function onPickClick(e) {
     var el = e.target;
-    // 跳过面板内点击和无关元素（在 preventDefault 之前检查）
-    if (!el || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.closest('.erp-panel') || el.tagName === 'HTML' || el.tagName === 'BODY') return;
+    // 跳过面板内点击（用 contains 比 closest 更可靠）
+    var panelEl = document.getElementById('__erp_floating_panel');
+    if (!el || panelEl?.contains(el) || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.tagName === 'HTML' || el.tagName === 'BODY') return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -1920,6 +1921,19 @@
         el.addEventListener('click', function(e) {
           e.stopPropagation();
           var key = el.getAttribute('data-delete');
+          // 从 storage 读选择器，清除页面元素高亮
+          chrome.storage.local.get(key, function(items) {
+            var item = items[key];
+            if (item && item.selector) {
+              var selStr = item.selector.containerSelector || item.selector;
+              var target = document.querySelector(selStr);
+              if (target) {
+                target.classList.remove('__erp_selected', '__erp_container_highlight');
+                target.style.outline = '';
+                target.style.outlineOffset = '';
+              }
+            }
+          });
           chrome.storage.local.remove(key, function() {
             renderPanelContainers();
             panelToast('🗑️ 已删除容器');
