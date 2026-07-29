@@ -9,6 +9,15 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log(`ERP 地址: ${ERP_CONFIG.erpUrl}`);
 });
 
+// 点击扩展图标 → 切换页面内浮动面板
+chrome.action.onClicked.addListener((tab) => {
+  if (tab?.id) {
+    chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_PANEL' }).catch(() => {
+      // 页面可能未加载 content script
+    });
+  }
+});
+
 // 监听来自 popup 或 content script 的消息
 // 预览数据暂存
 var _previewData = null;

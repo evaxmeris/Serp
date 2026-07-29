@@ -729,6 +729,53 @@
       return false;
     }
 
+    // 高亮页面上的容器元素（属性训练器点击容器列表时）
+    if (message.type === 'HIGHLIGHT_CONTAINER') {
+      try {
+        // 清除之前的旧高亮
+        var oldHighlights = document.querySelectorAll('.__erp_container_highlight');
+        oldHighlights.forEach(function(el) { el.classList.remove('__erp_container_highlight'); });
+        var oldLabel = document.getElementById('__erp_highlight_label');
+        if (oldLabel) oldLabel.remove();
+
+        var selStr = message.selector && message.selector.containerSelector ? message.selector.containerSelector : (message.selector || '');
+        if (!selStr) { sendResponse({ success: false, error: 'no selector' }); return false; }
+
+        // 确保高亮样式存在（独立于选择模式）
+        if (!document.getElementById('__erp_container_hl_style')) {
+          var hlStyle = document.createElement('style');
+          hlStyle.id = '__erp_container_hl_style';
+          hlStyle.textContent = '.__erp_container_highlight{outline:3px solid #6366f1!important;outline-offset:3px!important;background:rgba(99,102,241,0.08)!important;box-shadow:0 0 20px rgba(99,102,241,0.3)!important}';
+          document.head.appendChild(hlStyle);
+        }
+
+        var target = document.querySelector(selStr);
+        if (!target) { sendResponse({ success: false, error: 'element not found: ' + selStr.substring(0,60) }); return false; }
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('__erp_container_highlight');
+
+        // 添加浮动标签
+        var label = document.createElement('div');
+        label.id = '__erp_highlight_label';
+        label.textContent = '🔍 容器 #' + (message.index != null ? (message.index + 1) : '');
+        label.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#6366f1;color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);pointer-events:none;';
+        document.body.appendChild(label);
+
+        // 自动清除高亮
+        setTimeout(function() {
+          target.classList.remove('__erp_container_highlight');
+          var lbl = document.getElementById('__erp_highlight_label');
+          if (lbl) lbl.remove();
+        }, 5000);
+
+        sendResponse({ success: true });
+      } catch(e) {
+        sendResponse({ success: false, error: e.message });
+      }
+      return false;
+    }
+
     // 获取训练结果
     if (message.type === 'GET_TRAINED_SELECTOR') {
       sendResponse(getTrainedSelector());
@@ -857,10 +904,110 @@
       sendResponse({ success: true });
       return false;
     }
+
+    // PICK_ATTR_TEXT: Shift+drag to pick text from page
+    // 前向拖动(左→右)=选中，后向拖动(右→左)=取消
+    // popup 管理两阶段：第一次=属性名，第二次=属性值
+    if (message.type === 'PICK_ATTR_TEXT') {
+      var oldHint = document.getElementById('__erp_pick_hint');
+      if (oldHint) oldHint.remove();
+
+      var phase = message.phase || 'name';
+      var hintText = phase === 'name' ? '按住 Shift + 拖动选择属性名（左→右选，右→左取消）' : '按住 Shift + 拖动选择属性值（左→右选，右→左取消）';
+
+      var hint = document.createElement('div');
+      hint.id = '__erp_pick_hint';
+      hint.textContent = hintText;
+      hint.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:999999;background:#059669;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;';
+      document.body.appendChild(hint);
+
+      function isSelectionBackward(sel) {
+        if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return false;
+        if (sel.anchorNode === sel.focusNode) return sel.anchorOffset > sel.focusOffset;
+        var pos = sel.anchorNode.compareDocumentPosition(sel.focusNode);
+        return (pos & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+      }
+
+      var handler = function(e) {
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var sel = window.getSelection();
+        var text = sel ? sel.toString().trim() : '';
+        var backward = isSelectionBackward(sel);
+
+        // 后向拖动 = 取消（undo）
+        if (backward) {
+          document.removeEventListener('mouseup', handler, true);
+          if (hint.parentNode) hint.parentNode.removeChild(hint);
+          sendResponse({ success: true, cancel: true });
+          return;
+        }
+
+        // 前向拖动且选中文字 → 确认选择
+        if (text && text.length < 200) {
+          try {
+            var range = sel.getRangeAt(0);
+            var span = document.createElement('span');
+            span.style.cssText = 'background:#a7f3d0;border-radius:3px;padding:0 2px;';
+            range.surroundContents(span);
+            setTimeout(function() { span.style.background = 'transparent'; }, 2000);
+          } catch(ex) {}
+          document.removeEventListener('mouseup', handler, true);
+          if (hint.parentNode) hint.parentNode.removeChild(hint);
+          // 保存到 storage（弹窗关闭后恢复用）
+          try {
+            chrome.storage.local.set({ pendingPickResult: { text: text, phase: phase, timestamp: Date.now() } });
+          } catch(ex) {}
+          sendResponse({ success: true, text: text });
+        }
+      };
+      document.addEventListener('mouseup', handler, true);
+
+      setTimeout(function() {
+        document.removeEventListener('mouseup', handler, true);
+        if (hint.parentNode) hint.parentNode.removeChild(hint);
+        sendResponse({ success: false, error: 'timeout' });
+      }, 30000);
+
+      return true;
+    }
+
+    // TOGGLE_PANEL: show/hide in-page floating panel (replaces popup)
+    if (message.type === 'TOGGLE_PANEL') {
+      togglePanel();
+      sendResponse({ success: true, panelActive: !!window.__panelActive });
+      return false;
+    }
   });
 
   window.__ERP_EXTENSION__ = { platform: detectPlatform(), isProductPage: detectPlatform() !== 'unknown', v2Available: v2Available };
   console.log('[ERP采集 v2] 平台:', detectPlatform(), 'v2引擎:', v2Available ? '✅ 可用' : '❌ 不可用');
+
+  // 在页面右下角注入一个浮动触发按钮
+  (function injectToggleButton() {
+    var btn = document.createElement('div');
+    btn.id = '__erp_toggle_btn';
+    btn.textContent = '📦';
+    btn.title = '打开 ERP 采集面板';
+    btn.style.cssText = 'position:fixed !important;bottom:20px !important;right:20px !important;z-index:2147483646 !important;width:48px !important;height:48px !important;border-radius:50% !important;background:#6366f1 !important;color:#fff !important;font-size:22px !important;display:flex !important;align-items:center !important;justify-content:center !important;cursor:pointer !important;box-shadow:0 4px 12px rgba(99,102,241,0.4) !important;border:none !important;transition:transform 0.2s !important;';
+    btn.onmouseover = function() { this.style.transform = 'scale(1.1)'; };
+    btn.onmouseout = function() { this.style.transform = 'scale(1)'; };
+    btn.onclick = function() { togglePanel(); };
+    setTimeout(function() { document.body.appendChild(btn); }, 1000);
+    console.log('[ERP采集] 浮动按钮已注入');
+  })();
+
+  // 清理旧的 tc_ 容器存储（这些之前被错误当作配置显示）
+  try {
+    chrome.storage.local.get(null, function(all) {
+      var removeKeys = [];
+      for (var k in all) {
+        if (k.startsWith('tc_') || k === 'tc_keys') removeKeys.push(k);
+      }
+      if (removeKeys.length > 0) chrome.storage.local.remove(removeKeys);
+    });
+  } catch(e) {}
 
   // ===== 选择模式（不变） =====
   var selectModeActive = false;
@@ -881,12 +1028,16 @@
 
     var style = document.createElement('style');
     style.id = '__erp_style__';
-    style.textContent = '\n      .__erp_hover { outline: 2px solid #3b82f6 !important; outline-offset: 1px !important; cursor: crosshair !important; background: rgba(59,130,246,0.04) !important; }\n      .__erp_selected { outline: 2px solid #f59e0b !important; background: rgba(245,158,11,0.12) !important; }\n    ';
+    style.textContent = '\n      .__erp_hover { outline: 2px solid #3b82f6 !important; outline-offset: 1px !important; cursor: crosshair !important; background: rgba(59,130,246,0.04) !important; }\n      .__erp_selected { outline: 2px solid #f59e0b !important; background: rgba(245,158,11,0.12) !important; }\n      body { user-select: none !important; -webkit-user-select: none !important; }\n    ';
     document.head.appendChild(style);
     document.addEventListener('mouseover', onHover, true);
     document.addEventListener('mouseout', onHoverOut, true);
     document.addEventListener('click', onPickClick, true);
-    showFloatingHint('🖱️ 点击图片=采集  |  点击带冒号的文字=属性  |  Shift+点击属性区域=记住容器  |  点完回插件点"确认采集"');
+    document.addEventListener('selectstart', preventSelection, true);
+  }
+
+  function preventSelection(e) {
+    e.preventDefault();
   }
 
   function onHover(e) {
@@ -901,10 +1052,11 @@
   }
 
   function onPickClick(e) {
+    var el = e.target;
+    // 跳过面板内点击和无关元素（在 preventDefault 之前检查）
+    if (!el || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.closest('.erp-panel') || el.tagName === 'HTML' || el.tagName === 'BODY') return;
     e.preventDefault();
     e.stopPropagation();
-    var el = e.target;
-    if (!el || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.tagName === 'HTML' || el.tagName === 'BODY') return;
 
     el.classList.remove('__erp_hover');
 
@@ -915,26 +1067,20 @@
       var entry = { containerSelector: sel, nameIndex: 0, valueIndex: 1 };
       selectedSelector = entry;
       document.querySelectorAll('.__erp_selected').forEach(function(s) { s.classList.remove('__erp_selected'); });
+      document.querySelectorAll('.__erp_container_highlight').forEach(function(s) { s.classList.remove('__erp_container_highlight'); });
       container.classList.add('__erp_selected');
-      container.style.outline = '3px solid #059669';
+      container.style.outline = '3px solid #9ca3af';
+      container.style.outlineOffset = '2px';
       // 保存到 storage（弹窗关闭后再打开也能读到）
       try {
         var saveKey = 'tc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
         var saveData = {};
         saveData[saveKey] = { selector: entry, name: '框' + Date.now(), createdAt: Date.now() };
         chrome.storage.local.set(saveData);
-        // 也保存一份索引列表，方便读取
-        chrome.storage.local.get('tc_keys', function(res) {
-          var keys = res.tc_keys || [];
-          if (keys.indexOf(saveKey) < 0) {
-            keys.push(saveKey);
-            chrome.storage.local.set({ tc_keys: keys });
-          }
-        });
       } catch(e) {}
-      showFloatingHint('✅ 已选中属性容器! 回插件查看列表 → 确认');
-      // 通知 popup（如果还开着）
-      try { chrome.runtime.sendMessage({ type: 'CONTAINER_SELECTED', selector: entry }); } catch(e) {}
+      showFloatingHint('✅ 已选中属性容器');
+      // 刷新面板容器列表
+      if (typeof renderPanelContainers === 'function') renderPanelContainers();
       return;
     }
 
@@ -1078,10 +1224,14 @@
     document.removeEventListener('mouseover', onHover, true);
     document.removeEventListener('mouseout', onHoverOut, true);
     document.removeEventListener('click', onPickClick, true);
+    document.removeEventListener('selectstart', preventSelection, true);
     var style = document.getElementById('__erp_style__');
     if (style) style.remove();
     var hint = document.getElementById('__erp_hint__');
     if (hint) hint.remove();
+    // 确保 body 恢复正常选中
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
   }
 
   // ===== 调试工具 =====
@@ -1211,8 +1361,932 @@
       containerSelector: parentSelector,
       nameIndex: 0,
       valueIndex: 1,
-      childSelector: '> div, > span, > p',
+      childSelector: ':scope > div, :scope > span, :scope > p',
     };
+  }
+
+  // ===== Floating Panel (in-page collection UI, replaces popup) =====
+  // Global state
+  window.__panelActive = false;
+  var __panelInstance = null;
+
+  function togglePanel() {
+    if (window.__panelActive) {
+      removePanel();
+    } else {
+      injectPanel();
+    }
+  }
+
+  function injectPanel() {
+    if (window.__panelInstance) return;
+    window.__panelActive = true;
+
+    // --- inject panel styles ---
+    var style = document.createElement('style');
+    style.id = '__erp_panel_style';
+    style.textContent = '\
+.erp-panel * {\
+  box-sizing: border-box;\
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\
+  line-height: 1.5;\
+}\
+.erp-panel {\
+  all: initial;\
+  position: fixed !important;\
+  top: 20px !important;\
+  right: 20px !important;\
+  width: 420px !important;\
+  max-height: 90vh !important;\
+  background: #ffffff !important;\
+  border: 1px solid #e5e7eb !important;\
+  border-radius: 12px !important;\
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08) !important;\
+  z-index: 2147483647 !important;\
+  display: flex !important;\
+  flex-direction: column !important;\
+  overflow: hidden !important;\
+  font-size: 13px !important;\
+  color: #1f2937 !important;\
+}\
+.erp-panel-header {\
+  display: flex !important;\
+  align-items: center !important;\
+  justify-content: space-between !important;\
+  padding: 12px 16px !important;\
+  background: #f8fafc !important;\
+  border-bottom: 1px solid #e5e7eb !important;\
+  cursor: move !important;\
+  user-select: none !important;\
+  font-weight: 600 !important;\
+  font-size: 14px !important;\
+}\
+.erp-panel-header .erp-panel-close {\
+  cursor: pointer !important;\
+  background: none !important;\
+  border: none !important;\
+  font-size: 18px !important;\
+  line-height: 1 !important;\
+  color: #9ca3af !important;\
+  padding: 2px 6px !important;\
+  border-radius: 4px !important;\
+}\
+.erp-panel-header .erp-panel-close:hover {\
+  color: #ef4444 !important;\
+  background: #fee2e2 !important;\
+}\
+.erp-panel-body {\
+  flex: 1 !important;\
+  overflow-y: auto !important;\
+  padding: 12px 16px !important;\
+}\
+.erp-panel-section {\
+  margin-bottom: 12px !important;\
+}\
+.erp-panel-section:last-child {\
+  margin-bottom: 0 !important;\
+}\
+.erp-panel-label {\
+  display: block !important;\
+  font-size: 11px !important;\
+  font-weight: 600 !important;\
+  color: #6b7280 !important;\
+  text-transform: uppercase !important;\
+  letter-spacing: 0.05em !important;\
+  margin-bottom: 6px !important;\
+}\
+.erp-panel-select {\
+  width: 100% !important;\
+  padding: 6px 10px !important;\
+  border: 1px solid #d1d5db !important;\
+  border-radius: 6px !important;\
+  font-size: 13px !important;\
+  background: #fff !important;\
+  color: #1f2937 !important;\
+  outline: none !important;\
+}\
+.erp-panel-select:focus {\
+  border-color: #6366f1 !important;\
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15) !important;\
+}\
+.erp-panel-btn {\
+  display: inline-flex !important;\
+  align-items: center !important;\
+  gap: 5px !important;\
+  padding: 7px 14px !important;\
+  border-radius: 6px !important;\
+  font-size: 13px !important;\
+  font-weight: 500 !important;\
+  border: 1px solid transparent !important;\
+  cursor: pointer !important;\
+  transition: all 0.15s ease !important;\
+}\
+.erp-panel-btn.primary {\
+  background: #6366f1 !important;\
+  color: #fff !important;\
+}\
+.erp-panel-btn.primary:hover {\
+  background: #4f46e5 !important;\
+}\
+.erp-panel-btn.secondary {\
+  background: #f3f4f6 !important;\
+  color: #374151 !important;\
+  border-color: #d1d5db !important;\
+}\
+.erp-panel-btn.secondary:hover {\
+  background: #e5e7eb !important;\
+}\
+.erp-panel-btn.ghost {\
+  background: transparent !important;\
+  color: #6366f1 !important;\
+}\
+.erp-panel-btn.ghost:hover {\
+  background: #eef2ff !important;\
+}\
+.erp-panel-btn.small {\
+  padding: 3px 8px !important;\
+  font-size: 12px !important;\
+}\
+.erp-panel-btn.danger {\
+  color: #ef4444 !important;\
+}\
+.erp-panel-btn.danger:hover {\
+  background: #fef2f2 !important;\
+}\
+.erp-panel-btn-row {\
+  display: flex !important;\
+  gap: 8px !important;\
+  flex-wrap: wrap !important;\
+}\
+.erp-panel-input {\
+  width: 100% !important;\
+  padding: 6px 10px !important;\
+  border: 1px solid #d1d5db !important;\
+  border-radius: 6px !important;\
+  font-size: 13px !important;\
+  outline: none !important;\
+  color: #1f2937 !important;\
+}\
+.erp-panel-input:focus {\
+  border-color: #6366f1 !important;\
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15) !important;\
+}\
+.erp-panel-container-item {\
+  display: flex !important;\
+  align-items: center !important;\
+  justify-content: space-between !important;\
+  padding: 6px 8px !important;\
+  background: #f9fafb !important;\
+  border: 1px solid #e5e7eb !important;\
+  border-radius: 6px !important;\
+  margin-bottom: 4px !important;\
+  font-size: 12px !important;\
+}\
+.erp-panel-container-item .name {\
+  font-weight: 500 !important;\
+  color: #374151 !important;\
+  overflow: hidden !important;\
+  text-overflow: ellipsis !important;\
+  white-space: nowrap !important;\
+  max-width: 200px !important;\
+}\
+.erp-panel-attr-table {\
+  width: 100% !important;\
+  border-collapse: collapse !important;\
+  font-size: 12px !important;\
+}\
+.erp-panel-attr-table th,\
+.erp-panel-attr-table td {\
+  padding: 5px 6px !important;\
+  border: 1px solid #e5e7eb !important;\
+  text-align: left !important;\
+}\
+.erp-panel-attr-table th {\
+  background: #f9fafb !important;\
+  font-weight: 600 !important;\
+  color: #6b7280 !important;\
+  font-size: 11px !important;\
+}\
+.erp-panel-attr-table .actions {\
+  white-space: nowrap !important;\
+}\
+.erp-panel-collapsible {\
+  border: 1px solid #e5e7eb !important;\
+  border-radius: 8px !important;\
+  overflow: hidden !important;\
+}\
+.erp-panel-collapsible-header {\
+  display: flex !important;\
+  align-items: center !important;\
+  justify-content: space-between !important;\
+  padding: 8px 12px !important;\
+  background: #f9fafb !important;\
+  cursor: pointer !important;\
+  font-weight: 500 !important;\
+  font-size: 13px !important;\
+}\
+.erp-panel-collapsible-header:hover {\
+  background: #f3f4f6 !important;\
+}\
+.erp-panel-collapsible-body {\
+  padding: 12px !important;\
+  display: none !important;\
+}\
+.erp-panel-collapsible.open .erp-panel-collapsible-body {\
+  display: block !important;\
+}\
+.erp-panel-preview-card {\
+  background: #f9fafb !important;\
+  border: 1px solid #e5e7eb !important;\
+  border-radius: 8px !important;\
+  padding: 10px 12px !important;\
+  margin-bottom: 8px !important;\
+}\
+.erp-panel-preview-card h4 {\
+  margin: 0 0 4px 0 !important;\
+  font-size: 12px !important;\
+  font-weight: 600 !important;\
+  color: #374151 !important;\
+}\
+.erp-panel-preview-card p {\
+  margin: 0 !important;\
+  font-size: 12px !important;\
+  color: #6b7280 !important;\
+  line-height: 1.4 !important;\
+  max-height: 60px !important;\
+  overflow: hidden !important;\
+  text-overflow: ellipsis !important;\
+}\
+.erp-panel-empty {\
+  text-align: center !important;\
+  padding: 20px !important;\
+  color: #9ca3af !important;\
+  font-size: 13px !important;\
+}\
+.erp-panel-tag {\
+  display: inline-flex !important;\
+  align-items: center !important;\
+  padding: 2px 8px !important;\
+  border-radius: 10px !important;\
+  font-size: 11px !important;\
+  font-weight: 500 !important;\
+}\
+.erp-panel-tag.green {\
+  background: #d1fae5 !important;\
+  color: #065f46 !important;\
+}\
+.erp-panel-tag.blue {\
+  background: #dbeafe !important;\
+  color: #1e40af !important;\
+}\
+.erp-panel-tag.gray {\
+  background: #f3f4f6 !important;\
+  color: #6b7280 !important;\
+}\
+.erp-panel-divider {\
+  height: 1px !important;\
+  background: #e5e7eb !important;\
+  margin: 8px 0 !important;\
+}\
+.erp-panel-toast {\
+  position: fixed !important;\
+  bottom: 20px !important;\
+  right: 460px !important;\
+  background: #1f2937 !important;\
+  color: #fff !important;\
+  padding: 8px 16px !important;\
+  border-radius: 6px !important;\
+  font-size: 13px !important;\
+  z-index: 2147483647 !important;\
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;\
+  animation: erpFadeIn 0.2s ease !important;\
+}\
+@keyframes erpFadeIn {\
+  from { opacity: 0; transform: translateY(10px); }\
+  to { opacity: 1; transform: translateY(0); }\
+}\
+.erp-panel-container-item.active {\
+  background: #fef3c7 !important;\
+  border-color: #f59e0b !important;\
+}\
+.__erp_container_highlight {\
+  outline: 3px solid #f59e0b !important;\
+  outline-offset: 3px !important;\
+  background: rgba(245,158,11,0.08) !important;\
+  box-shadow: 0 0 20px rgba(245,158,11,0.3) !important;\
+}\
+';
+    document.head.appendChild(style);
+
+    // --- build panel DOM ---
+    var panel = document.createElement('div');
+    panel.className = 'erp-panel';
+    panel.id = '__erp_floating_panel';
+    panel.innerHTML = '\
+<div class="erp-panel-header" id="__erp_panel_header">\
+  <span>📦 采集到 ERP</span>\
+  <button class="erp-panel-close" id="__erp_panel_close">✕</button>\
+</div>\
+<div class="erp-panel-body">\
+  <div class="erp-panel-section">\
+    <label class="erp-panel-label">配置</label>\
+    <select class="erp-panel-select" id="__erp_config_selector">\
+      <option value="">— 加载中 —</option>\
+    </select>\
+  </div>\
+  <div class="erp-panel-section">\
+    <div class="erp-panel-btn-row">\
+      <button class="erp-panel-btn primary" id="__erp_collect_btn">⬇️ 采集到 ERP</button>\
+    </div>\
+  </div>\
+  <div class="erp-panel-section">\
+    <div class="erp-panel-btn-row">\
+      <button class="erp-panel-btn ghost" id="__erp_preview_btn">🔍 调试预览</button>\
+    </div>\
+  </div>\
+  <div class="erp-panel-section erp-panel-collapsible open" id="__erp_attr_config_panel">\
+    <div class="erp-panel-collapsible-header" id="__erp_attr_config_header">\
+      <span>🏷️ 属性配置</span>\
+      <span>▼</span>\
+    </div>\
+    <div class="erp-panel-collapsible-body">\
+      <label class="erp-panel-label">容器列表 (Shift+点击页面元素添加)</label>\
+      <div id="__erp_container_list"></div>\
+      <div style="margin-top:8px">\
+        <button class="erp-panel-btn primary small" id="__erp_extract_attrs_btn">确认提取</button>\
+      </div>\
+      <div class="erp-panel-divider"></div>\
+      <label class="erp-panel-label">属性编辑</label>\
+      <div id="__erp_attr_table_wrap" style="overflow-x:auto">\
+        <table class="erp-panel-attr-table" id="__erp_attr_table">\
+          <thead><tr><th>属性名</th><th>属性值</th><th class="actions">操作</th></tr></thead>\
+          <tbody></tbody>\
+        </table>\
+      </div>\
+      <div style="margin-top:6px">\
+        <button class="erp-panel-btn ghost small" id="__erp_add_attr_btn">+ 新增属性</button>\
+      </div>\
+      <div class="erp-panel-divider"></div>\
+      <label class="erp-panel-label">保存配置</label>\
+      <input class="erp-panel-input" id="__erp_config_name_input" placeholder="配置名称...">\
+      <div class="erp-panel-btn-row" style="margin-top:6px">\
+        <button class="erp-panel-btn primary small" id="__erp_save_config_btn">保存</button>\
+        <button class="erp-panel-btn secondary small" id="__erp_update_config_btn">更新</button>\
+        <button class="erp-panel-btn ghost small" id="__erp_save_as_btn">另存</button>\
+      </div>\
+    </div>\
+  </div>\
+  <div class="erp-panel-section" id="__erp_preview_section" style="display:none">\
+    <label class="erp-panel-label">调试预览</label>\
+    <div id="__erp_preview_content"></div>\
+  </div>\
+</div>\
+';
+    document.body.appendChild(panel);
+    window.__panelInstance = panel;
+
+    // --- draggable ---
+    makePanelDraggable(panel);
+
+    // --- close button ---
+    document.getElementById('__erp_panel_close').addEventListener('click', function(e) {
+      e.stopPropagation();
+      removePanel();
+    });
+
+    // --- event bindings ---
+    document.getElementById('__erp_collect_btn').addEventListener('click', handleCollectClick);
+    document.getElementById('__erp_preview_btn').addEventListener('click', handlePreviewClick);
+    document.getElementById('__erp_attr_config_header').addEventListener('click', function() {
+      var panel = this.parentElement;
+      panel.classList.toggle('open');
+      var arrow = this.querySelector('span:last-child');
+      if (arrow) arrow.textContent = panel.classList.contains('open') ? '▼' : '▶';
+      // 展开时自动进入容器选择模式
+      if (panel.classList.contains('open')) {
+        enterSelectMode();
+      } else {
+        exitSelectMode();
+      }
+    });
+    document.getElementById('__erp_extract_attrs_btn').addEventListener('click', handleExtractAttrs);
+    document.getElementById('__erp_add_attr_btn').addEventListener('click', handleAddAttr);
+    document.getElementById('__erp_save_config_btn').addEventListener('click', function() { handleSaveConfig('save'); });
+    document.getElementById('__erp_update_config_btn').addEventListener('click', function() { handleSaveConfig('update'); });
+    document.getElementById('__erp_save_as_btn').addEventListener('click', function() { handleSaveConfig('saveas'); });
+
+    // --- load configs ---
+    renderPanelConfigs();
+
+    // --- load containers ---
+    renderPanelContainers();
+
+    // --- auto enter select mode when panel opens ---
+    setTimeout(function() { enterSelectMode(); }, 300);
+
+    // --- load attributes ---
+    renderPanelAttributes();
+  }
+
+  function removePanel() {
+    window.__panelActive = false;
+    var panel = window.__panelInstance;
+    if (panel) {
+      panel.remove();
+      window.__panelInstance = null;
+    }
+    var style = document.getElementById('__erp_panel_style');
+    if (style) style.remove();
+    var toasts = document.querySelectorAll('.erp-panel-toast');
+    toasts.forEach(function(t) { t.remove(); });
+  }
+
+  function panelToast(msg) {
+    var existing = document.querySelector('.erp-panel-toast');
+    if (existing) existing.remove();
+    var div = document.createElement('div');
+    div.className = 'erp-panel-toast';
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(function() { if (div.parentNode) div.remove(); }, 3000);
+  }
+
+  // --- drag ---
+  function makePanelDraggable(panel) {
+    var header = document.getElementById('__erp_panel_header');
+    var isDragging = false, startX, startY, origX, origY;
+    header.addEventListener('mousedown', function(e) {
+      if (e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      var rect = panel.getBoundingClientRect();
+      origX = rect.left;
+      origY = rect.top;
+      startX = e.clientX;
+      startY = e.clientY;
+      panel.style.right = 'auto';
+      panel.style.top = rect.top + 'px';
+      panel.style.left = rect.left + 'px';
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      panel.style.left = (origX + e.clientX - startX) + 'px';
+      panel.style.top = (origY + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() {
+      isDragging = false;
+    });
+  }
+
+  // --- config selector ---
+  function renderPanelConfigs() {
+    var sel = document.getElementById('__erp_config_selector');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">选择配置...</option>';
+    chrome.storage.local.get('configs', function(result) {
+      var configs = result.configs || {};
+      var ids = Object.keys(configs);
+      ids.sort(function(a, b) { return (configs[b].updatedAt || 0) - (configs[a].updatedAt || 0); });
+      ids.forEach(function(id) {
+        var cfg = configs[id];
+        var opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = cfg.name + (cfg.isDefault ? ' ★' : '') + (cfg.urlPattern ? ' (' + cfg.urlPattern + ')' : '');
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  // --- container list ---
+  function renderPanelContainers() {
+    var container = document.getElementById('__erp_container_list');
+    if (!container) return;
+    container.innerHTML = '<div class="erp-panel-empty">加载中...</div>';
+
+    chrome.storage.local.get(null, function(all) {
+      var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
+      if (keys.length === 0) {
+        container.innerHTML = '<div class="erp-panel-empty">暂无容器。在页面上 Shift+点击属性区域来添加。</div>';
+        return;
+      }
+      var html = '';
+      keys.forEach(function(key, idx) {
+        var item = all[key];
+        if (!item || !item.selector) return;
+        var num = idx + 1;
+        var sel = item.selector.containerSelector || item.selector;
+        html += '\
+<div class="erp-panel-container-item" data-key="' + key + '" data-sel="' + sel.replace(/"/g, '&quot;') + '">\
+  <span class="num">' + num + '</span>\
+  <span class="name" title="' + sel.replace(/"/g, '&quot;') + '">容器' + num + '</span>\
+  <span class="erp-panel-tag gray" style="cursor:pointer;margin-left:auto" data-delete="' + key + '">✕</span>\
+</div>';
+      });
+      container.innerHTML = html;
+
+      // 点击整个容器项 → 切换页面元素高亮（黄色）
+      container.querySelectorAll('.erp-panel-container-item').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+          if (e.target.getAttribute('data-delete')) return;
+          var selStr = el.getAttribute('data-sel');
+          if (!selStr) { panelToast('⚠️ 无效的选择器'); return; }
+          var target = document.querySelector(selStr);
+          if (!target) { panelToast('⚠️ 页面中未找到该容器'); return; }
+
+          // 如果已高亮，则取消
+          if (target.classList.contains('__erp_container_highlight')) {
+            target.classList.remove('__erp_container_highlight');
+            el.classList.remove('active');
+            return;
+          }
+
+          // 清除其他容器的高亮
+          document.querySelectorAll('.__erp_container_highlight').forEach(function(h) {
+            h.classList.remove('__erp_container_highlight');
+          });
+          container.querySelectorAll('.erp-panel-container-item.active').forEach(function(a) {
+            a.classList.remove('active');
+          });
+
+          // 高亮当前容器
+          target.classList.add('__erp_container_highlight');
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('active');
+          panelToast('🔍 容器 ' + el.querySelector('.num').textContent);
+        });
+      });
+
+      // 删除按钮
+      container.querySelectorAll('[data-delete]').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var key = el.getAttribute('data-delete');
+          chrome.storage.local.remove(key, function() {
+            renderPanelContainers();
+            panelToast('🗑️ 已删除容器');
+          });
+        });
+      });
+    });
+  }
+
+          // --- attribute table ---
+  var __panelAttrs = [];
+
+  function renderPanelAttributes() {
+    var tbody = document.querySelector('#__erp_attr_table tbody');
+    if (!tbody) return;
+    if (__panelAttrs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#9ca3af;padding:10px">点击「确认提取」从容器中提取属性</td></tr>';
+      return;
+    }
+    var html = '';
+    __panelAttrs.forEach(function(attr, idx) {
+      html += '<tr data-idx="' + idx + '">\
+  <td contenteditable="true" data-field="name" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.name) + '</td>\
+  <td contenteditable="true" data-field="value" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.value) + '</td>\
+  <td class="actions">\
+    <button class="erp-panel-btn ghost small" data-pick="' + idx + '" title="从页面选取文字">📝</button>\
+    <button class="erp-panel-btn ghost small danger" data-delattr="' + idx + '" title="删除">✕</button>\
+  </td>\
+</tr>';
+    });
+    tbody.innerHTML = html;
+
+    // bind editable cell changes
+    tbody.querySelectorAll('td[contenteditable]').forEach(function(td) {
+      td.addEventListener('blur', function() {
+        var idx = parseInt(td.closest('tr').getAttribute('data-idx'), 10);
+        var field = td.getAttribute('data-field');
+        if (__panelAttrs[idx]) {
+          __panelAttrs[idx][field] = td.textContent.trim();
+        }
+      });
+    });
+
+    // bind pick buttons
+    tbody.querySelectorAll('[data-pick]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(btn.getAttribute('data-pick'), 10);
+        startPickPhase(idx, 'name');
+      });
+    });
+
+    // bind delete attribute buttons
+    tbody.querySelectorAll('[data-delattr]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(btn.getAttribute('data-delattr'), 10);
+        __panelAttrs.splice(idx, 1);
+        renderPanelAttributes();
+      });
+    });
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // --- collect click ---
+  function handleCollectClick() {
+    try {
+      var data;
+      if (typeof window.__ERP_PARSERS__ !== 'undefined' && window.__ERP_PARSERS__.AlibabaV2Engine) {
+        data = window.__ERP_PARSERS__.AlibabaV2Engine.extractFullProduct();
+      } else {
+        data = detectPlatform() === 'alibaba' ? parseAlibaba() : parse1688();
+      }
+      // merge in attributes from attr table
+      if (__panelAttrs.length > 0) {
+        data.attributes = __panelAttrs;
+      }
+      // send to background for ERP posting
+      chrome.runtime.sendMessage({ type: 'COLLECT_TO_ERP', data: data }, function(resp) {
+        if (resp && resp.success) {
+          panelToast('✅ 已采集并发送到 ERP');
+        } else {
+          panelToast('⚠️ 发送失败: ' + ((resp && resp.error) || '未知错误'));
+        }
+      });
+    } catch(e) {
+      panelToast('❌ 采集出错: ' + e.message);
+    }
+  }
+
+  // --- attr config toggle ---
+  function handleAttrConfigClick() {
+    var panel = document.getElementById('__erp_attr_config_panel');
+    if (panel) panel.classList.toggle('open');
+  }
+
+  // --- preview toggle ---
+  function handlePreviewClick() {
+    var section = document.getElementById('__erp_preview_section');
+    var content = document.getElementById('__erp_preview_content');
+    if (section.style.display === 'none') {
+      section.style.display = 'block';
+      try {
+        var data;
+        if (typeof window.__ERP_PARSERS__ !== 'undefined' && window.__ERP_PARSERS__.AlibabaV2Engine) {
+          data = window.__ERP_PARSERS__.AlibabaV2Engine.extractFullProduct();
+        } else {
+          data = detectPlatform() === 'alibaba' ? parseAlibaba() : parse1688();
+        }
+        content.innerHTML = '<div class="erp-panel-preview-card"><h4>标题</h4><p>' + escHtml((data.title || '') + '') + '</p></div>\
+<div class="erp-panel-preview-card"><h4>价格</h4><p>' + escHtml('' + (data.price || data.priceRange || '—')) + '</p></div>\
+<div class="erp-panel-preview-card"><h4>图片</h4><p>' + (data.images ? data.images.length + ' 张' : '0 张') + '</p></div>\
+<div class="erp-panel-preview-card"><h4>属性</h4><p>' + ((data.attributes || []).length > 0 ? data.attributes.map(function(a) { return escHtml(a.name + ': ' + a.value); }).join(' | ') : '无') + '</p></div>';
+      } catch(e) {
+        content.innerHTML = '<div class="erp-panel-empty">预览出错: ' + escHtml(e.message) + '</div>';
+      }
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  // --- extract attrs from containers ---
+  function handleExtractAttrs() {
+    // 先退出选择模式
+    exitSelectMode();
+    panelToast('🔍 正在读取容器数据...', 1000);
+    chrome.storage.local.get(null, function(all) {
+      var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
+      if (keys.length === 0) {
+        panelToast('⚠️ 没有容器，请先 Shift+点击页面属性区域');
+        return;
+      }
+      panelToast('📦 找到 ' + keys.length + ' 个容器', 1000);
+      var selectors = [];
+      keys.forEach(function(key) {
+        var item = all[key];
+        if (item && item.selector) {
+          selectors.push(item.selector);
+        }
+      });
+      if (selectors.length === 0) {
+        panelToast('⚠️ 容器数据异常');
+        return;
+      }
+      panelToast('🔎 正在从 ' + selectors.length + ' 个容器提取属性...', 1500);
+      // 诊断：显示第一个选择器
+      var firstSel = selectors[0];
+      var firstSelStr = (typeof firstSel === 'string') ? firstSel : (firstSel.containerSelector || 'unknown');
+      console.log('[提取] 选择器:', firstSelStr, '匹配数:', document.querySelectorAll(firstSelStr).length);
+      // inline extraction (same logic as EXTRACT_ATTRS_FROM_CONTAINERS)
+      var allAttrs = [];
+      var seenNames = {};
+      selectors.forEach(function(selItem) {
+        try {
+          var selStr = (typeof selItem === 'string') ? selItem : (selItem.containerSelector || '');
+          if (!selStr) return;
+          var containers = document.querySelectorAll(selStr);
+          containers.forEach(function(c) {
+            // strategy A: row structure
+            var rows = c.querySelectorAll('[data-testid$="row"], [data-testid*="-row"], [class*="row"], :scope > div');
+            var hasRow = false;
+            rows.forEach(function(r) {
+              var cells = r.querySelectorAll(':scope > div');
+              if (cells.length >= 2) {
+                hasRow = true;
+                var nm = cells[0].textContent.replace(/[：:]/g, '').trim();
+                var vl = cells[1].textContent.replace(/[：:]/g, '').trim();
+                if (nm && vl && nm.length < 100 && !seenNames[nm] && vl.length < 500) {
+                  seenNames[nm] = true;
+                  allAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                }
+              }
+            });
+            if (hasRow) return;
+            // strategy B: <p> tags
+            var pTags = c.querySelectorAll('p');
+            if (pTags.length >= 2) {
+              var texts = [];
+              pTags.forEach(function(p) { texts.push(p.textContent.trim()); });
+              for (var pi = 0; pi < texts.length - 1; pi += 2) {
+                if (texts[pi] && texts[pi + 1] && texts[pi].length < 80 && !seenNames[texts[pi]]) {
+                  seenNames[texts[pi]] = true;
+                  allAttrs.push({ name: texts[pi], value: texts[pi + 1], rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                }
+              }
+              return;
+            }
+            // strategy C: :scope > div pairs
+            var childDivs = c.querySelectorAll(':scope > div');
+            if (childDivs.length >= 2) {
+              for (var di = 0; di < childDivs.length - 1; di += 2) {
+                var nm2 = childDivs[di].textContent.replace(/[：:]/g, '').trim();
+                var vl2 = childDivs[di + 1].textContent.replace(/[：:]/g, '').trim();
+                if (nm2 && vl2 && nm2.length < 100 && !seenNames[nm2]) {
+                  seenNames[nm2] = true;
+                  allAttrs.push({ name: nm2, value: vl2, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                }
+              }
+              return;
+            }
+            // strategy D: colon-split text
+            var allText = c.textContent.trim();
+            var lines = allText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+            for (var li2 = 0; li2 < lines.length; li2++) {
+              var colonIdx = lines[li2].indexOf(':');
+              if (colonIdx > 0 && colonIdx < 50) {
+                var nm3 = lines[li2].substring(0, colonIdx).trim();
+                var vl3 = lines[li2].substring(colonIdx + 1).trim();
+                if (nm3 && vl3 && !seenNames[nm3]) {
+                  seenNames[nm3] = true;
+                  allAttrs.push({ name: nm3, value: vl3, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                }
+              }
+            }
+          });
+        } catch(e) { /* fail silently */ }
+      });
+      if (allAttrs.length === 0) {
+          panelToast('⚠️ 未能从容器中提取到属性');
+        } else {
+          __panelAttrs = allAttrs;
+          renderPanelAttributes();
+          panelToast('✅ 提取到 ' + allAttrs.length + ' 项属性');
+        }
+        // 提取完毕，退出容器选择模式
+        exitSelectMode();
+      });
+  }
+
+  // --- add new attribute row (starts pick mode) ---
+  function handleAddAttr() {
+    var newId = 'ar_' + Date.now() + '_' + __panelAttrs.length;
+    __panelAttrs.push({ name: '', value: '', rowId: newId });
+    renderPanelAttributes();
+    panelToast('📝 请在页面拖动选择属性名', 3000);
+    // 先退出选择模式
+    exitSelectMode();
+    // 延迟一帧启动选文字模式
+    setTimeout(function() { startPickPhase(__panelAttrs.length - 1, 'name'); }, 100);
+  }
+
+  // --- pick text from page ---
+  var __pickActive = false;
+  var __pickRowId = null;
+  var __pickPhase = null;
+
+  function startPickPhase(rowIdx, phase) {
+    if (__pickActive) {
+      panelToast('⚠️ 正在选取中，请先完成当前操作');
+      return;
+    }
+    __pickActive = true;
+    __pickRowId = rowIdx;
+    __pickPhase = phase;
+
+    // 退出选择模式（去掉 user-select: none 限制）
+    exitSelectMode();
+
+    var hint = document.createElement('div');
+    hint.id = '__erp_pick_attr_hint';
+    hint.textContent = phase === 'name' ? '👉 在页面上拖动选中属性名' : '👉 在页面上拖动选中属性值';
+    hint.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#6366f1;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;';
+    document.body.appendChild(hint);
+
+    var mouseupHandler = function(e) {
+      var sel = window.getSelection();
+      var text = sel ? sel.toString().trim() : '';
+      if (hint.parentNode) hint.parentNode.removeChild(hint);
+      document.removeEventListener('mouseup', mouseupHandler, true);
+
+      if (!text || text.length > 200 || sel.isCollapsed) {
+        __pickActive = false;
+        if (window.__panelActive) enterSelectMode();
+        return;
+      }
+
+      // highlight selection
+      try {
+        var range = sel.getRangeAt(0);
+        var span = document.createElement('span');
+        span.style.cssText = 'background:#c7d2fe;border-radius:3px;padding:0 2px;';
+        range.surroundContents(span);
+        setTimeout(function() { if (span.parentNode) span.style.background = 'transparent'; }, 2000);
+      } catch(ex) {}
+
+      // fill attribute
+      if (__panelAttrs[__pickRowId]) {
+        __panelAttrs[__pickRowId][__pickPhase] = text;
+        renderPanelAttributes();
+        panelToast('✅ 已填入: ' + text.substring(0, 30));
+      }
+
+      // auto advance to next phase (name → value)
+      __pickActive = false;
+      __pickRowId = null;
+      __pickPhase = null;
+
+      if (phase === 'name' && window.__panelActive) {
+        // 选完 name 后自动进入 value 阶段
+        // (在 handleAddAttr 中处理两阶段)
+      } else if (window.__panelActive) {
+        enterSelectMode();
+      }
+    };
+
+    document.addEventListener('mouseup', mouseupHandler, true);
+
+    setTimeout(function() {
+      document.removeEventListener('mouseup', mouseupHandler, true);
+      var h = document.getElementById('__erp_pick_attr_hint');
+      if (h) h.remove();
+      if (__pickActive) {
+        __pickActive = false;
+        __pickRowId = null;
+        __pickPhase = null;
+        if (window.__panelActive) enterSelectMode();
+      }
+    }, 30000);
+  }
+
+  // --- save config ---
+  function handleSaveConfig(mode) {
+    var nameInput = document.getElementById('__erp_config_name_input');
+    var name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+      panelToast('⚠️ 请输入配置名称');
+      return;
+    }
+    var sel = document.getElementById('__erp_config_selector');
+    var selectedKey = sel ? sel.value : '';
+
+    chrome.storage.local.get('configs', function(result) {
+      var configs = result.configs || {};
+      var targetId = null;
+
+      if (mode === 'update' && selectedKey && configs[selectedKey]) {
+        // 更新已有配置
+        targetId = selectedKey;
+      } else if (mode === 'saveas' && selectedKey) {
+        // 另存为：生成新ID
+        targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      } else {
+        // 新建
+        targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      }
+
+      var cfg = configs[targetId] || {
+        id: targetId,
+        createdAt: Date.now()
+      };
+      cfg.name = name;
+      cfg.containerSelectors = [];
+      cfg.attributeNames = [];
+      cfg.attributes = [];
+      cfg.updatedAt = Date.now();
+
+      configs[targetId] = cfg;
+      chrome.storage.local.set({ configs: configs }, function() {
+        panelToast('✅ 配置已保存: ' + name);
+        renderPanelConfigs();
+      });
+    });
   }
 
 })();

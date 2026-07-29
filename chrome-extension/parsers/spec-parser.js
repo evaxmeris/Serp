@@ -78,7 +78,7 @@
           '[class*="three-col"] [class*="overview"] > div'
         );
         rows.forEach(function (row) {
-          var cells = row.querySelectorAll('> div, > span, > label');
+          var cells = row.querySelectorAll(':scope > div, :scope > span, :scope > label');
           // 2列或3列布局都支持（三列：序号/名称/值 或 名称/值/单位）
           if (cells.length >= 2) {
             var key = cells[0].textContent.trim();

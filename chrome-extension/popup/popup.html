@@ -33,7 +33,17 @@
       <!-- 头部 -->
       <div class="header">
         <h2 class="title">📦 采集到 ERP</h2>
-        <button id="open-config" class="icon-btn" title="设置">⚙️</button>
+        <div class="header-actions">
+          <span id="config-default-star" class="default-star hidden" title="默认配置">★</span>
+          <button id="open-config" class="icon-btn" title="设置">⚙️</button>
+        </div>
+      </div>
+
+      <!-- 配置选择器 -->
+      <div class="config-bar">
+        <select id="config-select" class="config-select">
+          <option value="">— 选择配置 —</option>
+        </select>
       </div>
 
       <!-- 平台识别 -->
@@ -62,19 +72,6 @@
         <div id="duplicate-warning" class="duplicate-warning hidden">
           🔄 该产品已在 <span id="dup-time">-</span> 前采集过
         </div>
-        <!-- 详细预览区 -->
-        <div id="detail-preview" class="detail-preview hidden">
-          <div class="section-title">📋 属性列表</div>
-          <div id="attr-table" class="attr-table"></div>
-          <div class="section-title">🖼️ 图片预览</div>
-          <div id="image-thumbs" class="image-thumbs"></div>
-          <div class="section-title">📝 描述预览</div>
-          <div id="desc-preview" class="desc-preview"></div>
-          <div class="btn-row" style="margin-top:8px">
-            <button id="download-btn" class="btn btn-secondary btn-small">💾 下载到本地</button>
-            <button id="confirm-send-btn" class="btn btn-primary btn-small">📤 确认发送到 ERP</button>
-          </div>
-        </div>
       </div>
 
       <!-- ===== 进度条区域 ===== -->
@@ -93,50 +90,66 @@
       <!-- ===== 操作按钮 ===== -->
       <button id="collect-btn" class="btn btn-primary btn-large" disabled>⬇️ 采集到 ERP</button>
       <button id="retry-btn" class="btn btn-secondary btn-large hidden">🔄 重试采集</button>
+
+      <!-- ===== 配置工具 ===== -->
       <div class="secondary-btn-row">
-        <button id="select-btn" class="btn btn-secondary btn-small" disabled>👆 手动选择</button>
-        <button id="attr-train-btn" class="btn btn-ghost btn-small">🏷️ 属性选择器</button>
+        <button id="attr-config-btn" class="btn btn-ghost btn-small">🏷️ 配置属性</button>
         <button id="debug-btn" class="btn btn-ghost btn-small">🔍 调试预览</button>
       </div>
 
-      <!-- 属性选择器面板 -->
-      <div id="attr-train-panel" class="hidden">
-        <div class="panel-header"><span class="panel-title">🏷️ 选择属性容器</span></div>
-        <div class="train-hint">点击页面上<b>存放属性的那个大框</b>，选中的会列在下方</div>
-        <div id="selected-containers" class="container-list"></div>
-        <div class="btn-row" style="margin-top:8px">
-          <button id="train-confirm-btn" class="btn btn-primary btn-small">✅ 确认并提取</button>
-          <button id="train-cancel-btn" class="btn btn-secondary btn-small">取消</button>
+      <!-- ===== 属性配置面板 ===== -->
+      <div id="attr-config-panel" class="hidden">
+        <div class="panel-header"><span class="panel-title">🏷️ 配置属性</span></div>
+
+        <!-- Step 1: 容器选择 -->
+        <div class="attr-step">
+          <div class="step-label">① 选择属性容器</div>
+          <div id="selected-containers" class="container-list">
+            <div class="train-hint">在页面上按住 Shift 点击属性框</div>
+          </div>
+          <div class="btn-row">
+            <button id="extract-attrs-btn" class="btn btn-primary btn-small">✅ 确认提取</button>
+            <button id="train-cancel-btn" class="btn btn-secondary btn-small">取消</button>
+          </div>
+          <div id="train-status" class="status-msg"></div>
         </div>
-        <div id="train-status" class="status-msg"></div>
+
+        <!-- Step 2: 属性编辑 -->
+        <div class="attr-step hidden" id="attr-edit-step">
+          <div class="step-label">② 编辑属性</div>
+          <div class="attr-edit-hint">勾选=保留 · ✕=删除 · 点name/value框后从页面选文字</div>
+          <div id="attr-edit-table-wrap" class="attr-table-wrap">
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th style="width:32px"><input type="checkbox" id="attr-select-all" checked></th>
+                  <th style="width:36px">#</th>
+                  <th>属性名 <span class="key-hint">(Shift+页面选)</span></th>
+                  <th>属性值 <span class="key-hint">(Ctrl+页面选)</span></th>
+                  <th style="width:32px"></th>
+                </tr>
+              </thead>
+              <tbody id="attr-edit-tbody"></tbody>
+            </table>
+          </div>
+          <div id="attr-count-badge" class="stat-badge" style="margin-top:4px;display:inline-block">0 项</div>
+          <button id="add-attr-btn" class="btn btn-ghost btn-small" style="margin-top:4px">+ 🏷️ 新增属性</button>
+
+          <!-- 配置保存 -->
+          <div class="save-config-area">
+            <label class="save-label">配置名称</label>
+            <input type="text" id="config-name-input" class="config-name-input" placeholder="如：阿里国际站 - 肥皂类" />
+            <div class="btn-row">
+              <button id="save-attr-config-btn" class="btn btn-primary btn-small">💾 保存</button>
+              <button id="update-config-btn" class="btn btn-secondary btn-small hidden">🔄 更新</button>
+              <button id="save-as-btn" class="btn btn-ghost btn-small">📋 另存为</button>
+            </div>
+            <div id="config-save-status" class="status-msg"></div>
+          </div>
+        </div>
       </div>
 
-      <!-- 属性编辑表格（训练器第三步） -->
-      <div id="attr-result-panel" class="hidden">
-        <div class="panel-header">
-          <span class="panel-title">📋 属性提取结果</span>
-          <span id="attr-count-badge" class="stat-badge">0 项</span>
-        </div>
-        <div class="train-hint">勾选要保留的属性行，取消勾选即删除</div>
-        <div id="attr-result-table-wrap" class="attr-table-wrap">
-          <table id="attr-result-table" class="result-table">
-            <thead>
-              <tr>
-                <th style="width:32px"><input type="checkbox" id="attr-select-all" checked></th>
-                <th style="width:36px">#</th>
-                <th>属性名</th>
-                <th>属性值</th>
-              </tr>
-            </thead>
-            <tbody id="attr-result-tbody"></tbody>
-          </table>
-        </div>
-        <div class="btn-row" style="margin-top:8px">
-          <button id="attr-save-btn" class="btn btn-primary btn-small">💾 保存此模式</button>
-          <button id="attr-retry-btn" class="btn btn-secondary btn-small">🔄 重新选择</button>
-        </div>
-        <div id="attr-result-status" class="status-msg"></div>
-      </div>
+      <!-- 手动选择确认按钮 -->
       <button id="confirm-btn" class="btn btn-primary btn-large hidden">✅ 确认采集</button>
       <div id="collect-status" class="status-msg"></div>
 
@@ -153,7 +166,7 @@
           <span id="erp-status" class="status-dot disconnected"></span>
           <span id="erp-status-text">未连接</span>
         </span>
-        <span class="footer-right"><span class="version">v2.0</span></span>
+        <span class="footer-right"><span class="version">v2.3</span></span>
       </div>
     </div>
   </div>

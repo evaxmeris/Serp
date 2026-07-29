@@ -38,7 +38,7 @@
             var sel = window.__trainedAttrSelector;
             var containers = document.querySelectorAll(sel.containerSelector);
             containers.forEach(function(c) {
-              var children = c.querySelectorAll(sel.childSelector || ':scope > div, :scope > span');
+              var children = c.querySelectorAll(sel.childSelector || ':scope > div, :scope > span, :scope > p');
               if (children.length > sel.valueIndex) {
                 var nm = children[sel.nameIndex || 0].textContent.replace(/[：:]/g,'').trim();
                 var vl = children[sel.valueIndex || 1].textContent.replace(/[：:]/g,'').trim();

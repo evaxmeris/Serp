@@ -421,7 +421,9 @@ body {
 .train-hint { font-size:11px; color:#6b7280; margin-bottom:8px; line-height:1.4; }
 .train-hint b { color:#059669; }
 .container-list { max-height:200px; overflow-y:auto; margin-bottom:6px; }
-.container-item { display:flex; justify-content:space-between; align-items:center; padding:4px 6px; background:#f9fafb; border-radius:4px; margin-bottom:4px; font-size:11px; }
+.container-item { display:flex; justify-content:space-between; align-items:center; padding:4px 6px; background:#f9fafb; border-radius:4px; margin-bottom:4px; font-size:11px; cursor:pointer; border:1px solid transparent; transition:border-color 0.15s, background 0.15s; }
+.container-item:hover { background:#eef2ff; border-color:#a5b4fc; }
+.container-item-active { background:#eef2ff; border-color:#6366f1; font-weight:500; }
 .container-item .del-btn { color:#dc2626; cursor:pointer; font-size:13px; padding:0 4px; }
 
 /* 属性结果表格 */
@@ -433,3 +435,30 @@ body {
 .result-table tr.removed td { color:#d1d5db; text-decoration:line-through; }
 .result-table input[type="checkbox"] { cursor:pointer; }
 .result-table .row-del { color:#ef4444; cursor:pointer; font-size:13px; padding:0 4px; }
+
+/* 配置选择器 */
+.config-bar { display:flex; align-items:center; gap:6px; }
+.config-select { flex:1; padding:6px 8px; border:1px solid #d1d5db; border-radius:6px; font-size:12px; background:#fff; outline:none; cursor:pointer; }
+.config-select:focus { border-color:#2563eb; }
+.header-actions { display:flex; align-items:center; gap:4px; }
+.default-star { color:#f59e0b; font-size:16px; cursor:help; }
+
+/* 属性配置面板 */
+#attr-config-panel { background:#f9fafb; border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.attr-step { padding:0; }
+.step-label { font-size:12px; font-weight:600; color:#374151; margin-bottom:6px; }
+
+/* 属性编辑表格 - 可编辑单元格 */
+.attr-edit-hint { font-size:10px; color:#9ca3af; margin-bottom:4px; }
+.key-hint { font-size:9px; color:#d1d5db; font-weight:400; }
+.attr-cell-input { width:100%; border:none; background:transparent; font-size:12px; padding:2px 4px; outline:none; border-radius:3px; color:#1f2937; cursor:text; }
+.attr-cell-input:focus { background:#fff; border:1px solid #2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.1); }
+.attr-cell-input::placeholder { color:#d1d5db; font-style:italic; }
+.attr-cell-input.pick-mode { background:#fef3c7; border:1px solid #f59e0b; }
+.attr-cell-input.picked { background:#ecfdf5; border:1px solid #10b981; }
+
+/* 保存配置区 */
+.save-config-area { margin-top:8px; padding-top:8px; border-top:1px solid #e5e7eb; display:flex; flex-direction:column; gap:6px; }
+.save-label { font-size:11px; color:#6b7280; font-weight:500; }
+.config-name-input { padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; outline:none; }
+.config-name-input:focus { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.1); }
