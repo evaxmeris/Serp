@@ -998,17 +998,6 @@
     console.log('[ERP采集] 浮动按钮已注入');
   })();
 
-  // 清理旧的 tc_ 容器存储（这些之前被错误当作配置显示）
-  try {
-    chrome.storage.local.get(null, function(all) {
-      var removeKeys = [];
-      for (var k in all) {
-        if (k.startsWith('tc_') || k === 'tc_keys') removeKeys.push(k);
-      }
-      if (removeKeys.length > 0) chrome.storage.local.remove(removeKeys);
-    });
-  } catch(e) {}
-
   // ===== 选择模式（不变） =====
   var selectModeActive = false;
   var selectedImages = new Set();
@@ -1034,6 +1023,9 @@
     document.addEventListener('mouseout', onHoverOut, true);
     document.addEventListener('click', onPickClick, true);
     document.addEventListener('selectstart', preventSelection, true);
+    // 更新选容器按钮状态
+    var btn = document.getElementById('__erp_select_mode_btn');
+    if (btn) { btn.textContent = '✅ 选容器中'; btn.style.background = '#fef3c7'; btn.style.color = '#92400e'; }
   }
 
   function preventSelection(e) {
@@ -1078,6 +1070,7 @@
         var saveData = {};
         saveData[saveKey] = { selector: entry, name: '框' + Date.now(), createdAt: Date.now() };
         chrome.storage.local.set(saveData);
+        console.log('[采集] 保存容器:', saveKey, sel);
       } catch(e) {}
       showFloatingHint('✅ 已选中属性容器');
       // 刷新面板容器列表
@@ -1233,6 +1226,9 @@
     // 确保 body 恢复正常选中
     document.body.style.userSelect = '';
     document.body.style.webkitUserSelect = '';
+    // 更新选容器按钮状态
+    var btn = document.getElementById('__erp_select_mode_btn');
+    if (btn) { btn.textContent = '🔲 选容器'; btn.style.background = '#dbeafe'; btn.style.color = '#1e40af'; }
   }
 
   // ===== 调试工具 =====
@@ -1708,6 +1704,7 @@
   <div class="erp-panel-section erp-panel-collapsible open" id="__erp_attr_config_panel">\
     <div class="erp-panel-collapsible-header" id="__erp_attr_config_header">\
       <span>🏷️ 属性配置</span>\
+      <span class="erp-panel-tag blue" id="__erp_select_mode_btn" style="cursor:pointer;margin-left:8px;font-size:11px">🔲 选容器</span>\
       <span>▼</span>\
     </div>\
     <div class="erp-panel-collapsible-body">\
@@ -1758,7 +1755,9 @@
     // --- event bindings ---
     document.getElementById('__erp_collect_btn').addEventListener('click', handleCollectClick);
     document.getElementById('__erp_preview_btn').addEventListener('click', handlePreviewClick);
-    document.getElementById('__erp_attr_config_header').addEventListener('click', function() {
+    document.getElementById('__erp_attr_config_header').addEventListener('click', function(e) {
+      // 点击选容器按钮时不切换折叠状态
+      if (e.target.closest('#__erp_select_mode_btn')) return;
       var panel = this.parentElement;
       panel.classList.toggle('open');
       var arrow = this.querySelector('span:last-child');
@@ -1770,6 +1769,21 @@
         exitSelectMode();
       }
     });
+    // 容器选择模式切换按钮
+    document.getElementById('__erp_select_mode_btn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (selectModeActive) {
+        exitSelectMode();
+        this.textContent = '🔲 选容器';
+        this.style.background = '#dbeafe';
+        this.style.color = '#1e40af';
+      } else {
+        enterSelectMode();
+        this.textContent = '✅ 选容器中';
+        this.style.background = '#fef3c7';
+        this.style.color = '#92400e';
+      }
+    });
     document.getElementById('__erp_extract_attrs_btn').addEventListener('click', handleExtractAttrs);
     document.getElementById('__erp_add_attr_btn').addEventListener('click', handleAddAttr);
     document.getElementById('__erp_save_config_btn').addEventListener('click', function() { handleSaveConfig('save'); });
@@ -1779,11 +1793,75 @@
     // --- load configs ---
     renderPanelConfigs();
 
+    // 选择配置后加载容器和属性
+    document.getElementById('__erp_config_selector').addEventListener('change', function() {
+      var cfgId = this.value;
+      if (!cfgId) return;
+      chrome.storage.local.get('configs', function(result) {
+        var configs = result.configs || {};
+        var cfg = configs[cfgId];
+        if (!cfg) return;
+
+        // 先清除旧的 tc_ 容器
+        chrome.storage.local.get(null, function(all) {
+          var removeKeys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
+          if (removeKeys.length > 0) {
+            chrome.storage.local.remove(removeKeys, function() {
+              // 清除完成后，再写入新的容器
+              if (cfg.containerSelectors && cfg.containerSelectors.length > 0) {
+                var savedCount = 0;
+                cfg.containerSelectors.forEach(function(sel, idx) {
+                  var saveKey = 'tc_' + Date.now() + '_' + idx;
+                  var saveData = {};
+                  saveData[saveKey] = { selector: sel, name: '容器' + (idx + 1), createdAt: Date.now() };
+                  chrome.storage.local.set(saveData, function() {
+                    savedCount++;
+                    if (savedCount === cfg.containerSelectors.length) {
+                      // 所有容器写入完成，再渲染
+                      finishLoad();
+                    }
+                  });
+                });
+              } else {
+                finishLoad();
+              }
+            });
+          } else {
+            finishLoad();
+          }
+        });
+
+        function finishLoad() {
+          // 加载属性列表
+          if (cfg.attributes && cfg.attributes.length > 0) {
+            __panelAttrs = cfg.attributes.map(function(a, idx) {
+              return { name: a.name, value: a.value, rowId: 'ar_' + Date.now() + '_' + idx };
+            });
+          } else {
+            __panelAttrs = [];
+          }
+          renderPanelContainers();
+          renderPanelAttributes();
+          savePanelState();
+          panelToast('✅ 已加载配置: ' + cfg.name);
+        }
+        panelToast('✅ 已加载配置: ' + cfg.name);
+      });
+    });
+
     // --- load containers ---
     renderPanelContainers();
 
     // --- auto enter select mode when panel opens ---
     setTimeout(function() { enterSelectMode(); }, 300);
+
+    // --- restore saved attributes ---
+    chrome.storage.local.get('_panelAttrs', function(res) {
+      if (res._panelAttrs && res._panelAttrs.length > 0) {
+        __panelAttrs = res._panelAttrs;
+        renderPanelAttributes();
+      }
+    });
 
     // --- load attributes ---
     renderPanelAttributes();
@@ -1845,10 +1923,28 @@
     sel.innerHTML = '<option value="">选择配置...</option>';
     chrome.storage.local.get('configs', function(result) {
       var configs = result.configs || {};
-      var ids = Object.keys(configs);
-      ids.sort(function(a, b) { return (configs[b].updatedAt || 0) - (configs[a].updatedAt || 0); });
+      // 清理同名重复配置
+      var seenNames = {};
+      var toRemove = [];
+      var ids = Object.keys(configs).sort(function(a, b) { return (configs[b].updatedAt || 0) - (configs[a].updatedAt || 0); });
+      ids.forEach(function(id) {
+        var name = configs[id].name || '';
+        if (seenNames[name]) {
+          toRemove.push(id);
+        } else {
+          seenNames[name] = true;
+        }
+      });
+      if (toRemove.length > 0) {
+        toRemove.forEach(function(id) { delete configs[id]; });
+        chrome.storage.local.set({ configs: configs });
+        console.log('[配置] 清理了 ' + toRemove.length + ' 个重复配置');
+      }
+      // 渲染去重后的列表
+      ids = Object.keys(configs).sort(function(a, b) { return (configs[b].updatedAt || 0) - (configs[a].updatedAt || 0); });
       ids.forEach(function(id) {
         var cfg = configs[id];
+        if (!cfg) return;
         var opt = document.createElement('option');
         opt.value = id;
         opt.textContent = cfg.name + (cfg.isDefault ? ' ★' : '') + (cfg.urlPattern ? ' (' + cfg.urlPattern + ')' : '');
@@ -1866,7 +1962,7 @@
     chrome.storage.local.get(null, function(all) {
       var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
       if (keys.length === 0) {
-        container.innerHTML = '<div class="erp-panel-empty">暂无容器。在页面上 Shift+点击属性区域来添加。</div>';
+        container.innerHTML = '<div class="erp-panel-empty">暂无容器。在页面上 Shift+点击属性区域来添加。(' + Object.keys(all).length + ' 条存储)</div>';
         return;
       }
       var html = '';
@@ -1936,7 +2032,7 @@
           });
           chrome.storage.local.remove(key, function() {
             renderPanelContainers();
-            panelToast('🗑️ 已删除容器');
+            panelToast('🗑️ 已删除容器 (key=' + key.substring(0, 16) + ')');
           });
         });
       });
@@ -1945,6 +2041,13 @@
 
           // --- attribute table ---
   var __panelAttrs = [];
+
+  // 自动保存面板状态
+  function savePanelState() {
+    try {
+      chrome.storage.local.set({ _panelAttrs: __panelAttrs, _panelAttrsSavedAt: Date.now() });
+    } catch(e) {}
+  }
 
   function renderPanelAttributes() {
     var tbody = document.querySelector('#__erp_attr_table tbody');
@@ -1973,6 +2076,7 @@
         var field = td.getAttribute('data-field');
         if (__panelAttrs[idx]) {
           __panelAttrs[idx][field] = td.textContent.trim();
+          savePanelState();
         }
       });
     });
@@ -1991,6 +2095,7 @@
         var idx = parseInt(btn.getAttribute('data-delattr'), 10);
         __panelAttrs.splice(idx, 1);
         renderPanelAttributes();
+        savePanelState();
       });
     });
   }
@@ -2067,6 +2172,7 @@
     panelToast('🔍 正在读取容器数据...', 1000);
     chrome.storage.local.get(null, function(all) {
       var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
+      panelToast('🔍 提取: 存储中 tc_ 共 ' + keys.length + ' 个', 1500);
       if (keys.length === 0) {
         panelToast('⚠️ 没有容器，请先 Shift+点击页面属性区域');
         return;
@@ -2161,6 +2267,7 @@
         } else {
           __panelAttrs = allAttrs;
           renderPanelAttributes();
+          savePanelState();
           panelToast('✅ 提取到 ' + allAttrs.length + ' 项属性');
         }
         // 提取完毕，退出容器选择模式
@@ -2173,6 +2280,7 @@
     var newId = 'ar_' + Date.now() + '_' + __panelAttrs.length;
     __panelAttrs.push({ name: '', value: '', rowId: newId });
     renderPanelAttributes();
+    savePanelState();
     panelToast('📝 请在页面拖动选择属性名', 3000);
     // 先退出选择模式
     exitSelectMode();
@@ -2184,12 +2292,25 @@
   var __pickActive = false;
   var __pickRowId = null;
   var __pickPhase = null;
+  var _pickUndoStack = [];   // 撤销栈：{ rowIdx, field, prevValue }
+
+  // 检测文字选择方向：前向(左→右)=true，后向(右→左)=false
+  function isSelectionForward(sel) {
+    if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return true;
+    if (sel.anchorNode === sel.focusNode) return sel.anchorOffset <= sel.focusOffset;
+    var cmp = sel.anchorNode.compareDocumentPosition(sel.focusNode);
+    return !(cmp & Node.DOCUMENT_POSITION_PRECEDING);
+  }
 
   function startPickPhase(rowIdx, phase) {
     if (__pickActive) {
       panelToast('⚠️ 正在选取中，请先完成当前操作');
       return;
     }
+    // 清除之前的页面文字选择状态
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+
     __pickActive = true;
     __pickRowId = rowIdx;
     __pickPhase = phase;
@@ -2199,11 +2320,13 @@
 
     var hint = document.createElement('div');
     hint.id = '__erp_pick_attr_hint';
-    hint.textContent = phase === 'name' ? '👉 在页面上拖动选中属性名' : '👉 在页面上拖动选中属性值';
+    hint.textContent = phase === 'name' ? '👉 在页面上拖动选中属性名（左→右=确认，右→左=撤销）' : '👉 在页面上拖动选中属性值（左→右=确认，右→左=撤销）';
     hint.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#6366f1;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;';
     document.body.appendChild(hint);
 
     var mouseupHandler = function(e) {
+      // 面板内的点击不触发文字选择
+      if (e.target && e.target.closest && e.target.closest('.erp-panel')) return;
       var sel = window.getSelection();
       var text = sel ? sel.toString().trim() : '';
       if (hint.parentNode) hint.parentNode.removeChild(hint);
@@ -2215,7 +2338,34 @@
         return;
       }
 
-      // highlight selection
+      // 检测方向
+      var forward = isSelectionForward(sel);
+
+      if (!forward) {
+        // 右→左 = 撤销最后一次选择
+        __pickActive = false;
+        __pickRowId = null;
+        __pickPhase = null;
+
+        if (_pickUndoStack.length > 0) {
+          var last = _pickUndoStack.pop();
+          if (__panelAttrs[last.rowIdx]) {
+            __panelAttrs[last.rowIdx][last.field] = last.prevValue;
+            renderPanelAttributes();
+            panelToast('↩️ 已撤销: ' + last.field);
+          }
+          // 回到被撤销的那一阶段
+          if (window.__panelActive) {
+            startPickPhase(last.rowIdx, last.field);
+          }
+        } else {
+          panelToast('⚠️ 没有可撤销的操作');
+          if (window.__panelActive) enterSelectMode();
+        }
+        return;
+      }
+
+      // 前向拖动 = 确认选择
       try {
         var range = sel.getRangeAt(0);
         var span = document.createElement('span');
@@ -2224,24 +2374,31 @@
         setTimeout(function() { if (span.parentNode) span.style.background = 'transparent'; }, 2000);
       } catch(ex) {}
 
-      // fill attribute
+      // 保存到撤销栈
+      var prevVal = __panelAttrs[__pickRowId] ? __panelAttrs[__pickRowId][phase] : '';
+      _pickUndoStack.push({ rowIdx: __pickRowId, field: phase, prevValue: prevVal });
+
+      // 填入
       if (__panelAttrs[__pickRowId]) {
-        __panelAttrs[__pickRowId][__pickPhase] = text;
+        __panelAttrs[__pickRowId][phase] = text;
         renderPanelAttributes();
-        panelToast('✅ 已填入: ' + text.substring(0, 30));
+        savePanelState();
+        panelToast('✅ 已填入 ' + phase + ': ' + text.substring(0, 30));
+      } else {
+        panelToast('⚠️ 找不到行 ' + __pickRowId + ' 当前共 ' + __panelAttrs.length);
       }
 
-      // auto advance to next phase (name → value)
+      // 自动推进
       __pickActive = false;
+      var savedRowIdx = __pickRowId;
       __pickRowId = null;
       __pickPhase = null;
 
       if (phase === 'name' && window.__panelActive) {
-        // 选完 name 后自动进入 value 阶段
-        // (在 handleAddAttr 中处理两阶段)
-      } else if (window.__panelActive) {
-        enterSelectMode();
+        // 自动进入 value 阶段
+        setTimeout(function() { startPickPhase(savedRowIdx, 'value'); }, 100);
       }
+      // value 选择完成后不自动进入容器选择模式
     };
 
     document.addEventListener('mouseup', mouseupHandler, true);
@@ -2274,6 +2431,8 @@
       var configs = result.configs || {};
       var targetId = null;
 
+      panelToast('🔍 模式=' + mode + ' key=' + (selectedKey || '空') + ' 存在=' + (configs[selectedKey] ? '是' : '否'), 2000);
+
       if (mode === 'update' && selectedKey && configs[selectedKey]) {
         // 更新已有配置
         targetId = selectedKey;
@@ -2281,8 +2440,20 @@
         // 另存为：生成新ID
         targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
       } else {
-        // 新建
-        targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        // 新建：检查是否已有同名配置
+        var existingId = null;
+        for (var id in configs) {
+          if (configs[id].name === name && id !== selectedKey) {
+            existingId = id;
+            break;
+          }
+        }
+        if (existingId) {
+          panelToast('⚠️ 配置名 "' + name + '" 已存在，请选中后点「更新」覆盖');
+          return;  // 阻止保存，必须选「更新」
+        } else {
+          targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        }
       }
 
       var cfg = configs[targetId] || {
@@ -2290,15 +2461,30 @@
         createdAt: Date.now()
       };
       cfg.name = name;
-      cfg.containerSelectors = [];
-      cfg.attributeNames = [];
-      cfg.attributes = [];
       cfg.updatedAt = Date.now();
 
-      configs[targetId] = cfg;
-      chrome.storage.local.set({ configs: configs }, function() {
-        panelToast('✅ 配置已保存: ' + name);
-        renderPanelConfigs();
+      // 读取当前容器，再一起保存
+      chrome.storage.local.get(null, function(all) {
+        var containerSelectors = [];
+        var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
+        keys.forEach(function(key) {
+          var item = all[key];
+          if (item && item.selector) {
+            containerSelectors.push(item.selector);
+          }
+        });
+        cfg.containerSelectors = containerSelectors;
+        cfg.attributes = __panelAttrs.map(function(a) {
+          return { name: a.name, value: a.value };
+        });
+        cfg.attributeNames = __panelAttrs.map(function(a) { return a.name; }).filter(function(n) { return n; });
+
+        panelToast('💾 保存中: 容器=' + containerSelectors.length + ' 属性=' + cfg.attributes.length, 1500);
+        configs[targetId] = cfg;
+        chrome.storage.local.set({ configs: configs }, function() {
+          panelToast('✅ 配置已保存: ' + name + ' (' + containerSelectors.length + '容器, ' + cfg.attributes.length + '属性)');
+          renderPanelConfigs();
+        });
       });
     });
   }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ERP 采集管理",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "从阿里国际站、1688 采集产品信息到 Trade ERP，支持图片、属性、变体、阶梯定价的完整采集。",
   "permissions": [
     "activeTab",
