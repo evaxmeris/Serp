@@ -905,74 +905,6 @@
       return false;
     }
 
-    // PICK_ATTR_TEXT: Shift+drag to pick text from page
-    // 前向拖动(左→右)=选中，后向拖动(右→左)=取消
-    // popup 管理两阶段：第一次=属性名，第二次=属性值
-    if (message.type === 'PICK_ATTR_TEXT') {
-      var oldHint = document.getElementById('__erp_pick_hint');
-      if (oldHint) oldHint.remove();
-
-      var phase = message.phase || 'name';
-      var hintText = phase === 'name' ? '按住 Shift + 拖动选择属性名（左→右选，右→左取消）' : '按住 Shift + 拖动选择属性值（左→右选，右→左取消）';
-
-      var hint = document.createElement('div');
-      hint.id = '__erp_pick_hint';
-      hint.textContent = hintText;
-      hint.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:999999;background:#059669;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;';
-      document.body.appendChild(hint);
-
-      function isSelectionBackward(sel) {
-        if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return false;
-        if (sel.anchorNode === sel.focusNode) return sel.anchorOffset > sel.focusOffset;
-        var pos = sel.anchorNode.compareDocumentPosition(sel.focusNode);
-        return (pos & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
-      }
-
-      var handler = function(e) {
-        if (!e.shiftKey) return;
-        e.preventDefault();
-        e.stopPropagation();
-        var sel = window.getSelection();
-        var text = sel ? sel.toString().trim() : '';
-        var backward = isSelectionBackward(sel);
-
-        // 后向拖动 = 取消（undo）
-        if (backward) {
-          document.removeEventListener('mouseup', handler, true);
-          if (hint.parentNode) hint.parentNode.removeChild(hint);
-          sendResponse({ success: true, cancel: true });
-          return;
-        }
-
-        // 前向拖动且选中文字 → 确认选择
-        if (text && text.length < 200) {
-          try {
-            var range = sel.getRangeAt(0);
-            var span = document.createElement('span');
-            span.style.cssText = 'background:#a7f3d0;border-radius:3px;padding:0 2px;';
-            range.surroundContents(span);
-            setTimeout(function() { span.style.background = 'transparent'; }, 2000);
-          } catch(ex) {}
-          document.removeEventListener('mouseup', handler, true);
-          if (hint.parentNode) hint.parentNode.removeChild(hint);
-          // 保存到 storage（弹窗关闭后恢复用）
-          try {
-            chrome.storage.local.set({ pendingPickResult: { text: text, phase: phase, timestamp: Date.now() } });
-          } catch(ex) {}
-          sendResponse({ success: true, text: text });
-        }
-      };
-      document.addEventListener('mouseup', handler, true);
-
-      setTimeout(function() {
-        document.removeEventListener('mouseup', handler, true);
-        if (hint.parentNode) hint.parentNode.removeChild(hint);
-        sendResponse({ success: false, error: 'timeout' });
-      }, 30000);
-
-      return true;
-    }
-
     // TOGGLE_PANEL: show/hide in-page floating panel (replaces popup)
     if (message.type === 'TOGGLE_PANEL') {
       togglePanel();
@@ -1044,10 +976,19 @@
   }
 
   function onPickClick(e) {
+    console.log('[B类训练] onPickClick fired shiftKey=', e.shiftKey, 'pairTrainMode=', __pairTrainMode, 'selectModeActive=', selectModeActive, 'target=', e.target.tagName, (e.target.className || '').toString().slice(0, 40));
+    // *** BUG FIX: B类训练期间，onPickClick 不处理任何点击，由 __trainClick 负责 ***
+    if (__pairTrainMode) {
+      console.log('[B类训练] onPickClick DELEGATED — B类训练由 __trainClick 处理');
+      return;
+    }
     var el = e.target;
     // 跳过面板内点击（用 contains 比 closest 更可靠）
     var panelEl = document.getElementById('__erp_floating_panel');
-    if (!el || panelEl?.contains(el) || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.tagName === 'HTML' || el.tagName === 'BODY') return;
+    if (!el || panelEl?.contains(el) || el.closest('#__erp_hint__') || el.closest('#__erp_style__') || el.tagName === 'HTML' || el.tagName === 'BODY') {
+      console.log('[B类训练] GUARD EXIT', {noEl: !el, inPanel: panelEl?.contains(el), inHint: el?.closest('#__erp_hint__'), inStyle: el?.closest('#__erp_style__'), isHtmlBody: el?.tagName === 'HTML' || el?.tagName === 'BODY'});
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
 
@@ -1055,6 +996,14 @@
 
     // 如果按住 Shift 键点击，标记为属性容器
     if (e.shiftKey) {
+      console.log('[B类训练] shiftKey=true, pairTrainMode=', __pairTrainMode);
+      // 配对训练模式：Shift+click 选容器做名/值
+      if (__pairTrainMode) {
+        console.log('[B类训练] calling handlePairTrainClick');
+        handlePairTrainClick(el);
+        return;
+      }
+      // 正常容器选择
       var container = el.closest('[data-testid="three-column-key-attributes"], [data-module-name*="key_attribute"], .module_3_tab_key_attribute, [class*="attribute"], [class*="specification"]') || el;
       var sel = getElementSelector(container);
       var entry = { containerSelector: sel, nameIndex: 0, valueIndex: 1 };
@@ -1334,6 +1283,25 @@
       var nameEl = __trainClicked[__trainClicked.length - 2];
       var valEl = __trainClicked[__trainClicked.length - 1];
       hint.innerHTML = '✅ 已记录：<b>' + nameEl.textContent.trim().substring(0, 30) + '</b> → <b>' + valEl.textContent.trim().substring(0, 30) + '</b><br>继续选择下一对，或点插件的「✅ 完成训练」';
+      // *** BUG FIX: B类配对训练自动写入属性项 ***
+      if (__pairTrainMode && __pairTrainRowIdx >= 0 && __panelAttrs && __panelAttrs[__pairTrainRowIdx]) {
+        var nText = nameEl.textContent.trim();
+        var vText = valEl.textContent.trim();
+        if (nText && vText) {
+          __panelAttrs[__pairTrainRowIdx].name = nText;
+          __panelAttrs[__pairTrainRowIdx].value = vText;
+          renderPanelAttributes();
+          savePanelState();
+          // 紫色标识区分
+          nameEl.style.outline = '3px solid #6366f1';
+          valEl.style.outline = '3px solid #6366f1';
+          hint.innerHTML = '✅ 配对完成：<b>' + nText.substring(0,20) + '</b> → <b>' + vText.substring(0,20) + '</b>（已写入属性项）';
+          __pairTrainMode = false;
+          __pairTrainRowIdx = -1;
+          // 1秒后自动退出训练模式，点击页面空白区或右键可立即退出
+          setTimeout(stopTrainMode, 1000);
+        }
+      }
     }
   }
 
@@ -1762,10 +1730,9 @@
       panel.classList.toggle('open');
       var arrow = this.querySelector('span:last-child');
       if (arrow) arrow.textContent = panel.classList.contains('open') ? '▼' : '▶';
-      // 展开时自动进入容器选择模式
-      if (panel.classList.contains('open')) {
-        enterSelectMode();
-      } else {
+      // 展开/折叠时不自动切换容器选择模式（用户通过「选容器」按钮控制）
+      // 折叠时退出选择模式
+      if (!panel.classList.contains('open')) {
         exitSelectMode();
       }
     });
@@ -1832,14 +1799,111 @@
         });
 
         function finishLoad() {
-          // 清空属性列表（每个页面需要重新提取验证）
-          __panelAttrs = [];
+          // 重置训练配对
+          __attrPairs = [];
+          // 直接走 JSON 提取（不经过 handleExtractAttrs，避免容器 DOM 提取干扰）
+          var jsonFound = false;
+          try {
+            // 来源1：window 全局变量
+            var jsonSources = [
+              window.detailData, window.__INITIAL_STATE__, window.__NUXT__?.state,
+              window.__NEXT_DATA__?.props?.pageProps?.product,
+              window.__NEXT_DATA__?.props?.pageProps?.detailData,
+              window.__INITIAL_DATA__, window.__PAGE_DATA__, window.__STORE__,
+              window.__DATA__, window.pageData, window.detail,
+              window.productInfo, window.skuInfo, window.priceInfo
+            ];
+            // 来源2：<script> 标签中的 JSON
+            try {
+              document.querySelectorAll('script').forEach(function(s) {
+                var txt = s.textContent.trim();
+                if (txt.length > 200 && txt.indexOf('"moq"') > -1) {
+                  try { jsonSources.push(JSON.parse(txt)); } catch(e) {
+                    // 可能是拼接的 JSON，尝试匹配大括号包裹的部分
+                    try {
+                      var start = txt.indexOf('{');
+                      var end = txt.lastIndexOf('}');
+                      if (start >= 0 && end > start) {
+                        jsonSources.push(JSON.parse(txt.substring(start, end + 1)));
+                      }
+                    } catch(e2) {}
+                  }
+                }
+              });
+            } catch(e) {}
+            // 来源3：遍历 window 所有属性
+            try {
+              for (var wk in window) {
+                try {
+                  var wv = window[wk];
+                  if (wv && typeof wv === 'object' && !Array.isArray(wv) && wv.constructor === Object) {
+                    var wvStr = JSON.stringify(wv);
+                    if (wvStr && wvStr.indexOf('"productBasicProperties"') > -1) {
+                      jsonSources.push(wv);
+                      break;
+                    }
+                  }
+                } catch(e) {}
+              }
+            } catch(e) {}
+            var seen2 = {};
+            jsonSources.forEach(function(src) {
+              if (!src || jsonFound) return;
+              try {
+                var d = (typeof src === 'string') ? JSON.parse(src) : src;
+                (function find(obj, depth) {
+                  if (depth > 5 || jsonFound || !obj || typeof obj !== 'object') return;
+                  if (Array.isArray(obj)) { obj.forEach(function(i) { find(i, depth+1); }); return; }
+                  var props = obj.productBasicProperties || obj.attributes || obj.props || obj.params || obj.attrList;
+                  if (props && Array.isArray(props) && props.length > 0) {
+                    var newAttrs = [];
+                    props.forEach(function(p) {
+                      var nm = (p.attrName || p.name || p.key || '').trim();
+                      var vl = (p.attrValue || p.value || p.val || '').trim();
+                      if (nm && vl && !seen2[nm]) {
+                        seen2[nm] = true;
+                        newAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + newAttrs.length });
+                      }
+                    });
+                    // 价格和 MOQ
+                    var prod = obj.product || obj;
+                    if (prod.price && prod.price.formatLadderPrice && !seen2['Price']) {
+                      seen2['Price'] = true;
+                      newAttrs.push({ name: 'Price', value: prod.price.formatLadderPrice, rowId: 'ar_' + Date.now() + '_' + newAttrs.length });
+                    }
+                    if (prod.customPrice && prod.customPrice.formatFixedPrice && !seen2['Price']) {
+                      seen2['Price'] = true;
+                      newAttrs.push({ name: 'Price', value: prod.customPrice.formatFixedPrice, rowId: 'ar_' + Date.now() + '_' + newAttrs.length });
+                    }
+                    if (prod.moq && !seen2['Minimum order quantity']) {
+                      seen2['Minimum order quantity'] = true;
+                      newAttrs.push({ name: 'Minimum order quantity', value: prod.moq + ' pieces', rowId: 'ar_' + Date.now() + '_' + newAttrs.length });
+                    }
+                    if (newAttrs.length > 0) {
+                      __panelAttrs = newAttrs;
+                      renderPanelAttributes();
+                      savePanelState();
+                      panelToast('📋 从页面数据提取 ' + newAttrs.length + ' 项属性', 4000);
+                      jsonFound = true;
+                    }
+                    return;
+                  }
+                  for (var k in obj) { if (!jsonFound) try { find(obj[k], depth+1); } catch(e) {} }
+                })(d, 0);
+              } catch(e) {}
+            });
+          } catch(e) {}
+          if (!jsonFound) {
+            panelToast('🔍 未找到 JSON 属性，需按旧流程提取', 3000);
+          }
+          // 应用 B 类配对规则
+          if (cfg.attrPairs && cfg.attrPairs.length > 0) {
+            __attrPairs = cfg.attrPairs.slice();
+            applyAttrPairs(__attrPairs);
+            panelToast('📋 应用了 ' + cfg.attrPairs.length + ' 条配对规则', 3000);
+          }
           renderPanelContainers();
           renderPanelAttributes();
-          savePanelState();
-          panelToast('✅ 已加载配置: ' + cfg.name + '，点「确认提取」验证', 3000);
-          // 自动提取属性
-          setTimeout(function() { handleExtractAttrs(); }, 500);
         }
       });
     });
@@ -1847,8 +1911,8 @@
     // --- load containers ---
     renderPanelContainers();
 
-    // --- auto enter select mode when panel opens ---
-    setTimeout(function() { enterSelectMode(); }, 300);
+    // --- 属性配置折叠面板默认展开 ---
+    // (不自动进入容器选择模式，用户点「选容器」按钮才进入)
 
     // --- restore saved attributes ---
     chrome.storage.local.get('_panelAttrs', function(res) {
@@ -2057,7 +2121,7 @@
   <td contenteditable="true" data-field="name" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.name) + '</td>\
   <td contenteditable="true" data-field="value" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.value) + '</td>\
   <td class="actions">\
-    <button class="erp-panel-btn ghost small" data-pick="' + idx + '" title="从页面选取文字">📝</button>\
+    <button class="erp-panel-btn ghost small" data-pick="' + idx + '" title="配对训练(Shift+click选容器)">📝</button>\
     <button class="erp-panel-btn ghost small danger" data-delattr="' + idx + '" title="删除">✕</button>\
   </td>\
 </tr>';
@@ -2076,11 +2140,11 @@
       });
     });
 
-    // bind pick buttons
+    // bind pick buttons → 配对训练模式
     tbody.querySelectorAll('[data-pick]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var idx = parseInt(btn.getAttribute('data-pick'), 10);
-        startPickPhase(idx, 'name');
+        startPairTrain(idx);
       });
     });
 
@@ -2197,9 +2261,81 @@
           var selStr = (typeof selItem === 'string') ? selItem : (selItem.containerSelector || '');
           if (!selStr) return;
           var containers = document.querySelectorAll(selStr);
+
+          // 策略 0：从 window 数据源读取结构化属性（复用 jsonld-parser 的数据源）
+          try {
+            var foundJson = false;
+            var jsonSources = [
+              window.detailData, window.__INITIAL_STATE__, window.__NUXT__?.state,
+              window.__NEXT_DATA__?.props?.pageProps?.product,
+              window.__NEXT_DATA__?.props?.pageProps?.detailData,
+              window.__INITIAL_DATA__, window.__PAGE_DATA__, window.__STORE__,
+              window.__DATA__, window.pageData, window.detail,
+              window.productInfo, window.skuInfo, window.priceInfo
+            ];
+            jsonSources.forEach(function(source) {
+              if (!source || foundJson) return;
+              try {
+                var data = (typeof source === 'string') ? JSON.parse(source) : source;
+                // 递归搜索 productBasicProperties 或 attributes
+                function findAttrs(obj, depth) {
+                  if (depth > 5 || !obj || typeof obj !== 'object' || foundJson) return null;
+                  if (Array.isArray(obj)) {
+                    obj.forEach(function(item) { findAttrs(item, depth + 1); });
+                    return;
+                  }
+                  // 检查当前对象是否有属性列表
+                  var props = obj.productBasicProperties || obj.attributes || obj.props || obj.params || obj.attrList;
+                  if (props && Array.isArray(props) && props.length > 0) {
+                    console.log('[提取] 从 JSON 找到属性:', props.length, '条');
+                    props.forEach(function(p) {
+                      var nm = (p.attrName || p.name || p.key || '').trim();
+                      var vl = (p.attrValue || p.value || p.val || '').trim();
+                      if (nm && vl && !seenNames[nm]) {
+                        seenNames[nm] = true;
+                        allAttrs.push({ name: nm, value: vl, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                      }
+                    });
+                    // 也提取价格和 MOQ
+                    var prod = obj.product || obj;
+                    if (prod.price && prod.price.formatLadderPrice && !seenNames['Price']) {
+                      seenNames['Price'] = true;
+                      allAttrs.push({ name: 'Price', value: prod.price.formatLadderPrice, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                    }
+                    if (prod.customPrice && prod.customPrice.formatFixedPrice && !seenNames['Price']) {
+                      seenNames['Price'] = true;
+                      allAttrs.push({ name: 'Price', value: prod.customPrice.formatFixedPrice, rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                    }
+                    if (prod.moq && !seenNames['Minimum order quantity']) {
+                      seenNames['Minimum order quantity'] = true;
+                      allAttrs.push({ name: 'Minimum order quantity', value: prod.moq + ' pieces', rowId: 'ar_' + Date.now() + '_' + allAttrs.length });
+                    }
+                    foundJson = true;
+                    return;
+                  }
+                  // 递归搜索子对象
+                  for (var key in obj) {
+                    if (foundJson) return;
+                    try { findAttrs(obj[key], depth + 1); } catch(e) {}
+                  }
+                }
+                findAttrs(data, 0);
+              } catch(e) {}
+            });
+            if (foundJson) {
+              panelToast('📋 从页面 JSON 提取到 ' + allAttrs.length + ' 项属性', 3000);
+              return; // JSON 提取成功，跳过 DOM 策略
+            }
+            panelToast('🔍 未找到 JSON 属性数据，使用 DOM 提取', 2000);
+          } catch(e) { /* 回退到 DOM 策略 */ }
+
           containers.forEach(function(c) {
+            // 清除 script 和 style 标签的内容（避免 JSON 数据污染）
+            var cleanContainer = c.cloneNode(true);
+            cleanContainer.querySelectorAll('script, style').forEach(function(s) { s.remove(); });
+
             // strategy A: row structure
-            var rows = c.querySelectorAll('[data-testid$="row"], [data-testid*="-row"], [class*="row"], :scope > div');
+            var rows = cleanContainer.querySelectorAll('[data-testid$="row"], [data-testid*="-row"], [class*="row"], :scope > div');
             var hasRow = false;
             rows.forEach(function(r) {
               var cells = r.querySelectorAll(':scope > div');
@@ -2215,7 +2351,7 @@
             });
             if (hasRow) return;
             // strategy B: <p> tags
-            var pTags = c.querySelectorAll('p');
+            var pTags = cleanContainer.querySelectorAll('p');
             if (pTags.length >= 2) {
               var texts = [];
               pTags.forEach(function(p) { texts.push(p.textContent.trim()); });
@@ -2228,7 +2364,7 @@
               return;
             }
             // strategy C: :scope > div pairs
-            var childDivs = c.querySelectorAll(':scope > div');
+            var childDivs = cleanContainer.querySelectorAll(':scope > div');
             if (childDivs.length >= 2) {
               for (var di = 0; di < childDivs.length - 1; di += 2) {
                 var nm2 = childDivs[di].textContent.replace(/[：:]/g, '').trim();
@@ -2241,7 +2377,7 @@
               return;
             }
             // strategy D: colon-split text
-            var allText = c.textContent.trim();
+            var allText = cleanContainer.textContent.trim();
             var lines = allText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
             for (var li2 = 0; li2 < lines.length; li2++) {
               var colonIdx = lines[li2].indexOf(':');
@@ -2255,6 +2391,24 @@
               }
             }
           });
+          // 策略 E：后处理 - 检测价格中的整数/小数分离（如 US$6 和 49 拼成 US$649）
+          allAttrs.forEach(function(attr) {
+            var rawValue = attr.value;
+            // 检查值是否匹配 US$数字（3+位数字）
+            var priceMatch = rawValue.match(/^(US\$|¥|€|£|AU\$|CA\$)(\d{3,})$/);
+            if (priceMatch) {
+              var symbol = priceMatch[1];
+              var digits = priceMatch[2];
+              // 只有最后2位可能是小数，且总数字 > 2 位才处理
+              if (digits.length >= 3) {
+                var intPart = digits.substring(0, digits.length - 2);
+                var decPart = digits.substring(digits.length - 2);
+                attr.value = symbol + intPart + '.' + decPart;
+                console.log('[提取] 价格修正:', rawValue, '→', attr.value);
+              }
+            }
+          });
+          console.log('[提取] 共提取', allAttrs.length, '个属性:', allAttrs.map(function(a) { return a.name + '=' + a.value; }).join(' | '));
         } catch(e) { /* fail silently */ }
       });
       if (allAttrs.length === 0) {
@@ -2263,162 +2417,139 @@
           __panelAttrs = allAttrs;
           renderPanelAttributes();
           savePanelState();
-          panelToast('✅ 提取到 ' + allAttrs.length + ' 项属性');
+          var names = allAttrs.map(function(a) { return a.name; }).join(', ');
+          panelToast('✅ 提取到 ' + allAttrs.length + ' 项: ' + names.substring(0, 100), 5000);
         }
         // 提取完毕，退出容器选择模式
         exitSelectMode();
+        // 应用 B 类配对规则
+        if (__attrPairs.length > 0) {
+          applyAttrPairs(__attrPairs);
+        }
       });
   }
 
-  // --- add new attribute row (starts pick mode) ---
+  // --- add new attribute row (just adds empty editable row) ---
   function handleAddAttr() {
     var newId = 'ar_' + Date.now() + '_' + __panelAttrs.length;
     __panelAttrs.push({ name: '', value: '', rowId: newId });
     renderPanelAttributes();
     savePanelState();
-    panelToast('📝 请在页面拖动选择属性名', 3000);
-    // 先退出选择模式
-    exitSelectMode();
-    // 延迟一帧启动选文字模式
-    setTimeout(function() { startPickPhase(__panelAttrs.length - 1, 'name'); }, 100);
+    panelToast('✅ 已添加空行，可直接输入或点 📝 选容器', 3000);
   }
 
-  // --- pick text from page ---
-  var __pickActive = false;
-  var __pickRowId = null;
-  var __pickPhase = null;
-  var _pickUndoStack = [];   // 撤销栈：{ rowIdx, field, prevValue }
+  /* pick text from page — removed, use B类配对训练 (startPairTrain) instead */
 
-  // 检测文字选择方向：前向(左→右)=true，后向(右→左)=false
-  function isSelectionForward(sel) {
-    if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return true;
-    if (sel.anchorNode === sel.focusNode) return sel.anchorOffset <= sel.focusOffset;
-    var cmp = sel.anchorNode.compareDocumentPosition(sel.focusNode);
-    return !(cmp & Node.DOCUMENT_POSITION_PRECEDING);
-  }
+  // ===== 属性配对训练模式（B 类容器） =====
+  var __pairTrainMode = false;
+  var __pairTrainRowIdx = -1;
+  var __pairTrainPhase = null;
+  var __pairTrainNameSelector = '';
+  var __pairTrainNameText = '';
+  var __pairTrainValueSelector = '';
+  var __pairTrainValueText = '';
+  var __attrPairs = [];
 
-  function startPickPhase(rowIdx, phase) {
-    if (__pickActive) {
-      panelToast('⚠️ 正在选取中，请先完成当前操作');
+  function startPairTrain(rowIdx) {
+    if (!__panelAttrs[rowIdx]) { panelToast('⚠️ 找不到该属性行'); return; }
+    // 如果已在配对模式，点击退出
+    if (__pairTrainMode) {
+      __pairTrainMode = false;
+      __pairTrainRowIdx = -1;
+      stopTrainMode();
+      panelToast('已退出B类配对模式');
       return;
     }
-    // 清除之前的页面文字选择状态
-    var sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
+    // 先退出旧训练模式
+    if (__trainActive) stopTrainMode();
+    
+    __pairTrainMode = true;
+    __pairTrainRowIdx = rowIdx;
 
-    __pickActive = true;
-    __pickRowId = rowIdx;
-    __pickPhase = phase;
-
-    // 退出选择模式（去掉 user-select: none 限制）
-    exitSelectMode();
-
-    var hint = document.createElement('div');
-    hint.id = '__erp_pick_attr_hint';
-    hint.textContent = phase === 'name' ? '👉 在页面上拖动选中属性名（左→右=确认，右→左=撤销）' : '👉 在页面上拖动选中属性值（左→右=确认，右→左=撤销）';
-    hint.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#6366f1;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;';
-    document.body.appendChild(hint);
-
-    var mouseupHandler = function(e) {
-      // 面板内的点击不触发文字选择
-      if (e.target && e.target.closest && e.target.closest('.erp-panel')) return;
-      var sel = window.getSelection();
-      var text = sel ? sel.toString().trim() : '';
-      if (hint.parentNode) hint.parentNode.removeChild(hint);
-      document.removeEventListener('mouseup', mouseupHandler, true);
-
-      if (!text || text.length > 200 || sel.isCollapsed) {
-        __pickActive = false;
-        if (window.__panelActive) enterSelectMode();
+    // 注册右键退出（一次性，触发后自清除）
+    var ctxHandler = function(e) {
+      if (!__pairTrainMode) {
+        document.removeEventListener('contextmenu', ctxHandler, true);
         return;
       }
+      e.preventDefault();
+      e.stopPropagation();
+      __pairTrainMode = false;
+      __pairTrainRowIdx = -1;
+      stopTrainMode();
+      panelToast('✅ 已退出B类配对模式');
+      document.removeEventListener('contextmenu', ctxHandler, true);
+    };
+    document.addEventListener('contextmenu', ctxHandler, true);
+    
+    // 直接使用旧训练模式的 click 监听（已验证可靠）
+    // __trainClick 中已有 B类配对自动写入逻辑
+    startTrainMode(function(){}); // 传入空回调，避免 startTrainMode 内部抛错
+  }
 
-      // 检测方向
-      var forward = isSelectionForward(sel);
-
-      if (!forward) {
-        // 右→左 = 撤销最后一次选择
-        __pickActive = false;
-        __pickRowId = null;
-        __pickPhase = null;
-
-        if (_pickUndoStack.length > 0) {
-          var last = _pickUndoStack.pop();
-          if (__panelAttrs[last.rowIdx]) {
-            __panelAttrs[last.rowIdx][last.field] = last.prevValue;
-            renderPanelAttributes();
-            panelToast('↩️ 已撤销: ' + last.field);
-          }
-          // 回到被撤销的那一阶段
-          if (window.__panelActive) {
-            startPickPhase(last.rowIdx, last.field);
-          }
-        } else {
-          panelToast('⚠️ 没有可撤销的操作');
-          if (window.__panelActive) enterSelectMode();
-        }
-        return;
-      }
-
-      // 前向拖动 = 确认选择
-      try {
-        var range = sel.getRangeAt(0);
-        var span = document.createElement('span');
-        span.style.cssText = 'background:#c7d2fe;border-radius:3px;padding:0 2px;';
-        range.surroundContents(span);
-        setTimeout(function() { if (span.parentNode) span.style.background = 'transparent'; }, 2000);
-      } catch(ex) {}
-
-      // 保存到撤销栈
-      var prevVal = __panelAttrs[__pickRowId] ? __panelAttrs[__pickRowId][phase] : '';
-      _pickUndoStack.push({ rowIdx: __pickRowId, field: phase, prevValue: prevVal });
-
-      // 填入
-      if (__panelAttrs[__pickRowId]) {
-        __panelAttrs[__pickRowId][phase] = text;
+  function handlePairTrainClick(el) {
+    console.log('[B类训练] handlePairTrainClick phase=', __pairTrainPhase, 'pairTrainMode=', __pairTrainMode, 'pairTrainRowIdx=', __pairTrainRowIdx, 'panelAttrsLen=', __panelAttrs.length, 'target=', el.tagName, el.className);
+    var sel = getElementSelector(el);
+    var text = el.textContent.trim();
+    if (!text) { panelToast('⚠️ 该容器无文本'); return; }
+    if (__pairTrainPhase === 'name') {
+      __pairTrainNameSelector = sel;
+      __pairTrainNameText = text;
+      __pairTrainPhase = 'value';
+      el.style.outline = '3px solid #6366f1';
+      panelToast('✅ 属性名: ' + text.substring(0, 30) + '，现在选属性值', 5000);
+    } else {
+      __pairTrainValueSelector = sel;
+      __pairTrainValueText = text;
+      el.style.outline = '3px solid #6366f1';
+      var pair = {
+        attrName: __panelAttrs[__pairTrainRowIdx] ? __panelAttrs[__pairTrainRowIdx].name : '',
+        nameSelector: __pairTrainNameSelector,
+        valueSelector: __pairTrainValueSelector
+      };
+      __attrPairs.push(pair);
+      if (__panelAttrs[__pairTrainRowIdx]) {
+        __panelAttrs[__pairTrainRowIdx].name = __pairTrainNameText;
+        __panelAttrs[__pairTrainRowIdx].value = __pairTrainValueText;
         renderPanelAttributes();
         savePanelState();
-        panelToast('✅ 已填入 ' + phase + ': ' + text.substring(0, 30));
-      } else {
-        panelToast('⚠️ 找不到行 ' + __pickRowId + ' 当前共 ' + __panelAttrs.length);
       }
+      __pairTrainMode = false;
+      __pairTrainRowIdx = -1;
+      __pairTrainPhase = null;
+      panelToast('✅ 属性配对已保存，共 ' + __attrPairs.length + ' 对规则', 4000);
+      if (window.__panelActive) enterSelectMode();
+    }
+  }
 
-      // 自动推进
-      __pickActive = false;
-      var savedRowIdx = __pickRowId;
-      __pickRowId = null;
-      __pickPhase = null;
-
-      if (phase === 'name' && window.__panelActive) {
-        // 自动进入 value 阶段
-        setTimeout(function() { startPickPhase(savedRowIdx, 'value'); }, 100);
+  function applyAttrPairs(pairs) {
+    if (!pairs || !pairs.length) return;
+    pairs.forEach(function(pair) {
+      var nameEl = document.querySelector(pair.nameSelector);
+      var valueEl = document.querySelector(pair.valueSelector);
+      if (nameEl && valueEl) {
+        var name = nameEl.textContent.trim();
+        var value = valueEl.textContent.trim();
+        if (name && value) {
+          var found = false;
+          __panelAttrs.forEach(function(a) {
+            if (a.name === pair.attrName || a.name === name) {
+              a.name = name; a.value = value; found = true;
+            }
+          });
+          if (!found) {
+            __panelAttrs.push({ name: name, value: value, rowId: 'ar_' + Date.now() + '_' + __panelAttrs.length });
+          }
+        }
       }
-      // value 选择完成后不自动进入容器选择模式
-    };
-
-    document.addEventListener('mouseup', mouseupHandler, true);
-
-    setTimeout(function() {
-      document.removeEventListener('mouseup', mouseupHandler, true);
-      var h = document.getElementById('__erp_pick_attr_hint');
-      if (h) h.remove();
-      if (__pickActive) {
-        __pickActive = false;
-        __pickRowId = null;
-        __pickPhase = null;
-        if (window.__panelActive) enterSelectMode();
-      }
-    }, 30000);
+    });
+    renderPanelAttributes();
   }
 
   // --- save config ---
   function handleSaveConfig(mode) {
     var nameInput = document.getElementById('__erp_config_name_input');
     var name = nameInput ? nameInput.value.trim() : '';
-    if (!name) {
-      panelToast('⚠️ 请输入配置名称');
-      return;
-    }
     var sel = document.getElementById('__erp_config_selector');
     var selectedKey = sel ? sel.value : '';
 
@@ -2426,52 +2557,50 @@
       var configs = result.configs || {};
       var targetId = null;
 
-      panelToast('🔍 模式=' + mode + ' key=' + (selectedKey || '空') + ' 存在=' + (configs[selectedKey] ? '是' : '否'), 2000);
-
+      // 更新模式：选中了配置即可，不需输入名称
       if (mode === 'update' && selectedKey && configs[selectedKey]) {
-        // 更新已有配置
         targetId = selectedKey;
+        name = configs[selectedKey].name;  // 自动使用已有配置名
+        if (nameInput) nameInput.value = name;
       } else if (mode === 'saveas' && selectedKey) {
-        // 另存为：生成新ID
+        // 另存为：需要输入新名称
+        if (!name) { panelToast('⚠️ 请输入新配置名称'); return; }
         targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
       } else {
-        // 新建：检查是否已有同名配置
+        // 新建：需要输入名称
+        if (!name) { panelToast('⚠️ 请输入配置名称'); return; }
+        // 检查同名
         var existingId = null;
         for (var id in configs) {
           if (configs[id].name === name && id !== selectedKey) {
-            existingId = id;
-            break;
+            existingId = id; break;
           }
         }
         if (existingId) {
           panelToast('⚠️ 配置名 "' + name + '" 已存在，请选中后点「更新」覆盖');
-          return;  // 阻止保存，必须选「更新」
-        } else {
-          targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+          return;
         }
+        targetId = 'cfg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
       }
 
-      var cfg = configs[targetId] || {
-        id: targetId,
-        createdAt: Date.now()
-      };
+      panelToast('💾 保存中: ' + mode, 1000);
+      var cfg = configs[targetId] || { id: targetId, createdAt: Date.now() };
       cfg.name = name;
       cfg.updatedAt = Date.now();
 
-      // 读取当前容器，再一起保存
+      // 读取当前容器
       chrome.storage.local.get(null, function(all) {
         var containerSelectors = [];
         var keys = Object.keys(all).filter(function(k) { return k.startsWith('tc_'); });
         keys.forEach(function(key) {
           var item = all[key];
-          if (item && item.selector) {
-            containerSelectors.push(item.selector);
-          }
+          if (item && item.selector) containerSelectors.push(item.selector);
         });
         cfg.containerSelectors = containerSelectors;
-        // 不保存属性值（属性列表只是验证规则的预览，每个页面应重新提取）
+        cfg.attrPairs = __attrPairs.map(function(p) {
+          return { attrName: p.attrName, nameSelector: p.nameSelector, valueSelector: p.valueSelector };
+        });
 
-        panelToast('💾 保存中: ' + containerSelectors.length + ' 个容器选择器', 1500);
         configs[targetId] = cfg;
         chrome.storage.local.set({ configs: configs }, function() {
           panelToast('✅ 配置已保存: ' + name + ' (' + containerSelectors.length + ' 个容器选择器)');
