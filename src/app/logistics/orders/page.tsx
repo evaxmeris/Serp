@@ -14,9 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FileUpload } from '@/components/ui/file-upload';
 import { useToast, ToastContainer } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirmation-dialog';
-import { Plus, Search, Truck, X, Check, Ban, Eye, Edit, Trash2, Send, UserCheck, ShieldCheck, Wallet } from 'lucide-react';
+import { Plus, Search, Truck, X, Check, Ban, Eye, Edit, Trash2, Send, UserCheck, ShieldCheck, Wallet, FileText } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -63,6 +64,15 @@ const STATUS_FLOW: Record<string, { next: string; label: string }[]> = {
   DELIVERED: [{ next: 'COMPLETED', label: '完成' }],
 };
 
+// 单据凭证类型
+const DOC_TYPES = [
+  { value: 'WAYBILL', label: '运单' },
+  { value: 'BILL_OF_LADING', label: '提单' },
+  { value: 'CUSTOMS_DECLARATION', label: '报关单' },
+  { value: 'INVOICE', label: '发票' },
+  { value: 'OTHER', label: '其他' },
+];
+
 export default function LogisticsOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
@@ -92,6 +102,8 @@ export default function LogisticsOrdersPage() {
   });
   const [feeItems, setFeeItems] = useState<{ feeType: string; description: string; amount: number }[]>([]);
   const [itemList, setItemList] = useState<{ productName: string; quantity: number; netWeight: number; dimensions: string }[]>([]);
+  // 单据凭证 [{type, name, url}]
+  const [docList, setDocList] = useState<{ type: string; name: string; url: string }[]>([]);
   // 提交审批时选择人员
   const [submitForm, setSubmitForm] = useState({ reviewerId: '', approverId: '', financeId: '' });
 
@@ -123,7 +135,7 @@ export default function LogisticsOrdersPage() {
 
   const resetForm = () => {
     setForm({ providerId: '', destination: '', transportMethod: 'SEA_FREIGHT', origin: '', currency: 'CNY', totalQuantity: 1, totalNetWeight: 0, totalGrossWeight: 0, totalVolume: 0, totalAmount: 0, insurance: false, insuranceAmount: 0, customsBroker: false, notes: '' });
-    setFeeItems([]); setItemList([]);
+    setFeeItems([]); setItemList([]); setDocList([]);
   };
 
   const openEdit = (order: any) => {
@@ -137,13 +149,14 @@ export default function LogisticsOrdersPage() {
     });
     setItemList(Array.isArray(order.items) ? order.items : []);
     setFeeItems(Array.isArray(order.amountBreakdown) ? order.amountBreakdown : []);
+    setDocList(Array.isArray(order.documents) ? order.documents : []);
     setShowEdit(order);
   };
 
   const handleCreate = async () => {
     if (!form.providerId || !form.destination) { toast.warning('请选择物流服务商和填写目的地'); return; }
     setSaving(true);
-    const body = { ...form, items: itemList, amountBreakdown: feeItems };
+    const body = { ...form, items: itemList, amountBreakdown: feeItems, documents: docList };
     const res = await fetch('/api/v1/logistics/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) { setShowCreate(false); resetForm(); fetchData(); } else { toast.error('创建失败'); }
     setSaving(false);
@@ -151,7 +164,7 @@ export default function LogisticsOrdersPage() {
 
   const handleUpdate = async () => {
     if (!showEdit) return; setSaving(true);
-    const body = { ...form, items: itemList, amountBreakdown: feeItems };
+    const body = { ...form, items: itemList, amountBreakdown: feeItems, documents: docList };
     const res = await fetch(`/api/v1/logistics/orders/${showEdit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) { setShowEdit(null); fetchData(); } else { toast.error('更新失败'); }
     setSaving(false);
@@ -218,6 +231,10 @@ export default function LogisticsOrdersPage() {
 
   const addFeeItem = () => setFeeItems([...feeItems, { feeType: '', description: '', amount: 0 }]);
   const addItemRow = () => setItemList([...itemList, { productName: '', quantity: 1, netWeight: 0, dimensions: '' }]);
+  const addDocRow = () => setDocList([...docList, { type: 'WAYBILL', name: '', url: '' }]);
+  const removeDocRow = (i: number) => setDocList(docList.filter((_, j) => j !== i));
+  // 从上传 URL 提取文件名（/uploads/xxx.jpg → xxx.jpg）
+  const docNameFromUrl = (url: string) => { const parts = url.split('/'); return parts[parts.length - 1] || url; };
 
   // 获取用户显示名
   const userName = (u: any) => u?.name || u?.email || '-';
@@ -255,11 +272,15 @@ export default function LogisticsOrdersPage() {
       {/* 物品明细 */}
       <div>
         <div className="flex items-center justify-between mb-2"><Label>物品明细</Label><Button type="button" variant="outline" size="sm" onClick={addItemRow}>+ 添加</Button></div>
+        <div className="grid grid-cols-4 gap-2 mb-1 px-1 text-xs font-medium text-gray-500">
+          <span>品名</span><span>数量（件）</span><span>净重（kg）</span><span>尺寸（长×宽×高 cm）</span>
+        </div>
+        {itemList.length === 0 && <p className="text-xs text-gray-400 mb-2">尚未添加物品，点击"+ 添加"逐行填写</p>}
         {itemList.map((item, i) => (
           <div key={i} className="grid grid-cols-4 gap-2 mb-2">
             <Input placeholder="品名" value={item.productName} onChange={(e) => { const n = [...itemList]; n[i].productName = e.target.value; setItemList(n); }} />
             <Input type="number" placeholder="数量" value={item.quantity} onChange={(e) => { const n = [...itemList]; n[i].quantity = Number(e.target.value); setItemList(n); }} />
-            <Input type="number" placeholder="净重(kg)" value={item.netWeight} onChange={(e) => { const n = [...itemList]; n[i].netWeight = Number(e.target.value); setItemList(n); }} />
+            <Input type="number" step="0.01" placeholder="净重(kg)" value={item.netWeight} onChange={(e) => { const n = [...itemList]; n[i].netWeight = Number(e.target.value); setItemList(n); }} />
             <div className="flex gap-1"><Input placeholder="尺寸" value={item.dimensions} onChange={(e) => { const n = [...itemList]; n[i].dimensions = e.target.value; setItemList(n); }} /><Button type="button" variant="ghost" size="sm" onClick={() => setItemList(itemList.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button></div>
           </div>
         ))}
@@ -267,6 +288,10 @@ export default function LogisticsOrdersPage() {
       {/* 费用明细 */}
       <div>
         <div className="flex items-center justify-between mb-2"><Label>费用明细</Label><Button type="button" variant="outline" size="sm" onClick={addFeeItem}>+ 添加</Button></div>
+        <div className="grid grid-cols-4 gap-2 mb-1 px-1 text-xs font-medium text-gray-500">
+          <span>类型</span><span>描述</span><span>金额（{form.currency}，精确到 0.01）</span><span>操作</span>
+        </div>
+        {feeItems.length === 0 && <p className="text-xs text-gray-400 mb-2">尚未添加费用，点击"+ 添加"逐行填写</p>}
         {feeItems.map((fee, i) => (
           <div key={i} className="grid grid-cols-4 gap-2 mb-2">
             <Select value={fee.feeType} onValueChange={(v) => { const n = [...feeItems]; n[i].feeType = v; setFeeItems(n); }}>
@@ -274,8 +299,32 @@ export default function LogisticsOrdersPage() {
               <SelectContent><SelectItem value="OCEAN_FREIGHT">海运费</SelectItem><SelectItem value="AIR_FREIGHT">空运费</SelectItem><SelectItem value="TRUCKING">拖车费</SelectItem><SelectItem value="CUSTOMS">报关费</SelectItem><SelectItem value="PORT_CHARGES">港杂费</SelectItem><SelectItem value="INSURANCE">保险费</SelectItem><SelectItem value="WAREHOUSE">仓储费</SelectItem><SelectItem value="OTHER">其他</SelectItem></SelectContent>
             </Select>
             <Input placeholder="描述" value={fee.description} onChange={(e) => { const n = [...feeItems]; n[i].description = e.target.value; setFeeItems(n); }} />
-            <Input type="number" placeholder="金额" value={fee.amount} onChange={(e) => { const n = [...feeItems]; n[i].amount = Number(e.target.value); setFeeItems(n); }} />
+            <Input type="number" step="0.01" placeholder="金额" value={fee.amount} onChange={(e) => { const n = [...feeItems]; n[i].amount = Number(e.target.value); setFeeItems(n); }} />
             <Button type="button" variant="ghost" size="sm" onClick={() => setFeeItems(feeItems.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>
+          </div>
+        ))}
+      </div>
+      {/* 单据凭证 */}
+      <div>
+        <div className="flex items-center justify-between mb-2"><Label>单据凭证</Label><Button type="button" variant="outline" size="sm" onClick={addDocRow}>+ 添加</Button></div>
+        <div className="grid grid-cols-4 gap-2 mb-1 px-1 text-xs font-medium text-gray-500">
+          <span>类型</span><span className="col-span-3">文件（JPG/PNG/PDF，≤10MB）</span>
+        </div>
+        {docList.length === 0 && <p className="text-xs text-gray-400 mb-2">可上传运单、提单、报关单、发票等物流凭证</p>}
+        {docList.map((doc, i) => (
+          <div key={i} className="grid grid-cols-4 gap-2 mb-2 items-start">
+            <Select value={doc.type} onValueChange={(v) => { const n = [...docList]; n[i].type = v; setDocList(n); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{DOC_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="col-span-2">
+              <FileUpload
+                currentUrl={doc.url}
+                onUpload={(url) => { const n = [...docList]; n[i].url = url; n[i].name = url ? docNameFromUrl(url) : ''; setDocList(n); }}
+                accept="image/*,.pdf"
+              />
+            </div>
+            <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => removeDocRow(i)}><X className="h-3 w-3" /></Button>
           </div>
         ))}
       </div>
@@ -519,6 +568,17 @@ export default function LogisticsOrdersPage() {
                     <TableBody>{showView.items.map((item: any, i: number) => (
                       <TableRow key={i}><TableCell>{item.productName}</TableCell><TableCell>{item.quantity}</TableCell><TableCell>{item.netWeight} kg</TableCell><TableCell>{item.dimensions}</TableCell></TableRow>
                     ))}</TableBody></Table>
+                </div>)}
+              {showView.documents?.length > 0 && (
+                <div>
+                  <Label className="mb-2 block">单据凭证</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {showView.documents.map((d: any, i: number) => (
+                      <a key={i} href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 rounded px-2 py-1 text-blue-600 hover:text-blue-700">
+                        <FileText className="h-3 w-3" />{DOC_TYPES.find(t => t.value === d.type)?.label || d.type || '凭证'}: {d.name || '查看'}
+                      </a>
+                    ))}
+                  </div>
                 </div>)}
             </div>
           )}

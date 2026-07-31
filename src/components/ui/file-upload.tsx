@@ -8,7 +8,7 @@
  * - onUpload(url): 上传成功回调
  * - accept: 接受的文件类型 (默认 "image/*")
  * 
- * 限制：单文件 ≤ 500KB，仅支持 JPG/PNG/WebP
+ * 限制：单文件 ≤ 10MB，支持 JPG/PNG/WebP/PDF/Excel
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -116,7 +116,7 @@ export function FileUpload({ currentUrl, onUpload, accept = 'image/*' }: FileUpl
           ) : (
             <span className="flex items-center justify-center gap-2">
               <Upload className="h-4 w-4" />
-              点击上传 (≤500KB)
+              点击上传 (≤10MB)
             </span>
           )}
         </button>
