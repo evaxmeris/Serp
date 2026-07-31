@@ -1472,6 +1472,31 @@
   padding: 3px 8px !important;\
   font-size: 12px !important;\
 }\
+.erp-panel-btn.mini {\
+  padding: 1px 5px !important;\
+  font-size: 11px !important;\
+  line-height: 1.2 !important;\
+  border: none !important;\
+  background: none !important;\
+  cursor: pointer !important;\
+  color: #6b7280 !important;\
+}\
+.erp-panel-btn.mini:hover {\
+  color: #6366f1 !important;\
+}\
+.swap-cell {\
+  width: 28px !important;\
+  text-align: center !important;\
+  padding: 0 !important;\
+  vertical-align: middle !important;\
+}\
+.num-cell {\
+  width: 24px !important;\
+  text-align: center !important;\
+  color: #9ca3af !important;\
+  font-size: 11px !important;\
+  padding: 4px 2px !important;\
+}\
 .erp-panel-btn.danger {\
   color: #ef4444 !important;\
 }\
@@ -1685,12 +1710,13 @@
       <label class="erp-panel-label">属性编辑</label>\
       <div id="__erp_attr_table_wrap" style="overflow-x:auto">\
         <table class="erp-panel-attr-table" id="__erp_attr_table">\
-          <thead><tr><th>属性名</th><th>属性值</th><th class="actions">操作</th></tr></thead>\
+          <thead><tr><th class="num-cell">#</th><th>属性名</th><th></th><th>属性值</th><th class="actions">操作</th></tr></thead>\
           <tbody></tbody>\
         </table>\
       </div>\
       <div style="margin-top:6px">\
         <button class="erp-panel-btn ghost small" id="__erp_add_attr_btn">+ 新增属性</button>\
+        <button class="erp-panel-btn primary small" id="__erp_reapply_config_btn" style="margin-left:6px">📋 属性采集</button>\
       </div>\
       <div class="erp-panel-divider"></div>\
       <label class="erp-panel-label">保存配置</label>\
@@ -1753,6 +1779,16 @@
     });
     document.getElementById('__erp_extract_attrs_btn').addEventListener('click', handleExtractAttrs);
     document.getElementById('__erp_add_attr_btn').addEventListener('click', handleAddAttr);
+    // 属性采集按钮：重新执行当前配置的提取规则
+    document.getElementById('__erp_reapply_config_btn').addEventListener('click', function() {
+      var sel = document.getElementById('__erp_config_selector');
+      if (sel && sel.value) {
+        panelToast('📋 正在按配置重新采集...', 2000);
+        sel.dispatchEvent(new Event('change'));
+      } else {
+        panelToast('⚠️ 请先选择或保存一个配置');
+      }
+    });
     document.getElementById('__erp_save_config_btn').addEventListener('click', function() { handleSaveConfig('save'); });
     document.getElementById('__erp_update_config_btn').addEventListener('click', function() { handleSaveConfig('update'); });
     document.getElementById('__erp_save_as_btn').addEventListener('click', function() { handleSaveConfig('saveas'); });
@@ -1893,7 +1929,7 @@
               } catch(e) {}
             });
           } catch(e) {}
-          if (!jsonFound) {
+          if (!jsonFound && (!cfg.containerSelectors || cfg.containerSelectors.length === 0) && (!cfg.attrPairs || cfg.attrPairs.length === 0)) {
             panelToast('🔍 未找到 JSON 属性，需按旧流程提取', 3000);
           }
           // 应用 B 类配对规则
@@ -2112,16 +2148,18 @@
     var tbody = document.querySelector('#__erp_attr_table tbody');
     if (!tbody) return;
     if (__panelAttrs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#9ca3af;padding:10px">点击「确认提取」从容器中提取属性</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:10px">点击「确认提取」从容器中提取属性</td></tr>';
       return;
     }
     var html = '';
     __panelAttrs.forEach(function(attr, idx) {
       html += '<tr data-idx="' + idx + '">\
+  <td class="num-cell">' + (idx + 1) + '</td>\
   <td contenteditable="true" data-field="name" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.name) + '</td>\
+  <td class="swap-cell"><button class="erp-panel-btn mini" data-swap="' + idx + '" title="交换名与值">🔄</button></td>\
   <td contenteditable="true" data-field="value" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">' + escHtml(attr.value) + '</td>\
   <td class="actions">\
-    <button class="erp-panel-btn ghost small" data-pick="' + idx + '" title="配对训练(Shift+click选容器)">📝</button>\
+    <button class="erp-panel-btn ghost small" data-pick="' + idx + '" title="配对训练(点页面元素)">📝</button>\
     <button class="erp-panel-btn ghost small danger" data-delattr="' + idx + '" title="删除">✕</button>\
   </td>\
 </tr>';
@@ -2155,6 +2193,21 @@
         __panelAttrs.splice(idx, 1);
         renderPanelAttributes();
         savePanelState();
+      });
+    });
+
+    // bind swap buttons → 交换属性名与值
+    tbody.querySelectorAll('[data-swap]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(btn.getAttribute('data-swap'), 10);
+        if (__panelAttrs[idx]) {
+          var tmp = __panelAttrs[idx].name;
+          __panelAttrs[idx].name = __panelAttrs[idx].value;
+          __panelAttrs[idx].value = tmp;
+          renderPanelAttributes();
+          savePanelState();
+          panelToast('🔄 已交换', 1500);
+        }
       });
     });
   }
@@ -2201,26 +2254,188 @@
 
   // --- preview toggle ---
   function handlePreviewClick() {
-    var section = document.getElementById('__erp_preview_section');
-    var content = document.getElementById('__erp_preview_content');
-    if (section.style.display === 'none') {
-      section.style.display = 'block';
-      try {
-        var data;
-        if (typeof window.__ERP_PARSERS__ !== 'undefined' && window.__ERP_PARSERS__.AlibabaV2Engine) {
-          data = window.__ERP_PARSERS__.AlibabaV2Engine.extractFullProduct();
-        } else {
-          data = detectPlatform() === 'alibaba' ? parseAlibaba() : parse1688();
-        }
-        content.innerHTML = '<div class="erp-panel-preview-card"><h4>标题</h4><p>' + escHtml((data.title || '') + '') + '</p></div>\
-<div class="erp-panel-preview-card"><h4>价格</h4><p>' + escHtml('' + (data.price || data.priceRange || '—')) + '</p></div>\
-<div class="erp-panel-preview-card"><h4>图片</h4><p>' + (data.images ? data.images.length + ' 张' : '0 张') + '</p></div>\
-<div class="erp-panel-preview-card"><h4>属性</h4><p>' + ((data.attributes || []).length > 0 ? data.attributes.map(function(a) { return escHtml(a.name + ': ' + a.value); }).join(' | ') : '无') + '</p></div>';
-      } catch(e) {
-        content.innerHTML = '<div class="erp-panel-empty">预览出错: ' + escHtml(e.message) + '</div>';
+    try {
+      // 收集当前采集数据
+      var data;
+      if (typeof window.__ERP_PARSERS__ !== 'undefined' && window.__ERP_PARSERS__.AlibabaV2Engine) {
+        data = window.__ERP_PARSERS__.AlibabaV2Engine.extractFullProduct();
+      } else {
+        data = detectPlatform() === 'alibaba' ? parseAlibaba() : parse1688();
       }
-    } else {
-      section.style.display = 'none';
+      // 合并属性编辑表格中的属性
+      if (__panelAttrs && __panelAttrs.length > 0) {
+        data.attributes = __panelAttrs.filter(function(a) { return a.name && a.value; }).map(function(a) { return { name: a.name, value: a.value }; });
+      }
+      // 如果图片为空，兜底扫描页面上的大图（不依赖 img.width，懒加载图片可能为0）
+      if (!data.images || data.images.length === 0) {
+        data.images = [];
+        try {
+          document.querySelectorAll('img').forEach(function(img) {
+            var src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazyload') || '';
+            if (!src) return;
+            // 只跳过明确的小图/图标
+            if (/logo|icon|placeholder|blank|gray|loading|spacer|avatar|flag|star|rating|share|cart/i.test(src)) return;
+            if (src.indexOf('data:') === 0 && src.length < 500) return;
+            if (src.startsWith('//')) src = 'https:' + src;
+            // 去重
+            var dup = false;
+            data.images.forEach(function(e) { if (e.originalUrl === src) dup = true; });
+            if (!dup) data.images.push({ originalUrl: src });
+          });
+        } catch(e) { console.warn('[预览] 图片兜底失败:', e); }
+      }
+      // 补充视频提取（复用 EXTRACT_VIDEOS 的完整逻辑）
+      if (!data.videos || data.videos.length === 0) {
+        data.videos = [];
+        try {
+          document.querySelectorAll('script').forEach(function(s) {
+            var txt = s.textContent || '';
+            // videoUrl
+            var vu = txt.match(/videoUrl["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (vu) data.videos.push(vu[1]);
+            // mediaVOs 数组中的视频
+            var mv = txt.match(/mediaVOs\s*[:=]\s*(\[[^\]]+\])/);
+            if (mv) {
+              try {
+                JSON.parse(mv[1]).forEach(function(m) {
+                  if (m.mediaType === 'video' || m.type === 'video') {
+                    if (m.url) data.videos.push(m.url);
+                    if (m.videoUrl) data.videos.push(m.videoUrl);
+                  }
+                });
+              } catch(e) {}
+            }
+            // mp4 链接
+            var mp4 = txt.match(/"https?:[^"]+\.mp4[^"]*"/gi);
+            if (mp4) mp4.forEach(function(m) { data.videos.push(m.replace(/^"|"$/g, '')); });
+          });
+          // JSON-LD VideoObject
+          document.querySelectorAll('script[type="application/ld+json"]').forEach(function(s) {
+            try {
+              var parsed = JSON.parse(s.textContent);
+              (Array.isArray(parsed) ? parsed : [parsed]).forEach(function(item) {
+                if (item['@type'] === 'VideoObject' && item.contentUrl) data.videos.push(item.contentUrl);
+              });
+            } catch(e) {}
+          });
+          // 来源3: data-video / data-media 属性
+          document.querySelectorAll('[data-video], [data-media-url]').forEach(function(el) {
+            var v = el.getAttribute('data-video') || el.getAttribute('data-media-url') || '';
+            if (v) data.videos.push(v);
+          });
+          // 来源4: 页面上的 <video> 标签
+          document.querySelectorAll('video').forEach(function(el) {
+            var s = el.querySelector('source');
+            var src = el.src || (s && s.src) || '';
+            if (src) data.videos.push(src);
+          });
+          // 去重，只保留第一个视频
+          var seen = {};
+          var first = '';
+          data.videos.forEach(function(v) {
+            var key = typeof v === 'string' ? v : (v.url || v.videoUrl || '');
+            if (key && !seen[key]) { seen[key] = true; if (!first) first = key; }
+          });
+          data.videos = first ? [first] : [];
+        } catch(e) {}
+      }
+      
+      // 生成自包含 HTML 预览
+      var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>采集预览</title>';
+      html += '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:960px;margin:0 auto;padding:20px;background:#f5f5f5}';
+      html += '.card{background:#fff;border-radius:8px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}';
+      html += 'h2{font-size:16px;margin:0 0 8px 0;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:6px}';
+      html += '.imgs{display:flex;flex-wrap:wrap;gap:8px}';
+      html += '.imgs img{width:120px;height:120px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb}';
+      html += 'video{width:240px;border-radius:4px}';
+      html += 'table{width:100%;border-collapse:collapse}';
+      html += 'td{padding:6px 8px;border-bottom:1px solid #f3f4f6;font-size:13px}';
+      html += 'td:first-child{font-weight:600;color:#6b7280;width:140px}';
+      html += '.desc{white-space:pre-wrap;font-size:13px;line-height:1.6;color:#374151}';
+      html += '</style></head><body>';
+      html += '<h1 style="margin-bottom:4px">📋 采集预览</h1>';
+      html += '<p style="color:#9ca3af;font-size:13px;margin-top:0">' + new Date().toLocaleString() + '</p>';
+      
+      // 标题
+      html += '<div class="card"><h2>标题</h2><p style="font-size:15px;font-weight:500">' + escHtml((data.title || '—')) + '</p></div>';
+      // 价格
+      html += '<div class="card"><h2>价格</h2><p>' + escHtml('' + (data.price || data.priceRange || '—')) + ' ' + (data.currency || '') + '</p></div>';
+      
+      // 图片/视频
+      var imgs = data.images || [];
+      if (imgs.length > 0) {
+        // 过滤占位图、图标、小缩略图
+        var realImgs = imgs.filter(function(img) {
+          var u = (img.originalUrl || img.cleanedUrl || img.url || '');
+          if (typeof img === 'string') u = img;
+          return u && !/placeholder|logo|icon|blank|gray|loading|spacer|transparent|pixel|thumb|small/i.test(u);
+        });
+        // 最多显示20张主图
+        var showImgs = realImgs.slice(0, 20);
+        html += '<div class="card"><h2>图片 (' + showImgs.length + ')</h2><div class="imgs">';
+        showImgs.forEach(function(img) {
+          var url = img.originalUrl || img.cleanedUrl || img.url || img;
+          if (typeof img === 'string') url = img;
+          // 处理协议相对URL
+          if (url && typeof url === 'string' && url.startsWith('//')) url = 'https:' + url;
+          if (url && typeof url === 'string' && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'))) {
+            html += '<video controls src="' + escHtml(url) + '"></video>';
+          } else if (url && typeof url === 'string') {
+            html += '<img src="' + escHtml(url) + '" onerror="this.style.display=\'none\'">';
+          }
+        });
+        html += '</div></div>';
+      }
+      // 视频
+      var vids = data.videos || [];
+      if (vids.length > 0) {
+        html += '<div class="card"><h2>视频 (' + vids.length + ')</h2><div class="imgs">';
+        vids.forEach(function(v) {
+          var vu = typeof v === 'string' ? v : (v.url || v.videoUrl || '');
+          if (vu && vu.startsWith('//')) vu = 'https:' + vu;
+          if (vu) html += '<video controls src="' + escHtml(vu) + '" style="max-width:320px"></video>';
+        });
+        html += '</div></div>';
+      }
+      
+      // 属性
+      var attrs = data.attributes || [];
+      if (attrs.length > 0) {
+        html += '<div class="card"><h2>属性 (' + attrs.length + ')</h2><table>';
+        attrs.forEach(function(a) {
+          html += '<tr><td>' + escHtml(a.name) + '</td><td>' + escHtml(a.value) + (a.unit ? ' ' + a.unit : '') + '</td></tr>';
+        });
+        html += '</table></div>';
+      }
+      
+      // 详情描述
+      var desc = data.description || data.descriptionEn || '';
+      if (desc) {
+        // 将描述中的相对图片URL转为绝对路径（blob页面无法解析相对路径）
+        desc = desc.replace(/<img[^>]+src=["']([^"']+)["']/gi, function(match, src) {
+          if (src.startsWith('http') || src.startsWith('data:')) return match;
+          var absSrc = src;
+          if (src.startsWith('//')) absSrc = 'https:' + src;
+          else if (src.startsWith('/')) absSrc = window.location.origin + src;
+          else absSrc = window.location.origin + '/' + src;
+          return match.replace(src, absSrc);
+        });
+        html += '<div class="card"><h2>详情描述</h2><div class="desc">' + desc + '</div></div>';
+      }
+      
+      html += '<p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:20px">— 预览结束 —</p>';
+      html += '</body></html>';
+      
+      // 打开新标签页
+      var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+      
+      panelToast('✅ 预览已在新标签页打开');
+    } catch(e) {
+      panelToast('❌ 预览失败: ' + e.message);
+      console.error('[预览错误]', e);
     }
   }
 
