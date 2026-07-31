@@ -673,7 +673,7 @@ export default function ApprovalWorkflowsPage() {
       {/* 新建 / 编辑 Dialog */}
       {/* ============================================================ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+        <DialogContent draggable  className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingWorkflow ? `编辑流程 - ${editingWorkflow.name}` : '新建审批流程'}

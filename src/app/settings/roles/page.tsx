@@ -608,7 +608,7 @@ export default function RolesPage() {
 
       {/* 创建/编辑对话框 */}
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-        <DialogContent 
+        <DialogContent draggable  
           className="max-w-md max-h-[90vh] overflow-y-auto md:max-h-none" 
           role="dialog" 
           aria-modal="true" 

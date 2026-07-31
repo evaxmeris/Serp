@@ -473,7 +473,7 @@ export default function LogisticsOrdersPage() {
 
       {/* 查看详情 */}
       <Dialog open={!!showView} onOpenChange={(v) => { if (!v) setShowView(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent draggable  className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>详情 — {showView?.orderNo}</DialogTitle></DialogHeader>
           {showView && (
             <div className="space-y-4">

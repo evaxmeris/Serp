@@ -311,7 +311,7 @@ export default function LogisticsProvidersPage() {
                   <span className="sm:hidden">新增</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogContent draggable className="max-w-2xl max-h-[85vh] overflow-y-auto">
                 <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
                 <DialogHeader>
                   <DialogTitle>

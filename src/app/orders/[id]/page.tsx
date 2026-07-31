@@ -342,7 +342,7 @@ export default function OrderDetailPage() {
                 生成采购订单
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent draggable  className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>从销售订单生成采购订单</DialogTitle>
                 <p className="text-sm text-gray-500">

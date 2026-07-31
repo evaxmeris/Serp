@@ -1427,7 +1427,7 @@ export default function ProductsPage() {
 
       {/* 编辑产品弹窗 */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent draggable  className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>编辑产品</DialogTitle>
             </DialogHeader>

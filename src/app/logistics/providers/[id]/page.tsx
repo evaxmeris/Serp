@@ -541,7 +541,7 @@ export default function LogisticsProviderDetailPage() {
                   新增报价
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+              <DialogContent draggable  className="max-w-lg max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingQuotation ? '编辑报价' : '新增报价'}
@@ -844,7 +844,7 @@ export default function LogisticsProviderDetailPage() {
 
       {/* 查看报价详情 Dialog */}
       <Dialog open={!!viewingQuotation} onOpenChange={(open) => !open && setViewingQuotation(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent draggable className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>报价详情</DialogTitle>
           </DialogHeader>

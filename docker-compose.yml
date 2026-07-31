@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: trade-erp-v0.14.0
+    container_name: trade-erp-v0.14.1
     ports:
       - "3000:3000"
     environment:

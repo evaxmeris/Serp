@@ -635,7 +635,7 @@ export default function TemplatesPage() {
       {/* 创建/编辑对话框 */}
       {showModal && (
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent draggable  className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingTemplate ? '编辑属性模板' : '新建属性模板'}

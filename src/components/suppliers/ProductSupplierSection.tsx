@@ -490,7 +490,7 @@ export default function ProductSupplierSection({
 
       {/* 添加关联弹窗 */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent draggable  className="max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>添加{title}</DialogTitle>
           </DialogHeader>
