@@ -280,12 +280,13 @@ export default function InventoryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label>调整数量</Label>
+                    <Label>调整数量（按类型填写正数）</Label>
                     <Input
                       type="number"
+                      min={0}
                       value={adjustForm.quantity}
                       onChange={(e) => setAdjustForm({ ...adjustForm, quantity: Number(e.target.value) })}
-                      placeholder="正数增加，负数减少"
+                      placeholder="入库填正数（增加）；出库填正数（减少）"
                     />
                   </div>
                   <div>

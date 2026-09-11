@@ -144,6 +144,13 @@ export async function POST(request: NextRequest) {
     let updatedItem: any;
     let success = false;
 
+    // 修复（2026-09-11）：此前一律 beforeQty + data.quantity，忽略 type，导致"出库"反而增加库存。
+    // 现按业务类型决定方向：OUT 恒为减；IN/RETURN 恒为增；ADJUSTMENT/TRANSFER 沿用传入的带符号数量。
+    // 在循环外计算，供下方流水记录复用。
+    const delta = (data.type === 'ADJUSTMENT' || data.type === 'TRANSFER')
+      ? data.quantity
+      : (data.type === 'OUT' ? -Math.abs(data.quantity) : Math.abs(data.quantity));
+
     for (let attempt = 0; attempt < 3; attempt++) {
       const current = await prisma.inventoryItem.findUniqueOrThrow({
         where: { id: inventoryItem.id },
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
       });
 
       const beforeQty = current.quantity;
-      const afterQty = beforeQty + data.quantity;
+      const afterQty = beforeQty + delta;
 
       if (afterQty < 0) {
         return conflictResponse('调整后库存不能为负数');
@@ -161,7 +168,7 @@ export async function POST(request: NextRequest) {
         quantity: afterQty,
       };
 
-      if (data.quantity > 0) {
+      if (delta > 0) {
         updateData.lastInboundDate = new Date();
       } else {
         updateData.lastOutboundDate = new Date();
@@ -195,8 +202,8 @@ export async function POST(request: NextRequest) {
         productId: data.productId,
         warehouseId: data.warehouseId,
         type: data.type,
-        quantity: data.quantity,
-        beforeQuantity: updatedItem.quantity - data.quantity,
+        quantity: delta,
+        beforeQuantity: updatedItem.quantity - delta,
         afterQuantity: updatedItem.quantity,
         referenceType: data.referenceType,
         referenceId: data.referenceId,
