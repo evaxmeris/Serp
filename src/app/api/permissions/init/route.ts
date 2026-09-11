@@ -2,6 +2,7 @@ import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { seedAdsRolePermissions } from '@/lib/permissions';
 
 /**
  * 默认系统权限定义
@@ -106,6 +107,12 @@ const defaultPermissions = [
   { name: 'research:create', code: 'research:create', displayName: '创建研究', module: 'research' },
   { name: 'research:edit', code: 'research:edit', displayName: '编辑研究', module: 'research' },
   { name: 'research:delete', code: 'research:delete', displayName: '删除研究', module: 'research' },
+
+  // 广告优化模块（M1，亚马逊投流优化中心）
+  // ⚠️ 权限种子存在两处，必须同步：本数组 + src/lib/permissions.ts 的 initDefaultPermissions
+  { name: 'ads:view', code: 'ads:view', displayName: '查看广告数据', module: 'ads' },
+  { name: 'ads:edit', code: 'ads:edit', displayName: '操作广告优化', module: 'ads' },
+  { name: 'ads:admin', code: 'ads:admin', displayName: '管理广告账户', module: 'ads' },
 ];
 
 /**
@@ -238,7 +245,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length });
+    // 广告域角色接线（M1，第二处种子入口）：admin 全有 / sales view+edit（幂等）
+    // ⚠️ hasPermission 有 5 分钟缓存，接线后已登录用户需重新登录或 invalidateUserPermissionsCache(userId)
+    const adsWiring = await seedAdsRolePermissions();
+
+    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length, adsRolePermissions: adsWiring.wired });
   } catch (error) {
     console.error('Error initializing permissions:', error);
     return errorResponse('Failed to initialize permissions', 'INTERNAL_ERROR', 500);

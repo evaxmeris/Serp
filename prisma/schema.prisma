@@ -2703,3 +2703,215 @@ model WooCommerceConfig {
 
   @@map("woocommerce_configs")
 }
+
+// ════════════════════════════════════════════════════════════════
+// 广告域（M1）— 亚马逊投流优化中心 + 站点管理
+// 依据：docs/advertising-domain-m1-architecture.md §2（数据模型）
+//       docs/advertising-domain-m1-be-design.md §5（查询/写入语义）
+// 说明：reportType/source/action/matchType/state 等引擎驱动字段用 String
+//       （非 Prisma enum），引擎升级新增取值零迁移（R8）；API 层 Zod enum 校验。
+//       金额/竞价用 Float（非 Decimal），保证与引擎输出逐字段一致、误差为 0（AC-1）。
+// ════════════════════════════════════════════════════════════════
+
+// 站点（marketplace）配置 —— REQ-ADS-006-1（预设 9 站点 + CRUD）
+model AdMarketplace {
+  id            String  @id @default(cuid())
+  code          String  @unique // US / CA / BR / UK / DE / FR / ES / IT / JP
+  name          String // 显示名，如 "美国站"
+  marketplaceId String  @unique // ATVPDKIKX0DER (US)
+  currency      String  @default("USD")
+  adEndpoint    String // advertising-api.amazon.com / -eu / -fe
+  isActive      Boolean @default(true)
+
+  accounts AdAccount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("ad_marketplaces")
+}
+
+// 广告账户 —— REQ-ADS-006-2/3/4、D6
+model AdAccount {
+  id            String  @id @default(cuid())
+  platformCode  String  @default("amazon") // 与 PlatformSyncConfig.platformCode 同风格
+  marketplaceId String // → AdMarketplace.marketplaceId（业务键）
+  name          String // 账户名（展示用）
+  externalId    String? // Ads profileId（M2 API 用）
+
+  // ── 广告 API 凭据（独立于订单域 PlatformAccount，REQ-006-2；AES-256-GCM 加密存储）──
+  clientId     String? // 加密存储，接口层只返回脱敏值
+  clientSecret String? // 加密存储
+  refreshToken String? // 加密存储
+
+  // ── 关联与状态 ──
+  platformAccountId String? // 可选关联订单域 PlatformAccount（弱引用，不建 FK，避免跨域耦合）
+  isActive          Boolean   @default(true)
+  deletedAt         DateTime? // 软删除（保留报告/决策历史，R7）
+  settings          Json      @default("{}") // D6 引擎参数 { breakEvenAcos, negateClicks, stopSpend }（null=动态计算）
+
+  marketplace     AdMarketplace?     @relation(fields: [marketplaceId], references: [marketplaceId])
+  campaigns       AdCampaign[]
+  keywords        AdKeyword[]
+  reports         AdReport[]
+  recommendations AdRecommendation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platformCode, marketplaceId]) // REQ-006-4：一个站点仅绑定一个广告账户
+  @@index([marketplaceId])
+  @@index([isActive])
+  @@map("ad_accounts")
+}
+
+// 广告活动 —— M1 由 Targeting 报告行 upsert（campaignId 列）
+model AdCampaign {
+  id          String  @id @default(cuid())
+  adAccountId String
+  externalId  String // = 亚马逊 campaignId（Bulk 三件套之一 / M2 API 对齐）
+  name        String
+  status      String  @default("ENABLED") // ENABLED / PAUSED / ARCHIVED
+  dailyBudget Float?
+  currency    String? @default("USD")
+
+  adAccount AdAccount   @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  keywords  AdKeyword[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([adAccountId, externalId])
+  @@index([adAccountId])
+  @@map("ad_campaigns")
+}
+
+// 投放词/关键词决策 —— 核心资产（组合粒度 = 投放词 × 匹配类型）
+model AdKeyword {
+  id          String @id @default(cuid())
+  adAccountId String
+
+  // ── Bulk 三件套（REQ-ADS-005-2/3，Targeting 报告自带）──
+  campaignId       String? // FK → AdCampaign.id（内部 cuid，仅关系查询用）
+  amazonCampaignId String? // 亚马逊 campaignId 原文（冗余快照）；批量表「Campaign ID」列与自检 #1 只用本列，
+  //                         严禁把内部 cuid 写进批量表（架构必改项 5/I-4）
+  adGroupId        String? // 亚马逊 Ad Group ID（外部原文）
+  externalId       String? // keywordId / productTargetingId（Target ID）
+
+  // ── 投放词本体（Targeting 报告口径）──
+  keywordText String // 投放词（英文原文）
+  matchType   String // EXACT / PHRASE / BROAD / TARGETING_EXPRESSION / TARGETING_EXPRESSION_PREDEFINED / close-match / loose-match / asin=
+  state       String // ENABLED / PAUSED（Targeting 报告状态列）
+  bid         Float? // 当前目标竞价；无 bid 数据时 = null（禁止用 CPC 冒充，口径铁律 2）
+
+  // ── v20 决策字段（REQ-ADS-002-4）──
+  familyL1     String? // L1 语义族（品类×诉求）
+  duplicateOf  String? // L2 完全重复 → 主词 keywordText
+  action       String? // PAUSE / RAISE_BID / LOWER_BID / NEGATE / KEEP / EXPAND / HARVEST
+  actionBid    Float? // 建议 bid（层级约束后的最终值，两位小数语义）
+  actionReason String // 依据文字，**必填非空**；适配层缺依据时兜底 "待补充"（前端标黄，架构必改项 3/I-2）
+
+  // ── 行级可追溯（AC-10/R5，架构必改项 6/I-6）──
+  rawRowIndex Int? // 指向 AdReport.rawRows 数组下标（关闭矩阵/层级警告→Targeting，否定清单→搜索词；degraded 无原始行为 null）
+  source      String @default("CLOSE_MATRIX") // 决策行来源分区：CLOSE_MATRIX / LAYER_CHECK / EXPAND / NEGATE
+
+  acos        Float?
+  orders      Int?
+  spend       Float?
+  clicks      Int?
+  impressions Int?
+  ctr         Float?
+  reportId    String? // 本次决策来自哪份报告（软引用 AdReport.id）
+
+  // ── 执行清单勾选/覆写（REQ-ADS-004）──
+  isSelected     Boolean   @default(false) // 勾选持久化（004-3）
+  overrideAction String? // 手工覆写动作（覆盖引擎建议，004-2）
+  overrideBid    Float? // 手工覆写 bid
+  overriddenBy   String? // 覆写人 userId
+  overriddenAt   DateTime? // 覆写时间（非空 ⇒ 前端标注「手工修改」）
+
+  // ── 归属 ──
+  recommendationId String? // 产生本决策行的决策版本（勾选状态按版本隔离）
+
+  adAccount      AdAccount         @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaign       AdCampaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  recommendation AdRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 唯一约束建在 (recommendationId, externalId) 而非 (adAccountId, externalId)：
+  // 同一词每次跑批生成新决策行（REQ-002-6 不覆盖旧版），后者会冲突。
+  // externalId=null 的 NEGATE/EXPAND 行：Postgres 唯一索引多 NULL 不冲突，可多条共存。
+  @@unique([recommendationId, externalId])
+  @@index([adAccountId, familyL1])
+  @@index([recommendationId, isSelected]) // 批量表生成主查询
+  @@index([adAccountId, matchType])
+  @@index([keywordText, matchType])
+  @@map("ad_keywords")
+}
+
+// 报告快照 —— REQ-ADS-001-4/5、008，含分析状态机
+model AdReport {
+  id            String @id @default(cuid())
+  adAccountId   String
+  uploadBatchId String // 配对批次号：前端生成 UUID 传入，搜索词+Targeting 同 batchId 即配对（架构必改项 2/G-2）
+  reportType    String // SEARCH_TERM / TARGETING
+  source        String @default("MANUAL_UPLOAD") // MANUAL_UPLOAD / API（REQ-007-4）
+
+  startDate DateTime
+  endDate   DateTime
+
+  // ── 文件归档（私有目录 data/ads-reports/）──
+  originalName String? // 用户原始文件名
+  fileName     String? // 归档文件名（uuid.ext）
+  filePath     String? // 服务器私有路径
+  fileSize     Int?
+
+  // ── 解析结果（引擎 parse 模式产出）──
+  summary          Json // 账户总览 {spend,sales,orders,clicks,acos,cvr,aov}（引擎口径，R4）
+  rawRows          Json // 归一化原始行数组（保持文件原始行序，供 rowIndex 下钻，AC-10）
+  rowCount         Int   @default(0)
+  consistencyCheck Json? // 双报告一致性（E4）：{spendDiffPct, ordersDiffPct, dateMismatch, warning}
+
+  // ── 分析状态机（BE 设计 §5.4）──
+  analyzeStatus String    @default("UPLOADED") // UPLOADED / ANALYZING / ANALYZED / ANALYZE_FAILED
+  analyzeError  Json? // E2：{exitCode, stderr, attempts, durationMs}
+  analyzedAt    DateTime?
+
+  adAccount       AdAccount          @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  recommendations AdRecommendation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([adAccountId, createdAt])
+  @@index([uploadBatchId])
+  @@index([adAccountId, reportType])
+  @@index([analyzeStatus])
+  @@map("ad_reports")
+}
+
+// 决策快照 —— REQ-ADS-002-3/6、009（历史对比/复盘/引擎升级重跑）
+model AdRecommendation {
+  id          String @id @default(cuid())
+  adReportId  String // 主报告（Targeting；批内无 Targeting 时为搜索词报告，E3 degraded）
+  adAccountId String
+  version     String // 引擎版本 "v20"（E7/R8）
+
+  // 引擎输出全量快照（单一事实源）：键名与引擎契约一一对应
+  // account / families / closeMatrix / negateList / expandTable / layerCheck / summary / degraded
+  result Json
+  params Json @default("{}") // 本次跑批参数 {breakEvenAcos, negateClicks, stopSpend, startDate, endDate}
+
+  adAccount AdAccount   @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  report    AdReport    @relation(fields: [adReportId], references: [id], onDelete: Cascade)
+  keywords  AdKeyword[]
+
+  createdAt DateTime @default(now())
+
+  @@index([adReportId])
+  @@index([adAccountId, createdAt])
+  @@map("ad_recommendations")
+}

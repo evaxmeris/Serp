@@ -144,18 +144,8 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
     return ['*'];
   }
 
-  // 如果用户没有分配角色，检查旧的角色字段（向后兼容）
+  // 如果用户没有分配角色，视为无权限（User 模型已无 legacy role 字段，UserRole 是唯一角色来源）
   if (userRoles.length === 0) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-    if (user) {
-      const permissions = getDefaultPermissionsForRole(user.role);
-      // 存入缓存
-      setPermissionsToCache(userId, permissions);
-      return permissions;
-    }
     const emptyPermissions: string[] = [];
     setPermissionsToCache(userId, emptyPermissions);
     return emptyPermissions;
@@ -210,18 +200,13 @@ export async function hasPermission(
     return false;
   }
   
-  // 缓存未命中，需要查询数据库
-  // ADMIN 用户拥有所有权限
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
+  // 缓存未命中，需要查询数据库（UserRole 体系：super-admin 角色 → '*'，见 getUserPermissions）
+  const permissions = await getUserPermissions(userId);
 
-  if (user?.role === 'admin' || user?.role === 'super-admin') {
+  // 超级管理员（'*'）拥有所有权限
+  if (permissions.includes('*')) {
     return true;
   }
-
-  const permissions = await getUserPermissions(userId);
 
   // 直接匹配
   if (permissions.includes(permission)) {
@@ -394,6 +379,12 @@ export async function initDefaultPermissions() {
     { name: 'settings:edit', code: 'settings:edit', displayName: '编辑设置', module: 'settings', description: '编辑系统设置' },
     { name: 'settings:roles', code: 'settings:roles', displayName: '角色管理', module: 'settings', description: '管理角色权限' },
     { name: 'settings:users', code: 'settings:users', displayName: '用户管理', module: 'settings', description: '管理用户' },
+
+    // 广告优化（M1，亚马逊投流优化中心）
+    // ⚠️ 权限种子存在两处，必须同步：本数组 + src/app/api/permissions/init/route.ts 的 defaultPermissions
+    { name: 'ads:view', code: 'ads:view', displayName: '查看广告数据', module: 'ads', description: '查看广告数据与决策结果' },
+    { name: 'ads:edit', code: 'ads:edit', displayName: '操作广告优化', module: 'ads', description: '上传报告/触发分析/勾选覆写/下载批量表（含 view）' },
+    { name: 'ads:admin', code: 'ads:admin', displayName: '管理广告账户', module: 'ads', description: '站点/账户/凭据 CRUD、删除报告决策（含 edit）' },
   ];
 
   // 批量创建（跳过已存在的）
@@ -424,8 +415,73 @@ export async function initDefaultPermissions() {
     }
   }
 
+  // 广告域角色接线（M1）：admin 全有 / sales view+edit（幂等）
+  const adsWiring = await seedAdsRolePermissions();
+
   return {
     permissionsCreated: defaultPermissions.length,
     rolesCreated: defaultRoles.length,
+    adsRolePermissions: adsWiring.wired,
   };
+}
+
+/**
+ * 广告域（M1）角色权限接线 —— 幂等，可重复调用
+ *
+ * 背景（探索确认的两套体系）：
+ * - `hasPermission` 对 legacy `user.role='admin'/'super-admin'` 有 '*' 快速路径（无需 DB 行）；
+ * - 但 UserRole 体系下的 admin 用户依赖 RolePermission 行，而 /api/permissions/init
+ *   目前只给 super_admin 接线 —— 因此 admin 必须显式接线（架构 §3.3）。
+ *
+ * ⚠️ 缓存提醒：`getUserPermissions` 有 5 分钟内存缓存（CACHE_TTL）。接线后已登录用户
+ *    可能仍读到旧权限集，验收/开发时需重新登录，或调用 invalidateUserPermissionsCache(userId)。
+ *
+ * 角色矩阵（BE 设计 §8.4）：
+ *   admin  ← ads:view + ads:edit + ads:admin
+ *   sales  ← ads:view + ads:edit
+ *   viewer / purchasing / warehouse 不接线（默认无广告权限，D1）
+ */
+export async function seedAdsRolePermissions(): Promise<{
+  wired: { role: string; permissions: string[] }[];
+}> {
+  const ADS_CODES = ['ads:view', 'ads:edit', 'ads:admin'] as const;
+  const roleMatrix: Record<string, string[]> = {
+    admin: ['ads:view', 'ads:edit', 'ads:admin'],
+    sales: ['ads:view', 'ads:edit'],
+  };
+
+  // 1. 权限 code → id
+  const permissions = await prisma.permission.findMany({
+    where: { code: { in: [...ADS_CODES] } },
+    select: { id: true, code: true },
+  });
+  const permIdByCode = new Map(permissions.map(p => [p.code, p.id]));
+  if (permIdByCode.size === 0) {
+    console.warn('[ads] 广告权限点尚未创建，跳过角色接线（请先执行 initDefaultPermissions / POST /api/permissions/init）');
+    return { wired: [] };
+  }
+
+  const wired: { role: string; permissions: string[] }[] = [];
+
+  // 2. 按角色名接线（两套体系的 admin/sales 同名，天然统一）
+  for (const [roleName, codes] of Object.entries(roleMatrix)) {
+    const role = await prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) {
+      console.warn(`[ads] 角色 ${roleName} 不存在，跳过广告权限接线`);
+      continue;
+    }
+
+    const data = codes
+      .map(code => permIdByCode.get(code))
+      .filter((id): id is string => Boolean(id))
+      .map(permissionId => ({ roleId: role.id, permissionId }));
+
+    if (data.length === 0) continue;
+
+    // 3. 幂等写入（唯一约束 roleId+permissionId → skipDuplicates）
+    await prisma.rolePermission.createMany({ data, skipDuplicates: true });
+    wired.push({ role: roleName, permissions: codes });
+  }
+
+  return { wired };
 }
