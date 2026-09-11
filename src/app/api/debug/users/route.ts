@@ -19,9 +19,7 @@ export async function GET(request: NextRequest) {
         id: true,
         email: true,
         name: true,
-        role: true,
         isApproved: true,
-        passwordHash: false,
       },
     });
 

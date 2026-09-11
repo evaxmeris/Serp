@@ -194,7 +194,7 @@ export async function getSession(request: NextRequest): Promise<AuthSession | nu
     // 查询用户基本信息
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true }, // RBAC 重构后 User.role 已删除；主角色由 loadUserPermissions 提供
     });
 
     if (!user) {
@@ -365,8 +365,16 @@ export function requirePermission(
   session: AuthSession,
   permission: PermissionName
 ): NextResponse<AuthErrorResponse> | null {
+  // 会话空值保护：getSession 返回 null 时给 401，避免调用方非空断言(session!)触发 500
+  if (!session || !session.user || !session.user.permissions) {
+    return NextResponse.json(
+      { success: false, error: '未认证或会话已失效，请重新登录', code: 'UNAUTHORIZED' },
+      { status: 401 }
+    );
+  }
+
   // 超级管理员权限通配符
-  if (session.user.permissions.has('*') || session.user.role === 'admin') {
+  if (session.user.permissions.has('*') || session.user.role === 'admin' || session.user.role === 'super-admin') {
     return null;
   }
 
@@ -402,7 +410,14 @@ export function requireAnyPermission(
   session: AuthSession,
   permissions: PermissionName[]
 ): NextResponse<AuthErrorResponse> | null {
-  if (session.user.permissions.has('*') || session.user.role === 'admin') {
+  if (!session || !session.user || !session.user.permissions) {
+    return NextResponse.json(
+      { success: false, error: '未认证或会话已失效，请重新登录', code: 'UNAUTHORIZED' },
+      { status: 401 }
+    );
+  }
+
+  if (session.user.permissions.has('*') || session.user.role === 'admin' || session.user.role === 'super-admin') {
     return null;
   }
 
@@ -437,7 +452,14 @@ export function requireAllPermissions(
   session: AuthSession,
   permissions: PermissionName[]
 ): NextResponse<AuthErrorResponse> | null {
-  if (session.user.permissions.has('*') || session.user.role === 'admin') {
+  if (!session || !session.user || !session.user.permissions) {
+    return NextResponse.json(
+      { success: false, error: '未认证或会话已失效，请重新登录', code: 'UNAUTHORIZED' },
+      { status: 401 }
+    );
+  }
+
+  if (session.user.permissions.has('*') || session.user.role === 'admin' || session.user.role === 'super-admin') {
     return null;
   }
 
@@ -477,8 +499,12 @@ export function requireAllPermissions(
  * ```
  */
 export function getRowLevelFilter(session: AuthSession): RowLevelFilter {
+  if (!session || !session.user || !session.user.permissions) {
+    return {};
+  }
+
   // ADMIN 无过滤，可访问所有数据
-  if (session.user.role === 'admin' || session.user.permissions.has('*')) {
+  if (session.user.role === 'admin' || session.user.role === 'super-admin' || session.user.permissions.has('*')) {
     return {};
   }
 

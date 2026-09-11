@@ -18,7 +18,7 @@ export type PermissionCheckResult = {
 export interface AuthUserContext {
   id: string;
   email: string;
-  name: string;
+  name?: string; // 与 lib/auth::getCurrentUser 返回类型对齐（name 可为空）
   role: string;
 }
 
@@ -32,22 +32,8 @@ export async function checkUserPermission(
   permissionCode: string
 ): Promise<PermissionCheckResult> {
   try {
-    // 使用缓存优化的 hasPermission 函数
+    // 使用缓存优化的 hasPermission 函数（内部已含 admin/'*' 通配逻辑）
     const permissionGranted = await hasPermission(userId, permissionCode);
-    
-    // 获取用户信息（用于返回详细消息）
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-
-    if (user?.role === 'admin') {
-      return {
-        hasPermission: true,
-        userId,
-        message: 'Admin user has all permissions',
-      };
-    }
 
     return {
       hasPermission: permissionGranted,
@@ -225,20 +211,6 @@ export async function checkModulePermission(
     const hasAnyModulePermission = userPermissions.some(
       perm => perm.startsWith(`${moduleName}:`)
     );
-
-    // 管理员始终拥有所有权限
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
-
-    if (user?.role === 'admin') {
-      return {
-        hasPermission: true,
-        userId,
-        message: 'Admin user has all permissions',
-      };
-    }
 
     return {
       hasPermission: hasAnyModulePermission,

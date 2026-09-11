@@ -66,7 +66,6 @@ export async function PUT(request: NextRequest) {
         id: true,
         email: true,
         name: true,
-        role: true,
         avatar: true,
         createdAt: true,
         updatedAt: true,
