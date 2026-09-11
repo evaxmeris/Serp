@@ -115,7 +115,8 @@ export async function POST(
     const uniqueIds = [...new Set(userIds)];
     const users = await prisma.user.findMany({
       where: { id: { in: uniqueIds } },
-      select: { id: true, name: true, role: true },
+      // 注意：User.role 已在 RBAC 重构中删除，只查 id 校验存在性
+      select: { id: true },
     });
 
     const foundIds = new Set(users.map((u) => u.id));

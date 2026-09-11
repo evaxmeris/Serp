@@ -125,7 +125,9 @@ export default function LogisticsOrdersPage() {
     const pData = await pRes.json();
     if (pData.success) setProviders(pData.data?.items || pData.data || []);
     const uData = await uRes.json();
-    if (Array.isArray(uData)) setUsers(uData);
+    // /api/users 返回 successResponse 包装格式 {success, data}，需取 data 字段
+    const userList = uData.data ?? uData;
+    if (Array.isArray(userList)) setUsers(userList);
     const meData = await meRes.json();
     if (meData.success || meData.id) setCurrentUser(meData.user || meData);
     setLoading(false);
@@ -238,6 +240,13 @@ export default function LogisticsOrdersPage() {
 
   // 获取用户显示名
   const userName = (u: any) => u?.name || u?.email || '-';
+
+  // 获取用户主角色显示名（RBAC 后 User.role 已删除，角色在 userRoles[].role）
+  const userRoleLabel = (u: any) => {
+    const roles = Array.isArray(u?.userRoles) ? u.userRoles : [];
+    const primary = roles.find((r: any) => r.isPrimary) || roles[0];
+    return primary?.role?.displayName || primary?.role?.name || '未分配角色';
+  };
 
   const renderForm = () => (
     <form autoComplete="off" onSubmit={(e) => e.preventDefault()} className="space-y-4">
@@ -495,21 +504,21 @@ export default function LogisticsOrdersPage() {
               <Label>校对人 <span className="text-red-500">*</span></Label>
               <Select value={submitForm.reviewerId} onValueChange={(v) => setSubmitForm({ ...submitForm, reviewerId: v })}>
                 <SelectTrigger><SelectValue placeholder="选择校对人" /></SelectTrigger>
-                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({u.role})</SelectItem>)}</SelectContent>
+                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({userRoleLabel(u)})</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>审批人 <span className="text-red-500">*</span></Label>
               <Select value={submitForm.approverId} onValueChange={(v) => setSubmitForm({ ...submitForm, approverId: v })}>
                 <SelectTrigger><SelectValue placeholder="选择审批人" /></SelectTrigger>
-                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({u.role})</SelectItem>)}</SelectContent>
+                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({userRoleLabel(u)})</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>财务人员 <span className="text-red-500">*</span></Label>
               <Select value={submitForm.financeId} onValueChange={(v) => setSubmitForm({ ...submitForm, financeId: v })}>
                 <SelectTrigger><SelectValue placeholder="选择财务人员" /></SelectTrigger>
-                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({u.role})</SelectItem>)}</SelectContent>
+                <SelectContent>{users.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.name || u.email} ({userRoleLabel(u)})</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
