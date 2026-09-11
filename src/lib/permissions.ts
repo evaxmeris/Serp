@@ -399,11 +399,11 @@ export async function initDefaultPermissions() {
 
   // 初始化默认角色
   const defaultRoles = [
-    { name: 'admin', code: 'admin', displayName: '管理员', description: '系统管理员，拥有所有权限', isSystem: true },
-    { name: 'sales', code: 'sales', displayName: '业务员', description: '负责客户、报价、订单业务', isSystem: true },
-    { name: 'purchasing', code: 'purchasing', displayName: '采购员', description: '负责供应商、采购、入库', isSystem: true },
-    { name: 'warehouse', code: 'warehouse', displayName: '仓管员', description: '负责出入库、库存管理', isSystem: true },
-    { name: 'viewer', code: 'viewer', displayName: '访客', description: '只读访问权限', isSystem: true },
+    { name: 'admin', displayName: '管理员', description: '系统管理员，拥有所有权限', isSystem: true },
+    { name: 'sales', displayName: '业务员', description: '负责客户、报价、订单业务', isSystem: true },
+    { name: 'purchasing', displayName: '采购员', description: '负责供应商、采购、入库', isSystem: true },
+    { name: 'warehouse', displayName: '仓管员', description: '负责出入库、库存管理', isSystem: true },
+    { name: 'viewer', displayName: '访客', description: '只读访问权限', isSystem: true },
   ];
 
   for (const role of defaultRoles) {
@@ -481,6 +481,49 @@ export async function seedAdsRolePermissions(): Promise<{
     // 3. 幂等写入（唯一约束 roleId+permissionId → skipDuplicates）
     await prisma.rolePermission.createMany({ data, skipDuplicates: true });
     wired.push({ role: roleName, permissions: codes });
+  }
+
+  return { wired };
+}
+
+/**
+ * 用户停用/启用权限接线 —— 幂等，可重复调用（user-disable-arch §2.4）
+ *
+ * 职责：
+ * 1. 确保 user:disable 权限点存在（自愈，防两处种子数组漏加）
+ * 2. super_admin / admin 角色接线 user:disable
+ *
+ * ⚠️ 缓存提醒：hasPermission 有 5 分钟内存缓存，接线后已登录用户需重新登录
+ *    或调用 invalidateUserPermissionsCache(userId) 才能拿到新权限。
+ */
+export async function seedUserDisablePermission(): Promise<{
+  wired: { role: string; permissions: string[] }[];
+}> {
+  // 1. 确保权限点存在
+  let perm = await prisma.permission.findUnique({ where: { code: 'user:disable' } });
+  if (!perm) {
+    perm = await prisma.permission.create({
+      data: {
+        name: 'user:disable',
+        code: 'user:disable',
+        displayName: '停用/启用用户',
+        module: 'user',
+        description: '停用或启用用户账号（停用后禁止登录，历史数据保留）',
+      },
+    });
+  }
+
+  // 2. 角色接线（幂等：唯一约束 roleId+permissionId → skipDuplicates）
+  // ⚠️ 超级管理员角色实际命名为 'super-admin'（连字符），兼容 'super_admin' 历史写法
+  const wired: { role: string; permissions: string[] }[] = [];
+  for (const roleName of ['super-admin', 'super_admin', 'admin']) {
+    const role = await prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) continue;
+    await prisma.rolePermission.createMany({
+      data: [{ roleId: role.id, permissionId: perm.id }],
+      skipDuplicates: true,
+    });
+    wired.push({ role: roleName, permissions: ['user:disable'] });
   }
 
   return { wired };

@@ -10,12 +10,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { UserRound, Shield, Search, Check, X, Eye, Edit, Trash2 } from 'lucide-react';
+import { UserRound, Shield, Search, Check, X, Eye, Edit, Trash2, Power, PowerOff } from 'lucide-react';
 import { useToast, ToastContainer } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirmation-dialog';
 
 type User = {
   id: string; email: string; name?: string; isApproved: boolean;
+  isActive?: boolean; disabledAt?: string | null; disabledReason?: string | null;
   createdAt: string; roles: Role[]; permissions: string[];
   userRoles?: { role: { name: string; displayName: string } }[];
 };
@@ -35,6 +36,8 @@ export default function UserListTab() {
   const [viewUser, setViewUser] = useState<User | null>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
+  const [toggleUser, setToggleUser] = useState<User | null>(null);
+  const [disableReason, setDisableReason] = useState('');
   const [assignUser, setAssignUser] = useState<User | null>(null);
   const [assignedRoleIds, setAssignedRoleIds] = useState<string[]>([]);
 
@@ -139,6 +142,34 @@ export default function UserListTab() {
     } catch (e: any) { toast.warning('网络错误：' + (e?.message || '请检查连接')); }
   };
 
+  // 停用/启用用户
+  const openToggle = (user: User) => {
+    setToggleUser(user);
+    setDisableReason('');
+  };
+
+  const handleToggleActive = async () => {
+    if (!toggleUser) return;
+    const isCurrentlyActive = toggleUser.isActive !== false;
+    try {
+      const res = await fetch(`/api/users/${toggleUser.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isCurrentlyActive
+          ? { isActive: false, disabledReason: disableReason }
+          : { isActive: true }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.success(data.message || (isCurrentlyActive ? '用户已停用' : '用户已启用'));
+        setToggleUser(null);
+        loadUsers();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || err.message || '操作失败');
+      }
+    } catch (e: any) { toast.warning('网络错误：' + (e?.message || '请检查连接')); }
+  };
+
   // 角色分配
   const openAssign = (user: User) => {
     setAssignUser(user);
@@ -203,10 +234,16 @@ export default function UserListTab() {
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Badge className={user.isApproved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
-                      {user.isApproved ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
-                      {user.isApproved ? '已批准' : '待批准'}
-                    </Badge>
+                    {user.isActive === false ? (
+                      <Badge className="bg-red-100 text-red-700">
+                        <PowerOff className="h-3 w-3 mr-1" />已停用
+                      </Badge>
+                    ) : (
+                      <Badge className={user.isApproved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                        {user.isApproved ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
+                        {user.isApproved ? '已批准' : '待批准'}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="text-sm font-medium">
@@ -239,6 +276,16 @@ export default function UserListTab() {
                           <Shield className="h-3.5 w-3.5" />
                         </Button>
                       )}
+                      {hasPerm('user:disable') && (
+                        <Button
+                          variant="ghost" size="sm"
+                          className={user.isActive === false ? 'text-green-600' : 'text-amber-600'}
+                          onClick={() => openToggle(user)}
+                          title={user.isActive === false ? '启用' : '停用'}
+                        >
+                          {user.isActive === false ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
                       {hasPerm('user:delete') && (
                         <Button variant="ghost" size="sm" className="text-red-400" onClick={() => setDeleteUser(user)} title="删除">
                           <Trash2 className="h-3.5 w-3.5" />
@@ -262,7 +309,12 @@ export default function UserListTab() {
               <div><span className="text-zinc-500">姓名：</span>{viewUser.name || '-'}</div>
               <div><span className="text-zinc-500">邮箱：</span>{viewUser.email}</div>
               <div><span className="text-zinc-500">主角色：</span>{viewUser.userRoles?.[0]?.role?.displayName || viewUser.userRoles?.[0]?.role?.name || '-'}</div>
-              <div><span className="text-zinc-500">状态：</span>{viewUser.isApproved ? '已批准' : '待批准'}</div>
+              <div><span className="text-zinc-500">账号状态：</span>
+                {viewUser.isActive === false
+                  ? <span className="text-red-600">已停用{viewUser.disabledAt ? `（${new Date(viewUser.disabledAt).toLocaleDateString('zh-CN')}${viewUser.disabledReason ? ` · ${viewUser.disabledReason}` : ''}）` : ''}</span>
+                  : <span className="text-green-600">正常</span>}
+              </div>
+              <div><span className="text-zinc-500">审批状态：</span>{viewUser.isApproved ? '已批准' : '待批准'}</div>
               <div><span className="text-zinc-500">创建时间：</span>{new Date(viewUser.createdAt).toLocaleString('zh-CN')}</div>
               <div>
                 <span className="text-zinc-500">兼任角色：</span>
@@ -328,6 +380,40 @@ export default function UserListTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteUser(null)}>取消</Button>
             <Button variant="destructive" onClick={handleDelete}>删除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 停用/启用确认 */}
+      <Dialog open={!!toggleUser} onOpenChange={() => setToggleUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{toggleUser?.isActive === false ? '启用用户' : '停用用户'}</DialogTitle>
+          </DialogHeader>
+          {toggleUser?.isActive === false ? (
+            <p>确认恢复 <strong>{toggleUser?.name || toggleUser?.email}</strong> 的登录权限？</p>
+          ) : (
+            <>
+              <p>确认停用 <strong>{toggleUser?.name || toggleUser?.email}</strong>？停用后该账号将无法登录，历史数据保留，可随时启用。</p>
+              <div className="mt-3">
+                <label className="text-sm font-medium">停用原因（可选）</label>
+                <Input
+                  value={disableReason}
+                  onChange={e => setDisableReason(e.target.value)}
+                  placeholder="如：离职 / 长期休假"
+                  maxLength={200}
+                />
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToggleUser(null)}>取消</Button>
+            <Button
+              variant={toggleUser?.isActive === false ? 'default' : 'destructive'}
+              onClick={handleToggleActive}
+            >
+              {toggleUser?.isActive === false ? '确认启用' : '确认停用'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

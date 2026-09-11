@@ -101,6 +101,24 @@ export async function POST(request: Request) {
       );
     }
 
+    if (user.isActive === false) {
+      // 登录失败：账号已停用（user-disable-arch §2.2，放在密码校验后避免泄露账号状态）
+      const { ipAddress, userAgent } = getClientInfo(request);
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'User',
+        entityId: user.id,
+        userId: user.id,
+        details: { email: user.email, reason: 'account_disabled' },
+        ipAddress,
+        userAgent,
+      });
+      return NextResponse.json(
+        { error: '账号已停用，请联系管理员。' },
+        { status: 403 }
+      );
+    }
+
     // 查找用户的主角色
     const primaryRole = await prisma.userRole.findFirst({
       where: { userId: user.id, isPrimary: true },

@@ -2,7 +2,7 @@ import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { seedAdsRolePermissions } from '@/lib/permissions';
+import { seedAdsRolePermissions, seedUserDisablePermission } from '@/lib/permissions';
 
 /**
  * 默认系统权限定义
@@ -14,6 +14,7 @@ const defaultPermissions = [
   { name: 'user:edit', code: 'user:edit', displayName: '编辑用户', module: 'user' },
   { name: 'user:delete', code: 'user:delete', displayName: '删除用户', module: 'user' },
   { name: 'user:assign-role', code: 'user:assign-role', displayName: '分配用户角色', module: 'user' },
+  { name: 'user:disable', code: 'user:disable', displayName: '停用/启用用户', module: 'user' },
 
   // 角色管理模块
   { name: 'role:list', code: 'role:list', displayName: '查看角色列表', module: 'role' },
@@ -121,70 +122,60 @@ const defaultPermissions = [
 const defaultRoles = [
   {
     name: 'super_admin',
-    code: 'super_admin',
     displayName: '超级管理员',
     description: '系统超级管理员，拥有所有权限',
     isSystem: true,
   },
   {
     name: 'admin',
-    code: 'admin',
     displayName: '管理员',
     description: '系统管理员，拥有大部分管理权限',
     isSystem: true,
   },
   {
     name: 'sales_manager',
-    code: 'sales_manager',
     displayName: '销售经理',
     description: '销售经理，可管理客户、询盘、报价、订单',
     isSystem: false,
   },
   {
     name: 'sales',
-    code: 'sales',
     displayName: '业务员',
     description: '普通业务员，只能管理自己的客户',
     isSystem: false,
   },
   {
     name: 'purchasing_manager',
-    code: 'purchasing_manager',
     displayName: '采购经理',
     description: '采购经理，可管理供应商和采购',
     isSystem: false,
   },
   {
     name: 'purchasing',
-    code: 'purchasing',
     displayName: '采购员',
     description: '普通采购员',
     isSystem: false,
   },
   {
     name: 'warehouse_manager',
-    code: 'warehouse_manager',
     displayName: '仓库经理',
     description: '仓库经理，管理库存',
     isSystem: false,
   },
   {
     name: 'warehouse',
-    code: 'warehouse',
     displayName: '仓管员',
     description: '普通仓管员',
     isSystem: false,
   },
   {
     name: 'finance',
-    code: 'finance',
     displayName: '财务人员',
     description: '财务管理人员',
     isSystem: false,
   },
   {
     name: 'viewer',
-    code: 'viewer',
     displayName: '只读访客',
     description: '只能查看，不能修改',
     isSystem: true,
@@ -201,8 +192,8 @@ export async function POST(request: NextRequest) {
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
 
-    // SEC-006: 仅允许管理员初始化权限系统
-    if (session.role !== 'admin') {
+    // SEC-006: 仅允许管理员初始化权限系统（super_admin 同权，2026-09-11 修正：原实现严格比较 'admin' 会误拒 super_admin）
+    if (session.role !== 'admin' && session.role !== 'super_admin' && session.role !== 'super-admin') {
       return errorResponse('需要管理员权限', 'FORBIDDEN', 403);
     }
 
@@ -249,7 +240,10 @@ export async function POST(request: NextRequest) {
     // ⚠️ hasPermission 有 5 分钟缓存，接线后已登录用户需重新登录或 invalidateUserPermissionsCache(userId)
     const adsWiring = await seedAdsRolePermissions();
 
-    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length, adsRolePermissions: adsWiring.wired });
+    // 用户停用权限接线（幂等）：super_admin / admin 获得 user:disable
+    const userDisableWiring = await seedUserDisablePermission();
+
+    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length, adsRolePermissions: adsWiring.wired, userDisablePermissions: userDisableWiring.wired });
   } catch (error) {
     console.error('Error initializing permissions:', error);
     return errorResponse('Failed to initialize permissions', 'INTERNAL_ERROR', 500);

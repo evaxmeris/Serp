@@ -16,6 +16,10 @@ model User {
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
   isApproved                   Boolean             @default(false)
+  isActive                     Boolean             @default(true) // 停用开关（false=禁止登录，可逆）
+  disabledAt                   DateTime? // 停用时间
+  disabledBy                   String? // 停用操作人 userId
+  disabledReason               String? // 停用原因（可选，≤200字）
   phone                        String?
   department                   String?
   approvedCommissions          Commission[]        @relation("CommissionApprovedBy")
@@ -44,6 +48,7 @@ model User {
 
   auditLogs AuditLog[]
 
+  @@index([isActive])
   @@map("users")
 }
 
