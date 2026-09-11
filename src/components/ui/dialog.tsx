@@ -62,42 +62,67 @@ function DialogContent({
   const draggingRef = React.useRef(false);
   const startPosRef = React.useRef({ x: 0, y: 0 });
   const baseOffsetRef = React.useRef({ dx: 0, dy: 0 });
+  const movedRef = React.useRef(false); // 是否已超过阈值真正拖动
 
-  // 拖动期间挂 window 级监听，鼠标移出弹窗也能继续拖
+  // 拖动期间挂 window 级监听，鼠标移出弹窗也能继续拖。
+  // 用 pointermove + buttons 检测：mouseup 丢失（指针移出窗口/滚动条捕获/焦点切换）时自动复位，
+  // 杜绝弹窗"卡死"在跟随鼠标的状态（症状：不按键移动鼠标弹窗也跟着动）
   React.useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
+    const onPointerMove = (e: PointerEvent) => {
+      // 兜底：左键未按住 → 强制复位（处理 mouseup 未派发的情况）
+      if ((e.buttons & 1) === 0) {
+        draggingRef.current = false;
+        movedRef.current = false;
+        return;
+      }
       if (!draggingRef.current) return;
+      const dx = e.clientX - startPosRef.current.x;
+      const dy = e.clientY - startPosRef.current.y;
+      // 3px 阈值：点击/轻微移动不视为拖动
+      if (!movedRef.current && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      movedRef.current = true;
       setOffset({
-        dx: baseOffsetRef.current.dx + (e.clientX - startPosRef.current.x),
-        dy: baseOffsetRef.current.dy + (e.clientY - startPosRef.current.y),
+        dx: baseOffsetRef.current.dx + dx,
+        dy: baseOffsetRef.current.dy + dy,
       });
     };
-    const onMouseUp = () => {
+    const onPointerUp = () => {
       draggingRef.current = false;
+      movedRef.current = false;
     };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    const onBlur = () => {
+      // 窗口失焦也复位，防止切换窗口后弹窗"粘"在鼠标上
+      draggingRef.current = false;
+      movedRef.current = false;
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('blur', onBlur);
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('blur', onBlur);
     };
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!draggable || e.button !== 0) return;
-    // 点击输入框/按钮/上传等交互元素时不启动拖动，避免干扰表单操作
     const target = e.target as Element;
-    if (
-      target.closest(
-        'input, textarea, select, button, a, label, [contenteditable="true"], [role="button"], [data-slot="dialog-close"], [data-slot="file-upload"]'
-      )
-    ) {
+    // 仅允许从弹窗标题区(dialog-header)启动拖动：
+    // - 表单/内容区按下 → 不拖（点击、滚动、文本选择优先，避免"想滚动结果弹窗被拖走"）
+    // - 滚动条区域按下 → 不拖，原生滚动条正常工作
+    if (!target.closest('[data-slot="dialog-header"]')) {
+      return;
+    }
+    // 标题区内的交互元素（关闭按钮等）不启动拖动
+    if (target.closest('button, a, [role="button"], [data-slot="dialog-close"]')) {
       return;
     }
     draggingRef.current = true;
+    movedRef.current = false;
     startPosRef.current = { x: e.clientX, y: e.clientY };
     baseOffsetRef.current = offset;
-    e.preventDefault();
+    // 注意：不做 preventDefault —— 避免阻止原生滚动条拖拽和文本选择
   };
 
   const renderCloseButton = (
