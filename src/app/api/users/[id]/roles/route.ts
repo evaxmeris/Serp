@@ -21,9 +21,17 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const v = validateOrReturn(z.object({ roleIds: z.array(z.string()) }), body);
+    const v = validateOrReturn(z.object({
+      roleIds: z.array(z.string()),
+      primaryRoleId: z.string().optional(), // 主角色（决定 JWT role 与默认权限展示）
+    }), body);
     if (!v.success) return v.response;
     const { roleIds } = v.data;
+
+    // 主角色兜底（2026-09-11）：未指定或不在列表中 → 取第一个，避免出现"无主角色→按 viewer 对待"的幽灵状态
+    const primaryRoleId = (v.data.primaryRoleId && roleIds.includes(v.data.primaryRoleId))
+      ? v.data.primaryRoleId
+      : roleIds[0];
 
     // 检查用户是否存在
     const user = await prisma.user.findUnique({
@@ -53,6 +61,7 @@ export async function POST(
         data: validIds.map((roleId) => ({
           userId: id,
           roleId,
+          isPrimary: roleId === primaryRoleId,
         })),
       });
     }
@@ -65,7 +74,7 @@ export async function POST(
 
     const roles = updatedUserRoles.map(ur => ur.role);
 
-    return successResponse(roles, 'Roles updated successfully');
+    return successResponse(roles, '角色分配成功');
   } catch (error) {
     console.error('Error assigning user roles:', error);
     return errorResponse('Failed to assign roles', 'INTERNAL_ERROR', 500);

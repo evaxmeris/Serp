@@ -13,7 +13,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import Sidebar, { getCurrentUserRole, UserRole } from '@/components/Sidebar';
+import Sidebar, { getCurrentUserContext, UserRole } from '@/components/Sidebar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { KeyboardShortcutsProvider, useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { usePreferences, applyTheme } from '@/hooks/use-preferences';
@@ -52,6 +52,7 @@ function KeyboardShortcutsHelpBridge() {
 export default function RootLayoutContent({ children }: RootLayoutContentProps) {
   const pathname = usePathname();
   const [role, setRole] = useState<UserRole>('admin');
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -60,8 +61,9 @@ export default function RootLayoutContent({ children }: RootLayoutContentProps) 
   // 初始化：获取用户角色和 Sidebar 状态偏好
   useEffect(() => {
     const loadUserRole = async () => {
-      const userRole = await getCurrentUserRole();
-      setRole(userRole);
+      const ctx = await getCurrentUserContext();
+      setRole(ctx.role);
+      setPermissions(ctx.permissions);
     };
     loadUserRole();
     
@@ -137,6 +139,7 @@ export default function RootLayoutContent({ children }: RootLayoutContentProps) 
         {/* 左侧导航栏 */}
         <Sidebar
           currentRole={role}
+          currentPermissions={permissions}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
           mobileOpen={sidebarMobileOpen}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar, { getCurrentUserRole } from '@/components/Sidebar';
+import Sidebar, { getCurrentUserContext } from '@/components/Sidebar';
 import { UserRole } from '@/components/Sidebar';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +11,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [role, setRole] = useState<UserRole>('admin');
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -18,8 +19,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     // 客户端获取用户角色和侧边栏状态偏好
     const loadUserRole = async () => {
-      const userRole = await getCurrentUserRole();
-      setRole(userRole);
+      const ctx = await getCurrentUserContext();
+      setRole(ctx.role);
+      setPermissions(ctx.permissions);
     };
     loadUserRole();
     
@@ -49,6 +51,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen">
       <Sidebar
         currentRole={role}
+        currentPermissions={permissions}
         collapsed={collapsed}
         onToggleCollapse={handleToggleCollapse}
         mobileOpen={mobileOpen}

@@ -40,6 +40,7 @@ export default function UserListTab() {
   const [disableReason, setDisableReason] = useState('');
   const [assignUser, setAssignUser] = useState<User | null>(null);
   const [assignedRoleIds, setAssignedRoleIds] = useState<string[]>([]);
+  const [primaryRoleId, setPrimaryRoleId] = useState<string>('');
 
   // 编辑表单
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', password: '', isApproved: true });
@@ -174,16 +175,22 @@ export default function UserListTab() {
   const openAssign = (user: User) => {
     setAssignUser(user);
     setAssignedRoleIds(user.roles.map(r => r.id));
+    setPrimaryRoleId(user.roles[0]?.id || ''); // 默认第一个（后端亦有兜底）
   };
   const toggleRole = (roleId: string) => {
-    setAssignedRoleIds(prev => prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]);
+    setAssignedRoleIds(prev => {
+      const next = prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId];
+      // 取消主角色勾选时，主角色跟着切换（避免指向已移除的角色）
+      if (!next.includes(primaryRoleId)) setPrimaryRoleId(next[0] || '');
+      return next;
+    });
   };
   const handleSaveAssign = async () => {
     if (!assignUser) return;
     try {
       const res = await fetch(`/api/users/${assignUser.id}/roles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleIds: assignedRoleIds }),
+        body: JSON.stringify({ roleIds: assignedRoleIds, primaryRoleId }),
       });
       if (res.ok) { setAssignUser(null); loadUsers(); }
       else { const err = await res.json(); toast.error(err.error || '保存失败'); }
@@ -423,7 +430,7 @@ export default function UserListTab() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>分配角色 - {assignUser?.name || assignUser?.email}</DialogTitle>
-            <DialogDescription>选择要分配给该用户的角色，用户将获得所有选中角色的权限</DialogDescription>
+            <DialogDescription>选择要分配给该用户的角色，用户将获得所有选中角色的权限；点"设为主"指定主角色（决定其基础身份）</DialogDescription>
           </DialogHeader>
           <div className="py-4 grid grid-cols-2 gap-3">
             {roles.map(role => (
@@ -436,8 +443,20 @@ export default function UserListTab() {
                     <code className="text-xs bg-zinc-100 px-2 py-0.5 rounded mt-2 inline-block">{role.name}</code>
                     {role.isSystem && <Badge variant="secondary" className="ml-2 text-xs">系统</Badge>}
                   </div>
-                  <div className="w-5 h-5 border rounded flex items-center justify-center">
-                    {assignedRoleIds.includes(role.id) && <Check className="h-3 w-3 text-blue-600" />}
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="w-5 h-5 border rounded flex items-center justify-center">
+                      {assignedRoleIds.includes(role.id) && <Check className="h-3 w-3 text-blue-600" />}
+                    </div>
+                    {assignedRoleIds.includes(role.id) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPrimaryRoleId(role.id); }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${primaryRoleId === role.id ? 'bg-blue-600 text-white border-blue-600' : 'text-zinc-500 border-zinc-300 hover:border-blue-400'}`}
+                        title="设为主角色（决定用户的基础身份标识）"
+                      >
+                        {primaryRoleId === role.id ? '主角色' : '设为主'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

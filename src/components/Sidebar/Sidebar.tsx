@@ -57,6 +57,8 @@ export interface MenuItem {
   icon: React.ElementType;
   href: string;
   roles: UserRole[];
+  /** 权限码（RBAC 菜单驱动）：用户权限含此码即显示；未配置时回退 roles 白名单 */
+  permission?: string;
 }
 
 export interface MenuGroup {
@@ -78,6 +80,7 @@ const menuConfig: MenuGroup[] = [
         icon: LayoutDashboard,
         href: '/dashboard',
         roles: ['admin', 'sales', 'purchasing', 'warehouse', 'viewer'],
+        permission: 'dashboard:view',
       },
     ],
   },
@@ -90,6 +93,7 @@ const menuConfig: MenuGroup[] = [
         icon: Package,
         href: '/products',
         roles: ['admin', 'sales', 'purchasing'],
+        permission: 'product:list',
       },
       {
         key: 'collected-products',
@@ -97,6 +101,7 @@ const menuConfig: MenuGroup[] = [
         icon: Download,
         href: '/collected-products',
         roles: ['admin', 'sales'],
+        permission: 'collected_product:view',
       },
       {
         key: 'categories',
@@ -104,6 +109,7 @@ const menuConfig: MenuGroup[] = [
         icon: FileText,
         href: '/product-research/categories',
         roles: ['admin', 'sales'],
+        permission: 'category:list',
       },
       {
         key: 'templates',
@@ -111,6 +117,7 @@ const menuConfig: MenuGroup[] = [
         icon: FileText,
         href: '/product-research/templates',
         roles: ['admin', 'sales'],
+        permission: 'attribute_template:list',
       },
       {
         key: 'research-dashboard',
@@ -118,6 +125,7 @@ const menuConfig: MenuGroup[] = [
         icon: LayoutDashboard,
         href: '/product-research/dashboard',
         roles: ['admin', 'sales'],
+        permission: 'research:list',
       },
       {
         key: 'research-products',
@@ -125,6 +133,7 @@ const menuConfig: MenuGroup[] = [
         icon: Search,
         href: '/product-research/products',
         roles: ['admin', 'sales'],
+        permission: 'research:list',
       },
       {
         key: 'competitors',
@@ -132,6 +141,7 @@ const menuConfig: MenuGroup[] = [
         icon: Swords,
         href: '/competitors',
         roles: ['admin', 'sales'],
+        permission: 'competitor:list',
       },
       {
         key: 'comparisons',
@@ -139,6 +149,7 @@ const menuConfig: MenuGroup[] = [
         icon: Scale,
         href: '/product-research/comparisons',
         roles: ['admin', 'sales'],
+        permission: 'comparison:list',
       },
       {
         key: 'research-import',
@@ -146,6 +157,7 @@ const menuConfig: MenuGroup[] = [
         icon: Upload,
         href: '/product-research/import',
         roles: ['admin', 'sales'],
+        permission: 'research_import:execute',
       },
     ],
   },
@@ -158,6 +170,7 @@ const menuConfig: MenuGroup[] = [
         icon: Users,
         href: '/customers',
         roles: ['admin', 'sales'],
+        permission: 'customer:list',
       },
       {
         key: 'quotations',
@@ -165,6 +178,7 @@ const menuConfig: MenuGroup[] = [
         icon: CircleDollarSign,
         href: '/quotations',
         roles: ['admin', 'sales'],
+        permission: 'quotation:list',
       },
       {
         key: 'orders',
@@ -172,6 +186,7 @@ const menuConfig: MenuGroup[] = [
         icon: ShoppingCart,
         href: '/orders',
         roles: ['admin', 'sales'],
+        permission: 'order:list',
       },
     ],
   },
@@ -184,6 +199,7 @@ const menuConfig: MenuGroup[] = [
         icon: Building2,
         href: '/suppliers',
         roles: ['admin', 'purchasing'],
+        permission: 'supplier:list',
       },
       {
         key: 'purchase-orders',
@@ -191,6 +207,7 @@ const menuConfig: MenuGroup[] = [
         icon: Receipt,
         href: '/purchase-orders',
         roles: ['admin', 'purchasing'],
+        permission: 'purchase:list',
       },
       {
         key: 'inbound-orders',
@@ -198,6 +215,7 @@ const menuConfig: MenuGroup[] = [
         icon: Inbox,
         href: '/inbound-orders',
         roles: ['admin', 'purchasing', 'warehouse'],
+        permission: 'inbound_order:list',
       },
       {
         key: 'production-records',
@@ -224,6 +242,7 @@ const menuConfig: MenuGroup[] = [
         icon: Warehouse,
         href: '/inventory',
         roles: ['admin', 'warehouse'],
+        permission: 'inventory:list',
       },
       {
         key: 'outbound-orders',
@@ -231,6 +250,7 @@ const menuConfig: MenuGroup[] = [
         icon: Truck,
         href: '/outbound-orders',
         roles: ['admin', 'warehouse'],
+        permission: 'outbound_order:list',
       },
       {
         key: 'logistics-providers',
@@ -238,6 +258,7 @@ const menuConfig: MenuGroup[] = [
         icon: Truck,
         href: '/logistics/providers',
         roles: ['admin', 'purchasing'],
+        permission: 'logistics_provider:list',
       },
       {
         key: 'logistics-orders',
@@ -245,6 +266,7 @@ const menuConfig: MenuGroup[] = [
         icon: Ship,
         href: '/logistics/orders',
         roles: ['admin', 'purchasing'],
+        permission: 'logistics_order:list',
       },
       {
         key: 'shipments',
@@ -252,6 +274,7 @@ const menuConfig: MenuGroup[] = [
         icon: Globe,
         href: '/shipments',
         roles: ['admin', 'warehouse'],
+        permission: 'shipment:list',
       },
     ],
   },
@@ -264,6 +287,7 @@ const menuConfig: MenuGroup[] = [
         icon: FileText,
         href: '/invoices',
         roles: ['admin', 'sales'],
+        permission: 'finance:list',
       },
       {
         key: 'finance',
@@ -271,6 +295,7 @@ const menuConfig: MenuGroup[] = [
         icon: DollarSign,
         href: '/finance',
         roles: ['admin'],
+        permission: 'finance:list',
       },
     ],
   },
@@ -283,6 +308,7 @@ const menuConfig: MenuGroup[] = [
         icon: TrendingUp,
         href: '/reports',
         roles: ['admin'],
+        permission: 'report:view',
       },
       {
         key: 'report-subscriptions',
@@ -290,6 +316,7 @@ const menuConfig: MenuGroup[] = [
         icon: BarChart3,
         href: '/reports/subscriptions',
         roles: ['admin'],
+        permission: 'report:subscribe',
       },
     ],
   },
@@ -302,6 +329,7 @@ const menuConfig: MenuGroup[] = [
         icon: User,
         href: '/settings/users',
         roles: ['admin'],
+        permission: 'user:list',
       },
       {
         key: 'approval-workflows',
@@ -309,6 +337,7 @@ const menuConfig: MenuGroup[] = [
         icon: GitBranch,
         href: '/settings/approval-workflows',
         roles: ['admin'],
+        permission: 'approval:list',
       },
       {
         key: 'warehouses',
@@ -316,6 +345,7 @@ const menuConfig: MenuGroup[] = [
         icon: Package,
         href: '/settings/warehouses',
         roles: ['admin'],
+        permission: 'warehouse:list',
       },
       {
         key: 'platforms',
@@ -323,6 +353,7 @@ const menuConfig: MenuGroup[] = [
         icon: Link,
         href: '/settings/platforms',
         roles: ['admin'],
+        permission: 'platform:list',
       },
       {
         key: 'sync',
@@ -330,6 +361,7 @@ const menuConfig: MenuGroup[] = [
         icon: RefreshCw,
         href: '/sync',
         roles: ['admin'],
+        permission: 'sync:view',
       },
       {
         key: 'audit-logs',
@@ -337,6 +369,7 @@ const menuConfig: MenuGroup[] = [
         icon: History,
         href: '/settings/audit-logs',
         roles: ['admin'],
+        permission: 'settings:view',
       },
       {
         key: 'collected-config',
@@ -344,6 +377,7 @@ const menuConfig: MenuGroup[] = [
         icon: Settings,
         href: '/settings/collected-config',
         roles: ['admin'],
+        permission: 'woocommerce_config:manage',
       },
       {
         key: 'settings',
@@ -351,6 +385,7 @@ const menuConfig: MenuGroup[] = [
         icon: Settings,
         href: '/settings',
         roles: ['admin'],
+        permission: 'settings:list',
       },
     ],
   },
@@ -363,6 +398,7 @@ const menuConfig: MenuGroup[] = [
         icon: TrendingUp,
         href: '/ads/optimization',
         roles: ['admin', 'sales'],
+        permission: 'ads:view',
       },
       {
         key: 'ads-sites',
@@ -370,6 +406,7 @@ const menuConfig: MenuGroup[] = [
         icon: Globe,
         href: '/ads/sites',
         roles: ['admin', 'sales'],
+        permission: 'ads:admin',
       },
       {
         key: 'ads-inventory',
@@ -377,6 +414,7 @@ const menuConfig: MenuGroup[] = [
         icon: Boxes,
         href: '/ads/inventory',
         roles: ['admin', 'sales'],
+        permission: 'ads:view',
       },
       {
         key: 'ads-replenishment',
@@ -384,6 +422,7 @@ const menuConfig: MenuGroup[] = [
         icon: ClipboardList,
         href: '/ads/replenishment',
         roles: ['admin', 'sales'],
+        permission: 'ads:view',
       },
       {
         key: 'ads-dashboard',
@@ -391,17 +430,36 @@ const menuConfig: MenuGroup[] = [
         icon: BarChart3,
         href: '/ads/dashboard',
         roles: ['admin', 'sales'],
+        permission: 'ads:view',
       },
     ],
   },
 ];
 
-const filterMenuByRole = (role: UserRole): MenuGroup[] => {
-  if (role === 'super-admin') return menuConfig.filter(g => g.items.length > 0);
+/**
+ * 菜单过滤（2026-09-11 改造为权限驱动）
+ *
+ * 规则：
+ * 1. super-admin / 拥有 '*' 权限 → 全量菜单
+ * 2. 有权限数据（permissions 非空）→ 绑定 permission 的菜单项按权限码判断；
+ *    未绑定权限码的少数项（如 生产管理/质检管理）回退 roles 白名单
+ * 3. 无权限数据（接口未取到）→ 完全回退旧 roles 白名单，保证不白屏
+ */
+const filterMenu = (role: UserRole, permissions: string[] = []): MenuGroup[] => {
+  const hasAll = permissions.includes('*');
+  const usePermissionMode = permissions.length > 0;
+
   return menuConfig
     .map(group => ({
       ...group,
-      items: group.items.filter(item => item.roles.includes(role))
+      items: group.items.filter(item => {
+        if (role === 'super-admin' || hasAll) return true;
+        if (usePermissionMode) {
+          if (item.permission) return permissions.includes(item.permission);
+          return item.roles.includes(role); // 未绑定权限码 → 回退角色白名单
+        }
+        return item.roles.includes(role); // 无权限数据 → 回退角色白名单
+      }),
     }))
     .filter(group => group.items.length > 0);
 };
@@ -409,6 +467,8 @@ const filterMenuByRole = (role: UserRole): MenuGroup[] => {
 interface SidebarProps {
   className?: string;
   currentRole: UserRole;
+  /** 当前用户权限码集合（权限驱动菜单；缺省时回退角色白名单） */
+  currentPermissions?: string[];
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   mobileOpen?: boolean;
@@ -418,6 +478,7 @@ interface SidebarProps {
 export default function Sidebar({
   className,
   currentRole,
+  currentPermissions = [],
   collapsed = false,
   onToggleCollapse,
   mobileOpen = false,
@@ -467,7 +528,7 @@ export default function Sidebar({
     localStorage.setItem('sidebarCollapsed', String(newState));
   };
 
-  const filteredMenu = filterMenuByRole(currentRole);
+  const filteredMenu = filterMenu(currentRole, currentPermissions);
 
   const handleOverlayClick = () => {
     setIsMobileOpen(false);
@@ -689,4 +750,37 @@ export const getCurrentUserRole = async (): Promise<UserRole> => {
     }
   } catch {}
   return 'admin';
+};
+
+/**
+ * 获取当前用户的角色与权限码（权限驱动菜单所需）
+ * 优先读 localStorage（登录时写入）；缺失时回退 /api/auth/me 并回写缓存
+ */
+export const getCurrentUserContext = async (): Promise<{ role: UserRole; permissions: string[] }> => {
+  if (typeof window === 'undefined') return { role: 'admin', permissions: [] };
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user?.role && Array.isArray(user?.permissions)) {
+        return { role: user.role as UserRole, permissions: user.permissions };
+      }
+    }
+  } catch {}
+
+  // 回退：请求 /api/auth/me（返回 role + permissions），并回写 localStorage 加速下次
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    const u = data?.data ?? data?.user ?? data;
+    if (u?.role) {
+      const permissions: string[] = Array.isArray(u.permissions) ? u.permissions : [];
+      try {
+        // 写入完整用户对象（含 id/email/name）——只写 role/permissions 会导致 UserAvatar 等组件读到 undefined 崩溃
+        localStorage.setItem('user', JSON.stringify({ ...u, permissions }));
+      } catch {}
+      return { role: u.role as UserRole, permissions };
+    }
+  } catch {}
+  return { role: 'admin', permissions: [] };
 };

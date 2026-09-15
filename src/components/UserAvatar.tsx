@@ -72,8 +72,10 @@ export function UserAvatar({ user, size = 'md', showStatus = true, showName = fa
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  const initials = getInitials(user.name, user.email);
-  const bgColor = stringToColor(user.name || user.email);
+  // 防御：user 缓存可能缺 name/email（如接口回退回写不完整）——避免读 undefined 崩溃导致整页白屏
+  const safeName = user.name || user.email || '用户';
+  const initials = getInitials(safeName, user.email);
+  const bgColor = stringToColor(safeName);
   const status = user.status || 'online';
 
   const handleLogout = async () => {
