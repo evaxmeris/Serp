@@ -2,8 +2,9 @@
 
 /**
  * 海外仓工作台
- * 标签页：仓库概况 | 库存台账 | 库存流水（数量徽章）
+ * 标签页：仓库概况 | 库存台账 | 库存流水 | 平台对账（数量徽章）
  * 数据源：/api/v1/overseas/warehouses、/api/v1/overseas/inventory、/api/v1/overseas/inventory/movements
+ *        /api/v1/overseas/reconcile
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,9 +19,10 @@ import CreateWarehouseDialog from '@/components/overseas/create-warehouse-dialog
 import WarehouseOverview from '@/components/overseas/warehouse-overview';
 import InventoryLedger from '@/components/overseas/inventory-ledger';
 import MovementTable from '@/components/overseas/movement-table';
+import ReconcilePanel from '@/components/overseas/reconcile-panel';
 import type { OverseasWarehouse } from '@/components/overseas/types';
 
-type TabKey = 'overview' | 'ledger' | 'movements';
+type TabKey = 'overview' | 'ledger' | 'movements' | 'reconcile';
 
 export default function OverseasWarehousePage() {
   const { toasts, removeToast, toast } = useToast();
@@ -30,6 +32,7 @@ export default function OverseasWarehousePage() {
   const [movementTotal, setMovementTotal] = useState(0);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [selectedCode, setSelectedCode] = useState('');
+  const [reconcileSummary, setReconcileSummary] = useState({ total: 0, alertCount: 0 });
   const [createOpen, setCreateOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [entered, setEntered] = useState(false);
@@ -85,6 +88,31 @@ export default function OverseasWarehousePage() {
     fetchCounts();
   }, [fetchCounts, dataVersion]);
 
+  // 平台对账徽章：标签未展开时也给出行数（对账面板展开后会通过 onSummary 覆盖）
+  useEffect(() => {
+    if (!selectedCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/v1/overseas/reconcile?warehouseId=${encodeURIComponent(selectedCode)}&platformCode=amazon`
+        );
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          setReconcileSummary({
+            total: data.data.summary?.total ?? 0,
+            alertCount: data.data.summary?.alertCount ?? 0,
+          });
+        }
+      } catch (e) {
+        console.error('获取对账概览失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCode, dataVersion]);
+
   const refreshAll = useCallback(() => {
     fetchWarehouses();
     fetchCounts();
@@ -106,8 +134,19 @@ export default function OverseasWarehousePage() {
       overview: warehouses.length,
       ledger: ledgerTotal,
       movements: movementTotal,
+      reconcile: reconcileSummary.total,
     }),
-    [warehouses.length, ledgerTotal, movementTotal]
+    [warehouses.length, ledgerTotal, movementTotal, reconcileSummary.total]
+  );
+
+  // 稳定回调：ReconcilePanel 内部把它放进 fetch 依赖，不能每次渲染换新引用
+  const handleReconcileSummary = useCallback(
+    (summary: { total: number; alertCount: number }) => {
+      setReconcileSummary(prev =>
+        prev.total === summary.total && prev.alertCount === summary.alertCount ? prev : summary
+      );
+    },
+    []
   );
 
   return (
@@ -159,6 +198,20 @@ export default function OverseasWarehousePage() {
                   {tabCounts.movements}
                 </Badge>
               </TabsTrigger>
+              <TabsTrigger value="reconcile" className="flex-none px-4">
+                平台对账
+                <Badge
+                  className={cn(
+                    'ml-1 text-[10px] px-1.5 py-0',
+                    reconcileSummary.alertCount > 0
+                      ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                      : ''
+                  )}
+                  variant={reconcileSummary.alertCount > 0 ? 'default' : 'secondary'}
+                >
+                  {tabCounts.reconcile}
+                </Badge>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -188,6 +241,18 @@ export default function OverseasWarehousePage() {
                 warehouseCode={selectedCode}
                 onWarehouseChange={setSelectedCode}
                 onError={showError}
+              />
+            </TabsContent>
+
+            <TabsContent value="reconcile">
+              <ReconcilePanel
+                warehouses={warehouses}
+                warehouseCode={selectedCode}
+                onWarehouseChange={setSelectedCode}
+                onDataChanged={handleDataChanged}
+                onSuccess={showSuccess}
+                onError={showError}
+                onSummary={handleReconcileSummary}
               />
             </TabsContent>
           </Tabs>

@@ -100,42 +100,43 @@ model CustomerContact {
 }
 
 model Product {
-  id                 String                  @id @default(cuid())
-  sku                String                  @unique
-  name               String
-  nameEn             String?
-  specification      String?
-  unit               String                  @default("PCS")
-  costPrice          Decimal                 @default(0) @db.Decimal(10, 2)
-  salePrice          Decimal                 @db.Decimal(10, 2)
-  currency           String                  @default("USD")
-  images             String[]
-  description        String?
-  descriptionEn      String?
-  weight             Decimal?                @db.Decimal(10, 2)
-  volume             Decimal?                @db.Decimal(10, 2)
-  moq                Int?
-  leadTime           Int?
-  status             ProductStatus           @default(ACTIVE)
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  deletedAt          DateTime?
-  categoryId         String?
-  categoryOld        String?
-  inboundOrderItems  InboundOrderItem[]
-  inventoryItems     InventoryItem[]
-  inventoryLogs      InventoryLog[]
-  orderItems         OrderItem[]
-  outboundOrderItems OutboundOrderItem[]
-  overseasInventory  OverseasInventory[]
-  stockTransferItems StockTransferItem[]
-  attributeValues    ProductAttributeValue[]
-  category           ProductCategory?        @relation(fields: [categoryId], references: [id])
-  profitDetails      ProfitDetail[]
-  purchaseOrderItems PurchaseOrderItem[]
-  quotationItems     QuotationItem[]
-  productSuppliers   ProductSupplier[]
-  collectedProducts  CollectedProduct[]
+  id                       String                    @id @default(cuid())
+  sku                      String                    @unique
+  name                     String
+  nameEn                   String?
+  specification            String?
+  unit                     String                    @default("PCS")
+  costPrice                Decimal                   @default(0) @db.Decimal(10, 2)
+  salePrice                Decimal                   @db.Decimal(10, 2)
+  currency                 String                    @default("USD")
+  images                   String[]
+  description              String?
+  descriptionEn            String?
+  weight                   Decimal?                  @db.Decimal(10, 2)
+  volume                   Decimal?                  @db.Decimal(10, 2)
+  moq                      Int?
+  leadTime                 Int?
+  status                   ProductStatus             @default(ACTIVE)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  deletedAt                DateTime?
+  categoryId               String?
+  categoryOld              String?
+  inboundOrderItems        InboundOrderItem[]
+  inventoryItems           InventoryItem[]
+  inventoryLogs            InventoryLog[]
+  orderItems               OrderItem[]
+  outboundOrderItems       OutboundOrderItem[]
+  overseasInventory        OverseasInventory[]
+  stockTransferItems       StockTransferItem[]
+  attributeValues          ProductAttributeValue[]
+  category                 ProductCategory?          @relation(fields: [categoryId], references: [id])
+  profitDetails            ProfitDetail[]
+  purchaseOrderItems       PurchaseOrderItem[]
+  quotationItems           QuotationItem[]
+  productSuppliers         ProductSupplier[]
+  collectedProducts        CollectedProduct[]
+  replenishmentSuggestions ReplenishmentSuggestion[]
 
   @@map("products")
 }
@@ -685,9 +686,9 @@ model SupplierPayment {
 
 /// 国内仓调拨单（国内仓 → 海外仓 / 海外仓 → 国内仓），跳过采购直接调拨
 model StockTransfer {
-  id                      String              @id @default(cuid())
-  transferNo              String              @unique
-  status                  StockTransferStatus @default(DRAFT)
+  id                      String                 @id @default(cuid())
+  transferNo              String                 @unique
+  status                  StockTransferStatus    @default(DRAFT)
   direction               StockTransferDirection @default(DOMESTIC_TO_OVERSEAS)
   fromWarehouseId         String?
   toWarehouseId           String?
@@ -700,8 +701,8 @@ model StockTransfer {
   cancelReason            String?
   notes                   String?
   createdById             String?
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
   items                   StockTransferItem[]
 
   fromWarehouse         Warehouse?         @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
@@ -718,17 +719,17 @@ model StockTransfer {
 }
 
 model StockTransferItem {
-  id         String        @id @default(cuid())
-  transferId String
-  productId  String
-  quantity   Int
-  shippedQty Int           @default(0)
-  receivedQty Int          @default(0)
-  notes      String?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  product    Product       @relation(fields: [productId], references: [id])
+  id          String        @id @default(cuid())
+  transferId  String
+  productId   String
+  quantity    Int
+  shippedQty  Int           @default(0)
+  receivedQty Int           @default(0)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  transfer    StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product     Product       @relation(fields: [productId], references: [id])
 
   @@unique([transferId, productId])
   @@index([transferId])
@@ -780,26 +781,26 @@ model StockMovement {
 }
 
 model InboundOrder {
-  id              String             @id @default(cuid())
-  inboundNo       String             @unique
-  type            InboundType        @default(PURCHASE_IN)
-  status          InboundStatus      @default(PENDING)
-  purchaseOrderId String?
-  supplierId      String?
-  warehouseId     String?
+  id                        String             @id @default(cuid())
+  inboundNo                 String             @unique
+  type                      InboundType        @default(PURCHASE_IN)
+  status                    InboundStatus      @default(PENDING)
+  purchaseOrderId           String?
+  supplierId                String?
+  warehouseId               String?
   /// 目标海外仓（设置时 confirm 走海外仓台账，warehouseId 不再生效）
   targetOverseasWarehouseId String?
-  expectedDate    DateTime?
-  actualDate      DateTime?
-  totalAmount     Decimal            @db.Decimal(12, 2)
-  note            String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  items           InboundOrderItem[]
-  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
-  supplier        Supplier?          @relation(fields: [supplierId], references: [id])
-  targetOverseasWarehouse OverseasWarehouse? @relation(fields: [targetOverseasWarehouseId], references: [id])
-  inventoryLogs   InventoryLog[]
+  expectedDate              DateTime?
+  actualDate                DateTime?
+  totalAmount               Decimal            @db.Decimal(12, 2)
+  note                      String?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  items                     InboundOrderItem[]
+  purchaseOrder             PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  supplier                  Supplier?          @relation(fields: [supplierId], references: [id])
+  targetOverseasWarehouse   OverseasWarehouse? @relation(fields: [targetOverseasWarehouseId], references: [id])
+  inventoryLogs             InventoryLog[]
 
   @@index([status])
   @@index([warehouseId, status])
@@ -1514,33 +1515,34 @@ model PlatformOrder {
 }
 
 model OverseasWarehouse {
-  id             String                @id @default(cuid())
-  name           String
-  code           String                @unique
-  type           OverseasWarehouseType
-  country        String
-  province       String?
-  city           String?
-  address        String
-  postcode       String?
-  contactName    String?
-  contactPhone   String?
-  email          String?
-  warehouseId    String?
-  region         String?
-  timezone       String                @default("UTC")
-  isActive       Boolean               @default(true)
-  apiEnabled     Boolean               @default(false)
-  apiKey         String?
-  apiUrl         String?
-  fbaSyncEnabled Boolean               @default(false)
-  lastSyncAt     DateTime?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  inventory      OverseasInventory[]
-  inboundOrders  InboundOrder[]
-  transfersOut   StockTransfer[]       @relation("TransferFromOverseas")
-  transfersIn    StockTransfer[]       @relation("TransferToOverseas")
+  id                       String                    @id @default(cuid())
+  name                     String
+  code                     String                    @unique
+  type                     OverseasWarehouseType
+  country                  String
+  province                 String?
+  city                     String?
+  address                  String
+  postcode                 String?
+  contactName              String?
+  contactPhone             String?
+  email                    String?
+  warehouseId              String?
+  region                   String?
+  timezone                 String                    @default("UTC")
+  isActive                 Boolean                   @default(true)
+  apiEnabled               Boolean                   @default(false)
+  apiKey                   String?
+  apiUrl                   String?
+  fbaSyncEnabled           Boolean                   @default(false)
+  lastSyncAt               DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  inventory                OverseasInventory[]
+  inboundOrders            InboundOrder[]
+  transfersOut             StockTransfer[]           @relation("TransferFromOverseas")
+  transfersIn              StockTransfer[]           @relation("TransferToOverseas")
+  replenishmentSuggestions ReplenishmentSuggestion[]
 
   @@index([type, country, isActive])
   @@index([code])
@@ -2541,6 +2543,94 @@ model PlatformSyncConfig {
 }
 
 // ============================================
+// 平台镜像快照 + 同步调度（二期 BE-1）
+//
+// 口径：海外仓本地台账（overseas_inventory）是过程权威，
+//       平台快照仅用于对账（差异超过阈值告警，拉平走差异调整单）。
+// 多站点：所有快照以 (platformCode, marketplaceId, sku) 唯一定位，
+//        同一平台不同 marketplaceId 互不覆盖。
+// ============================================
+
+model PlatformInventorySnapshot {
+  id                String    @id @default(cuid())
+  platformCode      String // 'amazon' / 'tiktok' / 'shopify'
+  /// 站点 ID（Amazon marketplaceId，如 ATVPDKIKX0DER / A1F83G8C2ARO7P），空串表示默认站点
+  marketplaceId     String    @default("")
+  sku               String // 平台卖家 SKU（SellerSKU）
+  fnsku             String?
+  asin              String?
+  /// 平台可售量（Amazon: fulfillableQuantity）
+  availableQty      Int       @default(0)
+  /// 在途量（Amazon: inboundWorking + inboundShipped + inboundReceiving）
+  inboundQty        Int       @default(0)
+  /// 平台预留量（Amazon: reservedQuantity.totalReservedQuantity）
+  reservedQty       Int       @default(0)
+  /// 明细/履约中心维度附加信息（Amazon: inventoryDetails + condition + lastUpdatedTime 等原始结构）
+  fcDetail          Json?
+  /// 平台侧数据时间（快照口径时间；与本地 syncedAt 区分）
+  platformUpdatedAt DateTime?
+  syncedAt          DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([platformCode, marketplaceId, sku])
+  @@index([platformCode, marketplaceId])
+  @@index([sku])
+  @@index([asin])
+  @@map("platform_inventory_snapshots")
+}
+
+model PlatformListingSnapshot {
+  id                String    @id @default(cuid())
+  platformCode      String
+  marketplaceId     String    @default("")
+  sku               String
+  asin              String?
+  title             String?
+  /// 平台在售状态（Amazon: BUYABLE / DISCOVERABLE / INACTIVE 等）
+  status            String?
+  price             Decimal?  @db.Decimal(14, 2)
+  currency          String    @default("USD")
+  /// 原始 payload 片段（排查用）
+  rawPayload        Json?
+  platformUpdatedAt DateTime?
+  syncedAt          DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([platformCode, marketplaceId, sku])
+  @@index([platformCode, marketplaceId])
+  @@index([sku])
+  @@index([asin])
+  @@map("platform_listing_snapshots")
+}
+
+model SyncJob {
+  id            String    @id @default(cuid())
+  platformCode  String
+  marketplaceId String    @default("")
+  /// 资源类型：orders | fbaInventory | listings | all
+  resource      String    @default("orders")
+  /// cron 5 段表达式（优先于 intervalMin）
+  cronExpr      String?
+  /// 轮询间隔（分钟），cronExpr 为空时生效
+  intervalMin   Int?
+  enabled       Boolean   @default(true)
+  /// 防重入原子标志：同一 job 同一时刻只允许一次执行
+  isRunning     Boolean   @default(false)
+  lastRunAt     DateTime?
+  lastStatus    String? // success | failed | partial | not_supported
+  lastError     String?
+  nextRunAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([platformCode, marketplaceId, resource])
+  @@index([enabled, nextRunAt])
+  @@map("sync_jobs")
+}
+
+// ============================================
 // 发票管理模块 (v1.0)
 // 形式发票(PI)、商业发票(CI)、税务发票
 // ============================================
@@ -2615,18 +2705,23 @@ model Invoice {
 }
 
 model PlatformSyncLog {
-  id           String    @id @default(cuid())
-  platformCode String // 来源平台
-  triggerType  String // manual, scheduled, webhook
-  status       String // success, failed, partial
-  ordersFound  Int       @default(0)
-  ordersSynced Int       @default(0)
-  ordersFailed Int       @default(0)
-  retryCount   Int       @default(0) // 重试次数（指数退避）
-  errorMessage String?
-  startedAt    DateTime  @default(now())
-  completedAt  DateTime?
-  durationMs   Int?
+  id            String    @id @default(cuid())
+  platformCode  String // 来源平台
+  /// 站点 ID（多站点场景区分同平台不同站点的同步）
+  marketplaceId String?   @default("")
+  /// 资源类型：orders | fbaInventory | listings | all
+  /// 注：resource != orders 时，ordersFound/ordersSynced 表示「抓取条数 / 落库条数」
+  resource      String    @default("orders")
+  triggerType   String // manual, scheduled, webhook
+  status        String // success, failed, partial, not_supported
+  ordersFound   Int       @default(0)
+  ordersSynced  Int       @default(0)
+  ordersFailed  Int       @default(0)
+  retryCount    Int       @default(0) // 重试次数（指数退避）
+  errorMessage  String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  durationMs    Int?
 
   @@index([platformCode, startedAt])
   @@map("platform_sync_logs")
@@ -3044,4 +3139,95 @@ model AdRecommendation {
   @@index([adReportId])
   @@index([adAccountId, createdAt])
   @@map("ad_recommendations")
+}
+
+// ============================================
+// 补货建议引擎（二期 BE-2）
+// ============================================
+
+/// 补货建议状态
+/// PENDING 引擎产出待处理 → APPROVED 人工确认 → CONVERTED 已转单（终态）
+/// PENDING/APPROVED → DISMISSED 已忽略（终态）
+enum ReplenishmentStatus {
+  PENDING
+  APPROVED
+  CONVERTED
+  DISMISSED
+}
+
+/// 补货建议（一次生成的参数快照，可追溯当时口径）
+///
+/// 口径（业务已拍板，改公式前先读这里）：
+///   avgDailySales = 近 salesWindowDays 天平台订单该 SKU 日均销量
+///   stdDevDailySales = 同日销量序列的样本标准差（n-1，n<2 时为 0）
+///   safetyStock = serviceLevelZ × stdDevDailySales × √leadTimeDays
+///   reorderPoint = avgDailySales × leadTimeDays + safetyStock
+///   可用量口径 netAvailableQty = onHandQty(台账实物) + inTransitQty(在途) − reservedQty(已承诺预留)
+///   suggestedQty = max(0, ceil(reorderPoint + avgDailySales × replenishCycleDays − netAvailableQty))
+model ReplenishmentSuggestion {
+  id                  String  @id @default(cuid())
+  sku                 String
+  productId           String?
+  overseasWarehouseId String
+
+  // ---- 参数快照（生成时刻，禁止事后重算覆盖） ----
+  /// 日均销量（平台订单口径；手工降级时为手工日均目标）
+  avgDailySales    Float @default(0)
+  /// 日销量标准差（样本标准差）
+  stdDevDailySales Float @default(0)
+  /// 头程时效（天）：该路线已收货调拨单 shippedAt→receivedAt 均值，无历史时用默认值
+  leadTimeDays     Float @default(35)
+  safetyStock      Float @default(0)
+  reorderPoint     Float @default(0)
+  /// 台账实物数量
+  onHandQty        Int   @default(0)
+  /// 台账可用（onHandQty − reservedQty）
+  availableQty     Int   @default(0)
+  /// 已承诺预留
+  reservedQty      Int   @default(0)
+  /// 在途：IN_TRANSIT 调拨单 + 待收货入库单
+  inTransitQty     Int   @default(0)
+  /// 可用量口径合计 = onHandQty + inTransitQty − reservedQty
+  netAvailableQty  Int   @default(0)
+  /// 最终建议补货量（向上取整，非负）
+  suggestedQty     Int   @default(0)
+
+  // ---- 参数来源（可追溯） ----
+  salesWindowDays    Int    @default(30)
+  /// PLATFORM_ORDERS = 平台订单实测；MANUAL_TARGET = 无销量数据降级手工周转
+  salesBasis         String @default("PLATFORM_ORDERS")
+  salesOrderCount    Int    @default(0)
+  /// HISTORY = 调拨单实测均值；CONFIG = 线路/环境配置；DEFAULT = 内置默认
+  leadTimeSource     String @default("DEFAULT")
+  leadTimeSampleSize Int    @default(0)
+  /// 手工目标周转天数（salesBasis=MANUAL_TARGET 时记录）
+  targetDays         Int?
+  serviceLevelZ      Float  @default(1.28)
+  replenishCycleDays Int    @default(30)
+
+  status      ReplenishmentStatus @default(PENDING)
+  generatedAt DateTime            @default(now())
+
+  // ---- 转单结果 ----
+  /// PURCHASE_ORDER | STOCK_TRANSFER
+  convertedType   String?
+  convertedId     String?
+  convertedNo     String?
+  convertedAt     DateTime?
+  convertedById   String?
+  dismissedAt     DateTime?
+  dismissedReason String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product           Product?          @relation(fields: [productId], references: [id])
+  overseasWarehouse OverseasWarehouse @relation(fields: [overseasWarehouseId], references: [id], onDelete: Cascade)
+
+  @@index([overseasWarehouseId, status])
+  @@index([status, generatedAt])
+  @@index([sku])
+  @@index([productId])
+  @@map("replenishment_suggestions")
 }

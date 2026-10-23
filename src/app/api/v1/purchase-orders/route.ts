@@ -12,6 +12,7 @@ import {
   CreatePurchaseOrderSchema,
   PurchaseOrderQuerySchema,
 } from '@/lib/validators/purchase-order';
+import { createPurchaseOrderDraft } from '@/lib/purchase-order-draft';
 
 // GET /api/v1/purchase-orders - 获取采购订单列表
 export async function GET(request: NextRequest) {
@@ -183,96 +184,40 @@ export async function POST(request: NextRequest) {
       return errorResponse('供应商已停用或被拉黑', 'SUPPLIER_INACTIVE', 409);
     }
 
-    // 生成采购订单编号
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    const count = await prisma.purchaseOrder.count({
-      where: {
-        createdAt: {
-          gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-        },
-      },
-    });
-
-    const poNo = `PO-${year}${month}${day}-${String(count + 1).padStart(3, '0')}`;
-
-    // 计算总金额
-    let totalAmount = 0;
-    const itemsData = data.items.map((item) => {
-      const amount = item.quantity * item.unitPrice * (1 - item.discountRate / 100);
-      const taxAmount = amount * (item.taxRate / 100);
-      totalAmount += amount + taxAmount;
-      return {
-        productId: item.productId,
-        productName: item.productName,
-        productSku: item.productSku,
-        specification: item.specification,
-        unit: item.unit,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountRate: item.discountRate,
-        amount,
-        taxRate: item.taxRate,
-        taxAmount,
-        expectedDeliveryDate: item.expectedDeliveryDate
-          ? new Date(item.expectedDeliveryDate)
-          : null,
-        notes: item.notes,
-      };
-    });
-
-    // 创建采购订单
-    const purchaseOrder = await prisma.purchaseOrder.create({
-      data: {
-        poNo,
+    // 生成采购订单编号 + 建单（共享核心逻辑见 src/lib/purchase-order-draft.ts）
+    const purchaseOrder = await prisma.$transaction(async tx =>
+      createPurchaseOrderDraft(tx, {
         supplierId: data.supplierId,
-        salesOrderId: data.salesOrderId,
-        status: 'PENDING',
-        approvalStatus: 'NOT_REQUIRED',
+        salesOrderId: data.salesOrderId ?? null,
         currency: data.currency,
         exchangeRate: data.exchangeRate,
-        totalAmount,
-        paidAmount: 0,
-        balanceAmount: totalAmount,
         deliveryDate: data.deliveryDate ? new Date(data.deliveryDate) : null,
-        deliveryDeadline: data.deliveryDeadline
-          ? new Date(data.deliveryDeadline)
-          : null,
-        deliveryAddress: data.deliveryAddress,
-        shippingMethod: data.shippingMethod,
-        paymentTerms: data.paymentTerms,
-        paymentDeadline: data.paymentDeadline
-          ? new Date(data.paymentDeadline)
-          : null,
-        purchaserId: data.purchaserId,
-        notes: data.notes,
-        internalNotes: data.internalNotes,
+        deliveryDeadline: data.deliveryDeadline ? new Date(data.deliveryDeadline) : null,
+        deliveryAddress: data.deliveryAddress ?? null,
+        shippingMethod: data.shippingMethod ?? null,
+        paymentTerms: data.paymentTerms ?? null,
+        paymentDeadline: data.paymentDeadline ? new Date(data.paymentDeadline) : null,
+        purchaserId: data.purchaserId ?? null,
+        notes: data.notes ?? null,
+        internalNotes: data.internalNotes ?? null,
         attachments: data.attachments,
-        items: {
-          create: itemsData,
-        },
-      },
-      include: {
-        supplier: {
-          select: {
-            id: true,
-            companyName: true,
-            companyEn: true,
-          },
-        },
-        purchaser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        items: true,
-      },
-    });
+        items: data.items.map(item => ({
+          productId: item.productId ?? null,
+          productName: item.productName,
+          productSku: item.productSku ?? null,
+          specification: item.specification ?? null,
+          unit: item.unit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountRate: item.discountRate,
+          taxRate: item.taxRate,
+          expectedDeliveryDate: item.expectedDeliveryDate
+            ? new Date(item.expectedDeliveryDate)
+            : null,
+          notes: item.notes ?? null,
+        })),
+      })
+    );
 
     return successResponse(purchaseOrder, '采购订单创建成功', 'CREATED');
   } catch (error) {

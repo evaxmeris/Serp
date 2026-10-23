@@ -31,7 +31,20 @@
 
 import crypto from 'crypto';
 import { BasePlatformAdapter } from './base';
-import { PlatformConfig, UnifiedOrder, FetchOrdersParams, AuthResult } from '../types';
+import {
+  PlatformConfig,
+  UnifiedOrder,
+  FetchOrdersParams,
+  AuthResult,
+  UnifiedInventorySnapshot,
+  UnifiedListingSnapshot,
+} from '../types';
+
+/** 平台数字字段容错：null/空串/非法值一律按 0 处理（SP-API 字段常缺省） */
+function toInt(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
 
 // ============================================
 // 常量
@@ -86,7 +99,7 @@ interface LwaTokenCache {
 
 export class AmazonAdapter extends BasePlatformAdapter {
   readonly platformCode = 'amazon';
-  readonly platformName = 'Amazon';
+  readonly platformName: string = 'Amazon';
   /** Amazon 零售单写入 PlatformOrder 镜像表，不进 B2B Order 表 */
   readonly orderKind = 'RETAIL' as const;
 
@@ -367,6 +380,117 @@ export class AmazonAdapter extends BasePlatformAdapter {
     const { data } = await this.authedRequest(config, 'GET', `/listings/2021-08-01/items/${creds.sellerId}`, query);
     const payload = data.payload || data;
     return { items: payload.items || [], nextToken: payload.pagination?.nextToken };
+  }
+
+  // ------------------------------------------
+  // 平台镜像快照（二期 BE-1）
+  //
+  // 适配器只负责「拿原始数据 + 映射成统一快照」，落库/日志由 sync/inventory-sync.ts 负责。
+  // ------------------------------------------
+
+  /** FBA 库存快照（复用 fetchFbaInventory，映射为统一快照行） */
+  async fetchInventorySnapshots(config: PlatformConfig): Promise<UnifiedInventorySnapshot[]> {
+    let raw: any[];
+    try {
+      raw = await this.fetchFbaInventory(config);
+    } catch (error) {
+      throw this.handleError(error, 'fetchInventorySnapshots');
+    }
+
+    const marketplaceId = config.marketplaceId || config.credentials?.marketplaceId || DEFAULT_MARKETPLACE;
+    const rows: UnifiedInventorySnapshot[] = [];
+
+    for (const s of raw || []) {
+      const sku = s.sellerSku || s.sellerSKU;
+      if (!sku) {
+        // 没有卖家 SKU 的行无法与本地台账 join，跳过并留痕
+        this.log('warn', `FBA 库存汇总缺少 sellerSku，跳过：ASIN=${s.asin ?? '?'} FNSKU=${s.fnSku ?? '?'}`);
+        continue;
+      }
+      const d = s.inventoryDetails || {};
+      const inboundQty =
+        toInt(d.inboundWorkingQuantity) +
+        toInt(d.inboundShippedQuantity) +
+        toInt(d.inboundReceivingQuantity);
+      const reservedQty = toInt(d.reservedQuantity?.totalReservedQuantity);
+      const lastUpdated = s.lastUpdatedTime ? new Date(s.lastUpdatedTime) : null;
+
+      rows.push({
+        platformCode: this.platformCode,
+        marketplaceId,
+        sku,
+        fnsku: s.fnSku || null,
+        asin: s.asin || null,
+        // 可售 = fulfillable（FBA 可履约量）；预留/在途单列，不混入可售
+        availableQty: toInt(d.fulfillableQuantity),
+        inboundQty,
+        reservedQty,
+        fcDetail: {
+          condition: s.condition || null,
+          totalQuantity: toInt(d.totalQuantity),
+          unfulfillableQuantity: toInt(d.unfulfillableQuantity),
+          reservedBreakdown: d.reservedQuantity || null,
+          lastUpdatedTime: s.lastUpdatedTime || null,
+        },
+        platformUpdatedAt: lastUpdated && !isNaN(lastUpdated.getTime()) ? lastUpdated : null,
+      });
+    }
+
+    this.log('info', `FBA 库存快照映射 ${rows.length} 行（marketplace=${marketplaceId}）`);
+    return rows;
+  }
+
+  /** Listing 快照（复用 fetchListings，逐页拉取后映射） */
+  async fetchListingSnapshots(config: PlatformConfig, pageToken?: string): Promise<UnifiedListingSnapshot[]> {
+    const marketplaceId = config.marketplaceId || config.credentials?.marketplaceId || DEFAULT_MARKETPLACE;
+    const rows: UnifiedListingSnapshot[] = [];
+    let token: string | undefined = pageToken;
+    let page = 0;
+    const MAX_PAGES = 50;
+
+    try {
+      do {
+        const { items, nextToken } = await this.fetchListings(config, token);
+        for (const it of items || []) {
+          const sku = it.sku;
+          if (!sku) continue;
+          const summary =
+            (it.summaries || []).find((sm: any) => sm.marketplaceId === marketplaceId) ||
+            (it.summaries || [])[0] ||
+            {};
+          const priceAttr =
+            it.attributes?.purchasable_offer?.[0]?.our_price?.[0]?.schedule?.[0]?.value_with_tax;
+          const priceValue = summary.price?.amount ?? priceAttr;
+          const parsedPrice = priceValue === undefined || priceValue === null ? null : Number(priceValue);
+
+          rows.push({
+            platformCode: this.platformCode,
+            marketplaceId,
+            sku,
+            asin: summary.asin || it.asin || null,
+            title: summary.itemName || it.attributes?.item_name?.[0]?.value || null,
+            status: Array.isArray(it.status) ? it.status.join(',') : it.status || summary.status?.[0] || null,
+            price: parsedPrice !== null && !isNaN(parsedPrice) ? parsedPrice : null,
+            currency: summary.price?.currency || 'USD',
+            rawPayload: {
+              productType: it.productType || null,
+              createdDate: it.createdDate || null,
+              lastUpdatedDate: it.lastUpdatedDate || null,
+              summaries: it.summaries || [],
+            },
+            platformUpdatedAt: it.lastUpdatedDate ? new Date(it.lastUpdatedDate) : null,
+          });
+        }
+        token = nextToken;
+        page++;
+        if (token) await this.rateLimit(300); // Listings API 限流约 5 次/秒，翻页保守限速
+      } while (token && page < MAX_PAGES);
+    } catch (error) {
+      throw this.handleError(error, 'fetchListingSnapshots');
+    }
+
+    this.log('info', `Listing 快照映射 ${rows.length} 行（marketplace=${marketplaceId}, ${page} 页）`);
+    return rows;
   }
 
   // ------------------------------------------

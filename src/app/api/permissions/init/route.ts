@@ -2,7 +2,7 @@ import { getUserFromRequest } from '@/lib/auth-unified';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { seedAdsRolePermissions, seedUserDisablePermission } from '@/lib/permissions';
+import { seedAdsRolePermissions, seedUserDisablePermission, seedWorkbenchRolePermissions } from '@/lib/permissions';
 
 /**
  * 默认系统权限定义
@@ -243,7 +243,10 @@ export async function POST(request: NextRequest) {
     // 用户停用权限接线（幂等）：super_admin / admin 获得 user:disable
     const userDisableWiring = await seedUserDisablePermission();
 
-    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length, adsRolePermissions: adsWiring.wired, userDisablePermissions: userDisableWiring.wired });
+    // 二期 BE-2：工作台三角色（owner/ops/finance）+ 补货权限点接线（幂等，不动现有角色已有权限）
+    const workbenchWiring = await seedWorkbenchRolePermissions();
+
+    return successResponse({ message: 'Initialization completed', createdPermissions, createdRoles, totalPermissions: defaultPermissions.length, totalRoles: defaultRoles.length, adsRolePermissions: adsWiring.wired, userDisablePermissions: userDisableWiring.wired, workbenchSeeds: workbenchWiring });
   } catch (error) {
     console.error('Error initializing permissions:', error);
     return errorResponse('Failed to initialize permissions', 'INTERNAL_ERROR', 500);

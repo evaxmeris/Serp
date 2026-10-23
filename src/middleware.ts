@@ -50,6 +50,14 @@ export function middleware(request: NextRequest) {
 
   const publicPaths = ['/login', '/register', '/api/auth/', '/api/health'];
   if (process.env.NODE_ENV === 'development') publicPaths.push('/api/debug/');
+
+  // 同步调度 tick：由宿主机 cron / k8s CronJob 调用，无法携带登录 cookie。
+  // 鉴权在路由内部完成（x-sync-token === SYNC_TICK_TOKEN，timing-safe 比较），
+  // 因此这里放行，避免外部定时任务被 middleware 401 挡住。
+  if (pathname === '/api/sync/tick') {
+    return NextResponse.next();
+  }
+
   const isPublicPath = publicPaths.some(p => pathname === p || pathname.startsWith(p));
   const authToken = request.cookies.get('auth-token')?.value;
 

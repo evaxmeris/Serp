@@ -96,10 +96,60 @@ trade-erp/
 └── package.json
 ```
 
+## 🔄 同步调度（订单镜像 / 平台快照）
+
+平台同步分三类资源，统一入口 `POST /api/sync`：
+
+```bash
+# 订单（一期，写入 PlatformOrder 镜像表）
+curl -X POST http://127.0.0.1:3001/api/sync -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"platformCode":"amazon","marketplaceId":"ATVPDKIKX0DER","resource":"orders"}'
+
+# FBA 库存快照（写入 platform_inventory_snapshots）
+# Listing 快照（写入 platform_listing_snapshots）
+# all = orders + fbaInventory + listings
+```
+
+- 资源：`orders` | `fbaInventory` | `listings` | `all`（缺省 `orders`，兼容一期调用）
+- 失败不抛 500：无凭证 / 平台未配置 → `results[].status = "failed"`，`/api/sync` 仍返回 200
+- tiktok / shopify 的快照资源为占位实现，返回 `results[].status = "not_supported"`
+- 多站点共用一套 LWA 凭证，快照按 `(platformCode, marketplaceId, sku)` 唯一定位，站点之间互不覆盖
+
+### 定时执行（外部 cron 驱动）
+
+Next.js 进程内的 `setInterval` 在 dev 热更新 / 多实例下不可靠，调度改为**外部 cron 打 tick**：
+
+```bash
+# 1. 环境变量里配一个随机长串（≥8 位）
+#    SYNC_TICK_TOKEN=<openssl rand -hex 24>
+# 2. 宿主机 crontab 每 5 分钟打一次（服务在 3001）
+*/5 * * * * curl -s -X POST -H "x-sync-token: $SYNC_TICK_TOKEN" http://127.0.0.1:3001/api/sync/tick
+```
+
+- 任务表：`sync_jobs`（platformCode / marketplaceId / resource / cronExpr 或 intervalMin / enabled / nextRunAt）
+- `runDueSyncJobs` 每轮只领 `nextRunAt <= now` 的任务，`isRunning` 原子领取 + 领取时先推进 `nextRunAt`，
+  保证同一任务不会被并发或崩溃重跑；超过 30 分钟的执行锁会被自动回收
+- `GET /api/sync/tick` 可查看任务清单与下次执行时间（需登录）
+- 未配 `cronExpr` 且未配 `intervalMin` 的任务不会自动执行
+
+### 海外仓对账
+
+```bash
+# 台账 vs 平台快照（MATCH / DIFF / LOCAL_ONLY / PLATFORM_ONLY）
+GET /api/v1/overseas/reconcile?warehouseId=DEMO-LAX01&platformCode=amazon&marketplaceId=ATVPDKIKX0DER
+# 差异拉平（写差异调整单：stock_movements type=ADJUSTMENT, referenceType=OVERSEAS_ADJUST_PLATFORM_DIFF）
+POST /api/v1/overseas/reconcile/resolve  {warehouseId, sku, platformCode, marketplaceId?}
+```
+
+- 阈值：`RECONCILE_DIFF_THRESHOLD`（默认 5），超阈值行标 `alert=true` 并计入 `summary.alertCount`
+
 ## 🔐 环境变量
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/trade_erp?schema=public"
+DATABASE_URL="postgresql://user:***@localhost:5432/trade_erp?schema=public"
+SYNC_TICK_TOKEN="外部 cron 调用 /api/sync/tick 的令牌（≥8 位随机串）"
+RECONCILE_DIFF_THRESHOLD="5"
 ```
 
 ## 📝 License

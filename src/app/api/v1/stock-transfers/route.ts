@@ -20,10 +20,9 @@ import {
   OverseasWarehouseNotFoundError,
   OverseasStockConflictError,
   OverseasStockValidationError,
-  applyOverseasStockChange,
 } from '@/lib/overseas-inventory';
+import { createStockTransferDraft } from '@/lib/stock-transfer-create';
 import {
-  applyDomesticStockChange,
   DomesticStockConflictError,
   DomesticStockValidationError,
 } from '@/lib/inventory-mutations';
@@ -204,68 +203,24 @@ export async function POST(request: NextRequest) {
       if (!lo) return notFoundResponse('物流订单');
     }
 
-    // ---- 4. 事务：建单 + 扣减源仓库存 ----
-    const transfer = await prisma.$transaction(async tx => {
-      const now = new Date();
-      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-        now.getDate()
-      ).padStart(2, '0')}`;
-      const todayCount = await tx.stockTransfer.count({
-        where: { createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } },
-      });
-      const transferNo = `TR-${ymd}-${String(todayCount + 1).padStart(3, '0')}`;
-
-      const created = await tx.stockTransfer.create({
-        data: {
-          transferNo,
-          direction: data.direction,
-          status: 'DRAFT',
-          fromWarehouseId: domesticFrom?.id ?? null,
-          toWarehouseId: domesticTo?.id ?? null,
-          fromOverseasWarehouseId: overseasFrom?.id ?? null,
-          toOverseasWarehouseId: overseasTo?.id ?? null,
-          logisticsOrderId: data.logisticsOrderId ?? null,
-          notes: data.notes,
-          createdById: session.id,
-          items: {
-            create: data.items.map(i => ({
-              productId: i.productId,
-              quantity: i.quantity,
-              notes: i.notes,
-            })),
-          },
-        },
-        include: INCLUDE,
-      });
-
-      // 扣减源仓库存（创建即锁货，取消时回补）
-      for (const item of data.items) {
-        if (isDomesticToOverseas) {
-          await applyDomesticStockChange(tx, {
-            productId: item.productId,
-            warehouseCode: domesticFrom!.code,
-            delta: -item.quantity,
-            type: 'TRANSFER',
-            referenceType: 'STOCK_TRANSFER',
-            referenceId: created.id,
-            note: `调拨单 ${transferNo} 出库至海外仓 ${overseasTo!.name}`,
-          });
-        } else {
-          await applyOverseasStockChange(tx, {
-            overseasWarehouseId: overseasFrom!.id,
-            overseasWarehouseCode: overseasFrom!.code,
-            productId: item.productId,
-            delta: -item.quantity,
-            type: 'TRANSFER',
-            referenceType: 'STOCK_TRANSFER',
-            referenceId: created.id,
-            notes: `调拨单 ${transferNo} 出库至国内仓 ${domesticTo!.name}`,
-          });
-        }
-      }
-
-      return created;
-    });
+    // ---- 4. 事务：建单 + 扣减源仓库存（共享核心逻辑见 src/lib/stock-transfer-create.ts） ----
+    const transfer = await prisma.$transaction(async tx =>
+      createStockTransferDraft(tx, {
+        direction: data.direction,
+        domesticFrom,
+        overseasTo,
+        overseasFrom,
+        domesticTo,
+        logisticsOrderId: data.logisticsOrderId ?? null,
+        notes: data.notes ?? null,
+        items: data.items.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          notes: i.notes ?? null,
+        })),
+        createdById: session.id,
+      })
+    );
 
     return createdResponse(transfer, '调拨单创建成功');
   } catch (error) {

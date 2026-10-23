@@ -140,7 +140,7 @@ async function fetchWithRetry(
  */
 export async function executePlatformSync(
   platformCode: string,
-  triggerType: 'manual' | 'scheduled' = 'scheduled',
+  triggerType: 'manual' | 'scheduled' | 'webhook' = 'scheduled',
   marketplaceId?: string
 ): Promise<SyncResult> {
   const startTime = Date.now();
@@ -188,6 +188,8 @@ export async function executePlatformSync(
   const syncLog = await prisma.platformSyncLog.create({
     data: {
       platformCode,
+      marketplaceId: marketplaceId || '',
+      resource: 'orders',
       triggerType,
       status: 'processing',
       retryCount: 0,

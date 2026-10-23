@@ -296,6 +296,27 @@ function getDefaultPermissionsForRole(role: string): string[] {
         'customer:list', 'product:list', 'order:list',
         'quotation:list', 'supplier:list', 'inventory:list',
       ];
+    // 二期 BE-2：工作台三角色（owner 只读决策 / ops 平台业务 / finance 财务）
+    case 'owner':
+      return [
+        'dashboard:view', 'workbench:view',
+        'order:list', 'product:list', 'inventory:list', 'purchase:list',
+        'supplier:list', 'shipment:list', 'finance:list', 'report:view',
+        'replenishment:list',
+      ];
+    case 'ops':
+      return [
+        'dashboard:view', 'workbench:view',
+        'order:list', 'product:list', 'inventory:list', 'shipment:list',
+        'replenishment:list', 'replenishment:generate', 'report:view',
+      ];
+    case 'finance':
+      return [
+        'dashboard:view', 'workbench:view',
+        'finance:list', 'finance:edit', 'finance:report',
+        'order:list', 'purchase:list', 'supplier:list',
+        'replenishment:list', 'report:view',
+      ];
     default:
       return [];
   }
@@ -404,6 +425,9 @@ export async function initDefaultPermissions() {
     { name: 'purchasing', displayName: '采购员', description: '负责供应商、采购、入库', isSystem: true },
     { name: 'warehouse', displayName: '仓管员', description: '负责出入库、库存管理', isSystem: true },
     { name: 'viewer', displayName: '访客', description: '只读访问权限', isSystem: true },
+    // 二期 BE-2：老板（只读决策）/ 运营（平台业务）
+    { name: 'owner', displayName: '老板', description: '全局经营视角，只读决策（工作台/报表）', isSystem: true },
+    { name: 'ops', displayName: '运营', description: '平台业务：对账、平台同步、补货建议', isSystem: true },
   ];
 
   for (const role of defaultRoles) {
@@ -418,10 +442,14 @@ export async function initDefaultPermissions() {
   // 广告域角色接线（M1）：admin 全有 / sales view+edit（幂等）
   const adsWiring = await seedAdsRolePermissions();
 
+  // 二期 BE-2：工作台角色（owner/ops）+ 补货权限点接线（幂等）
+  const workbenchWiring = await seedWorkbenchRolePermissions();
+
   return {
     permissionsCreated: defaultPermissions.length,
     rolesCreated: defaultRoles.length,
     adsRolePermissions: adsWiring.wired,
+    workbenchSeeds: workbenchWiring,
   };
 }
 
@@ -527,4 +555,102 @@ export async function seedUserDisablePermission(): Promise<{
   }
 
   return { wired };
+}
+
+/**
+ * 二期 BE-2：工作台角色 / 补货权限点接线 —— 幂等，可重复调用
+ *
+ * 背景：新增 owner（老板，只读决策）/ ops（运营，平台业务）两个角色，finance 角色已存在。
+ * 本函数只做「补齐」，不改动任何现有角色的既有权限（createMany + skipDuplicates）。
+ *
+ * 接线矩阵：
+ *   super-admin / super_admin / admin → 全部（*，同时显式接线便于后台展示）
+ *   purchasing / purchasing_manager   → 补货全流程（list/generate/convert/dismiss）
+ *   ops / Operator_Manager            → 补货 list/generate + 工作台
+ *   warehouse / warehouse_manager     → 补货 list + dismiss（仓管可忽略不适用的建议）
+ *   finance                           → 补货 list + 工作台
+ *   owner                             → 只读：replenishment:list + 工作台 + 报表
+ *   sales / sales_manager             → 工作台
+ *
+ * ⚠️ hasPermission 有 5 分钟内存缓存，接线后已登录用户需重新登录或
+ *    invalidateUserPermissionsCache(userId) 才能拿到新权限。
+ */
+export async function seedWorkbenchRolePermissions(): Promise<{
+  roles: string[];
+  permissions: string[];
+  wired: { role: string; permissions: string[] }[];
+}> {
+  // 1. 权限点（自愈：缺失即建）
+  const permissionDefs = [
+    { name: 'workbench:view', code: 'workbench:view', displayName: '查看角色工作台', module: 'workbench', description: '按角色查看待办聚合' },
+    { name: 'replenishment:list', code: 'replenishment:list', displayName: '查看补货建议', module: 'replenishment', description: '查看补货建议列表与参数快照' },
+    { name: 'replenishment:generate', code: 'replenishment:generate', displayName: '生成补货建议', module: 'replenishment', description: '按仓库生成/刷新补货建议' },
+    { name: 'replenishment:convert', code: 'replenishment:convert', displayName: '补货建议转单', module: 'replenishment', description: '一键转采购单/调拨单草稿' },
+    { name: 'replenishment:dismiss', code: 'replenishment:dismiss', displayName: '忽略补货建议', module: 'replenishment', description: '忽略不需要执行的补货建议' },
+  ];
+  await prisma.permission.createMany({ data: permissionDefs, skipDuplicates: true });
+
+  // 2. 角色（自愈：owner / ops 不存在则建；finance 已存在则跳过）
+  const roleDefs = [
+    { name: 'owner', displayName: '老板', description: '全局经营视角，只读决策（工作台/报表）', isSystem: true },
+    { name: 'ops', displayName: '运营', description: '平台业务：对账、平台同步、补货建议', isSystem: true },
+  ];
+  await prisma.role.createMany({ data: roleDefs, skipDuplicates: true });
+
+  // 3. 角色 ↔ 权限接线
+  const matrix: Record<string, string[]> = {
+    'super-admin': permissionDefs.map(p => p.code),
+    super_admin: permissionDefs.map(p => p.code),
+    admin: permissionDefs.map(p => p.code),
+    purchasing: [
+      'workbench:view',
+      'replenishment:list',
+      'replenishment:generate',
+      'replenishment:convert',
+      'replenishment:dismiss',
+    ],
+    purchasing_manager: [
+      'workbench:view',
+      'replenishment:list',
+      'replenishment:generate',
+      'replenishment:convert',
+      'replenishment:dismiss',
+    ],
+    ops: ['workbench:view', 'replenishment:list', 'replenishment:generate'],
+    Operator_Manager: ['workbench:view', 'replenishment:list', 'replenishment:generate'],
+    warehouse: ['workbench:view', 'replenishment:list', 'replenishment:dismiss'],
+    warehouse_manager: ['workbench:view', 'replenishment:list', 'replenishment:dismiss'],
+    finance: ['workbench:view', 'replenishment:list', 'dashboard:view'],
+    owner: ['workbench:view', 'replenishment:list', 'dashboard:view', 'report:view', 'finance:list'],
+    sales: ['workbench:view'],
+    sales_manager: ['workbench:view'],
+    viewer: ['workbench:view'],
+  };
+
+  const permissions = await prisma.permission.findMany({
+    where: { code: { in: permissionDefs.map(p => p.code) } },
+    select: { id: true, code: true },
+  });
+  const permIdByCode = new Map(permissions.map(p => [p.code, p.id]));
+
+  const wired: { role: string; permissions: string[] }[] = [];
+  for (const [roleName, codes] of Object.entries(matrix)) {
+    const role = await prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) continue;
+
+    const data = codes
+      .map(code => permIdByCode.get(code))
+      .filter((id): id is string => Boolean(id))
+      .map(permissionId => ({ roleId: role.id, permissionId }));
+
+    if (!data.length) continue;
+    await prisma.rolePermission.createMany({ data, skipDuplicates: true });
+    wired.push({ role: roleName, permissions: codes });
+  }
+
+  return {
+    roles: roleDefs.map(r => r.name),
+    permissions: permissionDefs.map(p => p.code),
+    wired,
+  };
 }

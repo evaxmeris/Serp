@@ -291,6 +291,14 @@ const menuConfig: MenuGroup[] = [
         permission: 'inventory:list',
       },
       {
+        key: 'replenishment',
+        label: '补货建议',
+        icon: ClipboardList,
+        href: '/replenishment',
+        roles: ['admin', 'warehouse', 'purchasing'],
+        permission: 'inventory:list',
+      },
+      {
         key: 'stock-transfers',
         label: '调拨单',
         icon: ArrowLeftRight,

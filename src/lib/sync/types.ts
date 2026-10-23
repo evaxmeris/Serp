@@ -68,6 +68,51 @@ export interface UnifiedOrderItem {
 }
 
 // ============================================
+// 统一快照格式（二期 BE-1：平台镜像快照）
+// ============================================
+
+/**
+ * 资源类型。
+ * - orders：订单同步（走 executePlatformSync，B2B / RETAIL 分流）
+ * - fbaInventory：平台库存快照 → PlatformInventorySnapshot
+ * - listings：平台 Listing 快照 → PlatformListingSnapshot
+ * - all：以上全部
+ */
+export type SyncResource = 'orders' | 'fbaInventory' | 'listings' | 'all';
+
+export const SYNC_RESOURCES: SyncResource[] = ['orders', 'fbaInventory', 'listings', 'all'];
+
+/** 统一的平台库存快照行（适配器负责把平台原始结构映射到这里） */
+export interface UnifiedInventorySnapshot {
+  platformCode: string;
+  marketplaceId: string;
+  sku: string;
+  fnsku?: string | null;
+  asin?: string | null;
+  availableQty: number;
+  inboundQty: number;
+  reservedQty: number;
+  /** 附加明细（FBA 的 inventoryDetails / 条件 / 平台更新时间等），落 jsonb */
+  fcDetail?: Record<string, any> | null;
+  /** 平台侧数据时间（可选） */
+  platformUpdatedAt?: Date | null;
+}
+
+/** 统一的平台 Listing 快照行 */
+export interface UnifiedListingSnapshot {
+  platformCode: string;
+  marketplaceId: string;
+  sku: string;
+  asin?: string | null;
+  title?: string | null;
+  status?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  rawPayload?: Record<string, any> | null;
+  platformUpdatedAt?: Date | null;
+}
+
+// ============================================
 // 平台适配器接口
 // ============================================
 
@@ -91,6 +136,11 @@ export interface PlatformAdapter {
   // 订单同步
   fetchOrders(params: FetchOrdersParams, config: PlatformConfig): Promise<UnifiedOrder[]>;
   fetchOrderDetail(orderId: string, config: PlatformConfig): Promise<UnifiedOrder>;
+
+  // 可选：平台镜像快照（二期 BE-1）
+  // 适配器负责把平台原始结构映射为统一快照；未实现的平台由同步层返回 NOT_SUPPORTED
+  fetchInventorySnapshots?(config: PlatformConfig): Promise<UnifiedInventorySnapshot[]>;
+  fetchListingSnapshots?(config: PlatformConfig, pageToken?: string): Promise<UnifiedListingSnapshot[]>;
   
   // 可选：Webhook 支持
   handleWebhook?(payload: any, config: PlatformConfig): Promise<UnifiedOrder | null>;
