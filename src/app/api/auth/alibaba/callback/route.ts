@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     // 保存到数据库
     await prisma.platformSyncConfig.upsert({
-      where: { platformCode: 'alibaba' },
+      where: { platformCode_marketplaceId: { platformCode: 'alibaba', marketplaceId: '' } },
       update: {
         credentials: encryptCredentials({
           appKey: APP_KEY,
@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
       },
       create: {
         platformCode: 'alibaba',
+        marketplaceId: '',
         platformName: '阿里国际站',
         enabled: true,
         syncIntervalMin: 120,

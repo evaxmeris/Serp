@@ -174,6 +174,8 @@ function signTopApi(params: Record<string, string>, appSecret: string): string {
 export class AlibabaAdapter extends BasePlatformAdapter {
   readonly platformCode = 'alibaba';
   readonly platformName = '阿里国际站';
+  /** 阿里国际站订单是 B2B 批发单，写入 Order 表 */
+  readonly orderKind = 'B2B' as const;
 
   /**
    * 新平台签名 (HMAC-SHA256)

@@ -12,24 +12,34 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { resolveWarehouseCode } from '@/lib/warehouse-resolver';
 
 /**
  * 计算单个产品的可用库存数量
  * availableQty = quantity - reservedQty
  *
  * @param productId - 产品 ID
- * @param warehouseId - 仓库 ID
- * @returns 可用库存数量，如果库存记录不存在则返回 0
+ * @param warehouseId - 仓库标识（id / code / 'MAIN' 别名均可，内部统一归一化为 code）
+ * @returns 可用库存数量，如果库存记录不存在或仓库无法识别则返回 0
  */
 export async function getAvailableQty(
   productId: string,
   warehouseId: string
 ): Promise<number> {
+  // 库存表只认仓库编码；调用方常传 Warehouse.id（cuid），必须先归一化，
+  // 否则查到 0 条记录 → 可用库存恒为 0 → 出库永远报"库存不足"。
+  let warehouse: string;
+  try {
+    warehouse = await resolveWarehouseCode(warehouseId);
+  } catch {
+    return 0;
+  }
+
   const item = await prisma.inventoryItem.findUnique({
     where: {
       productId_warehouse: {
         productId,
-        warehouse: warehouseId,
+        warehouse,
       },
     },
     select: {
@@ -54,8 +64,21 @@ export async function getAvailableQtyBatch(
 ): Promise<Map<string, number>> {
   const result = new Map<string, number>();
 
+  // 统一归一化为仓库编码（cuid / code / 'MAIN' → code），否则按 cuid 永远查不到库存行
+  const normalized = await Promise.all(
+    items.map(async (i) => {
+      let warehouse = i.warehouseId;
+      try {
+        warehouse = await resolveWarehouseCode(i.warehouseId);
+      } catch {
+        // 无法识别的仓库保持原值，下面查不到自然算 0
+      }
+      return { productId: i.productId, warehouseId: i.warehouseId, warehouse };
+    })
+  );
+
   // 构建唯一的产品-仓库组合去重
-  const uniqueKeys = new Set(items.map(i => `${i.productId}:${i.warehouseId}`));
+  const uniqueKeys = new Set(normalized.map(i => `${i.productId}:${i.warehouse}`));
   const conditions = Array.from(uniqueKeys).map(key => {
     const [productId, warehouse] = key.split(':');
     return { productId, warehouse };

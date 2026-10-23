@@ -11,6 +11,8 @@ import { PlatformConfig, UnifiedOrder, FetchOrdersParams, AuthResult } from '../
 export class ShopifyAdapter extends BasePlatformAdapter {
   readonly platformCode = 'shopify';
   readonly platformName = 'Shopify';
+  /** Shopify 零售单写入 PlatformOrder 镜像表，不进 B2B Order 表 */
+  readonly orderKind = 'RETAIL' as const;
   
   async authenticate(config: PlatformConfig): Promise<AuthResult> {
     // TODO: 实现 Shopify API 密钥认证

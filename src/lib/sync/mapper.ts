@@ -5,7 +5,7 @@
  */
 
 import { UnifiedOrder, UnifiedOrderItem } from './types';
-import { OrderStatus, type Prisma } from '@prisma/client';
+import { OrderStatus, PlatformType, type Prisma } from '@prisma/client';
 
 /**
  * 平台状态 → ERP 订单状态映射
@@ -125,6 +125,125 @@ function mapOrderItem(item: UnifiedOrderItem): Prisma.OrderItemCreateWithoutOrde
     amount: item.amount,
     productImage: item.imageUrl || undefined,
     originCountry: 'CN',
+  };
+}
+
+/**
+ * 平台代码 → PlatformOrder.platformType 枚举
+ */
+export const PLATFORM_TYPE_MAP: Record<string, PlatformType> = {
+  alibaba: PlatformType.ALIBABA,
+  alibaba_1688: PlatformType.ALIBABA_1688,
+  amazon: PlatformType.AMAZON,
+  tiktok: PlatformType.TIKTOK,
+  shopify: PlatformType.SHOPIFY,
+  wish: PlatformType.WISH,
+  ebay: PlatformType.EBAY,
+};
+
+export function resolvePlatformType(platformCode: string): PlatformType {
+  return PLATFORM_TYPE_MAP[platformCode?.toLowerCase()] || PlatformType.OTHER;
+}
+
+/**
+ * 支付状态推导（零售镜像单没有独立的支付字段来源，用金额推算）
+ */
+function resolvePaymentStatus(order: UnifiedOrder): string {
+  if (order.totalAmount <= 0) return 'UNPAID';
+  if (order.paidAmount >= order.totalAmount) return 'PAID';
+  if (order.paidAmount > 0) return 'PARTIALLY_PAID';
+  return 'UNPAID';
+}
+
+/**
+ * 将统一订单映射为 PlatformOrder 镜像表字段（零售单专用）
+ *
+ * 注意：这里不创建 Customer，也不创建 B2B Order——零售单只做平台数据镜像。
+ *
+ * @param order 统一订单
+ * @param platformAccountId 平台账号 ID（PlatformAccount 外键，必需）
+ * @param marketplaceId 站点/市场标识
+ */
+export function mapUnifiedOrderToPlatformOrder(
+  order: UnifiedOrder,
+  platformAccountId: string,
+  marketplaceId?: string
+): Prisma.PlatformOrderUncheckedCreateInput {
+  return {
+    platformOrderId: order.platformOrderId,
+    platformOrderSn: order.orderNo || order.platformOrderId,
+    platformCode: order.platformCode,
+    marketplaceId: marketplaceId || order.marketplaceId || null,
+    platformAccountId,
+    platformType: resolvePlatformType(order.platformCode),
+    buyerName: order.customer?.contactName || order.customer?.companyName || null,
+    buyerEmail: order.customer?.email || null,
+    buyerPhone: order.customer?.phone || null,
+    status: order.status,
+    paymentStatus: resolvePaymentStatus(order),
+    orderDate: order.createdAt,
+    orderedAt: order.createdAt,
+    currency: order.currency || 'USD',
+    totalAmount: order.totalAmount,
+    shippingAddress: order.shippingInfo?.address
+      ? {
+          address: order.shippingInfo.address,
+          trackingNumber: order.shippingInfo.trackingNumber || null,
+          carrier: order.shippingInfo.carrier || null,
+          country: order.customer?.country || null,
+        }
+      : order.customer?.country
+        ? { country: order.customer.country }
+        : undefined,
+    buyerMessage: order.buyerMemo || null,
+    notes: order.sellerMemo || null,
+    items: order.items.map(item => ({
+      platformProductId: item.platformProductId,
+      productName: item.productName,
+      sku: item.sku || null,
+      specification: item.specification || null,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      amount: item.amount,
+      currency: item.currency || order.currency || 'USD',
+      imageUrl: item.imageUrl || null,
+    })),
+    rawData: order.rawData ?? undefined,
+    syncVersion: 1,
+  };
+}
+
+/**
+ * 已存在的零售单需要更新的字段（状态/金额随平台变化）
+ */
+export function mapUnifiedOrderToPlatformOrderUpdate(
+  order: UnifiedOrder,
+  marketplaceId?: string
+): Prisma.PlatformOrderUncheckedUpdateInput {
+  return {
+    platformOrderSn: order.orderNo || order.platformOrderId,
+    marketplaceId: marketplaceId || order.marketplaceId || null,
+    buyerName: order.customer?.contactName || order.customer?.companyName || null,
+    buyerEmail: order.customer?.email || null,
+    buyerPhone: order.customer?.phone || null,
+    status: order.status,
+    paymentStatus: resolvePaymentStatus(order),
+    orderedAt: order.createdAt,
+    currency: order.currency || 'USD',
+    totalAmount: order.totalAmount,
+    items: order.items.map(item => ({
+      platformProductId: item.platformProductId,
+      productName: item.productName,
+      sku: item.sku || null,
+      specification: item.specification || null,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      amount: item.amount,
+      currency: item.currency || order.currency || 'USD',
+      imageUrl: item.imageUrl || null,
+    })),
+    rawData: order.rawData ?? undefined,
+    syncVersion: { increment: 1 },
   };
 }
 

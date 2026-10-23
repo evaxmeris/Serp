@@ -2266,6 +2266,34 @@
       if (__panelAttrs && __panelAttrs.length > 0) {
         data.attributes = __panelAttrs.filter(function(a) { return a.name && a.value; }).map(function(a) { return { name: a.name, value: a.value }; });
       }
+      // 如果详情为空，尝试通过 API 获取描述
+      if (!data.description && !data.descriptionEn) {
+        try {
+          // 尝试从 window.__INITIAL_STATE__ 或内嵌 JSON 找描述
+          var jsonDesc = '';
+          document.querySelectorAll('script').forEach(function(s) {
+            if (jsonDesc) return;
+            try {
+              var parsed = JSON.parse(s.textContent);
+              var findDesc = function(o, depth) {
+                if (depth > 4 || jsonDesc) return;
+                if (!o || typeof o !== 'object') return;
+                if (o.productDescription) { jsonDesc = o.productDescription; return; }
+                if (o.detailDesc) { jsonDesc = o.detailDesc; return; }
+                if (o.descriptionEn) { jsonDesc = o.descriptionEn; return; }
+                for (var k in o) { if (!jsonDesc) findDesc(o[k], depth+1); }
+              };
+              findDesc(parsed, 0);
+            } catch(e) {}
+          });
+          if (jsonDesc) {
+            // 图片规范化（懒加载提升 + 高清化 + 绝对路径）
+            data.description = (window.__ERP_PARSERS__ && window.__ERP_PARSERS__.normalizeDescImages)
+              ? window.__ERP_PARSERS__.normalizeDescImages(jsonDesc)
+              : jsonDesc;
+          }
+        } catch(e) {}
+      }
       // 如果图片为空，兜底扫描页面上的大图（不依赖 img.width，懒加载图片可能为0）
       if (!data.images || data.images.length === 0) {
         data.images = [];
@@ -2411,15 +2439,20 @@
       // 详情描述
       var desc = data.description || data.descriptionEn || '';
       if (desc) {
-        // 将描述中的相对图片URL转为绝对路径（blob页面无法解析相对路径）
-        desc = desc.replace(/<img[^>]+src=["']([^"']+)["']/gi, function(match, src) {
-          if (src.startsWith('http') || src.startsWith('data:')) return match;
-          var absSrc = src;
-          if (src.startsWith('//')) absSrc = 'https:' + src;
-          else if (src.startsWith('/')) absSrc = window.location.origin + src;
-          else absSrc = window.location.origin + '/' + src;
-          return match.replace(src, absSrc);
-        });
+        // 图片规范化（懒加载提升 + 高清化 + 绝对路径）
+        if (window.__ERP_PARSERS__ && window.__ERP_PARSERS__.normalizeDescImages) {
+          desc = window.__ERP_PARSERS__.normalizeDescImages(desc);
+        } else {
+          // 兜底：将描述中的相对图片URL转为绝对路径（blob页面无法解析相对路径）
+          desc = desc.replace(/<img[^>]+src=["']([^"']+)["']/gi, function(match, src) {
+            if (src.startsWith('http') || src.startsWith('data:')) return match;
+            var absSrc = src;
+            if (src.startsWith('//')) absSrc = 'https:' + src;
+            else if (src.startsWith('/')) absSrc = window.location.origin + src;
+            else absSrc = window.location.origin + '/' + src;
+            return match.replace(src, absSrc);
+          });
+        }
         html += '<div class="card"><h2>详情描述</h2><div class="desc">' + desc + '</div></div>';
       }
       

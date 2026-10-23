@@ -18,6 +18,8 @@ const CreateInboundOrderSchema = z.object({
   purchaseOrderId: z.string().optional(),
   supplierId: z.string().optional(),
   warehouseId: z.string().optional(),
+  // 目标海外仓：填了就走海外仓台账，warehouseId（国内仓）不能再填
+  targetOverseasWarehouseId: z.string().min(1).optional(),
   expectedDate: z.string().optional(),
   totalAmount: z.number().optional(),
   note: z.string().optional(),
@@ -40,6 +42,7 @@ const QuerySchema = z.object({
   status: z.enum(['PENDING', 'PARTIAL', 'COMPLETED', 'CANCELLED']).optional(),
   supplierId: z.string().optional(),
   warehouseId: z.string().optional(),
+  targetOverseasWarehouseId: z.string().optional(),
   search: z.string().optional(),
   sortBy: z.string().default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
@@ -61,10 +64,13 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(extractZodErrors(queryResult.error));
     }
 
-    const { page, limit, type, status, supplierId, warehouseId, search, sortBy, sortOrder } = queryResult.data;
-
+    const { page, limit, type, status, supplierId, warehouseId, targetOverseasWarehouseId, search, sortBy, sortOrder } = queryResult.data;
     // 构建查询条件
     const where: any = {};
+
+    if (targetOverseasWarehouseId) {
+      where.targetOverseasWarehouseId = targetOverseasWarehouseId;
+    }
 
     if (type) {
       where.type = type;
@@ -100,6 +106,14 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             companyName: true,
+          },
+        },
+        targetOverseasWarehouse: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            country: true,
           },
         },
         items: {
@@ -154,6 +168,31 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validationResult.data;
+
+    // 目标仓二选一：国内仓（warehouseId）或海外仓（targetOverseasWarehouseId）
+    if (data.warehouseId && data.targetOverseasWarehouseId) {
+      return validationErrorResponse([
+        {
+          field: 'targetOverseasWarehouseId',
+          message: '目标国内仓与目标海外仓不能同时指定，请只填其中一个',
+        },
+      ]);
+    }
+
+    // 验证海外仓是否存在（如果提供了）
+    let targetOverseasWarehouse = null;
+    if (data.targetOverseasWarehouseId) {
+      targetOverseasWarehouse = await prisma.overseasWarehouse.findUnique({
+        where: { id: data.targetOverseasWarehouseId },
+        select: { id: true, name: true, code: true, isActive: true },
+      });
+      if (!targetOverseasWarehouse) {
+        return notFoundResponse('目标海外仓');
+      }
+      if (!targetOverseasWarehouse.isActive) {
+        return conflictResponse(`海外仓 ${targetOverseasWarehouse.name} 已停用，不能作为入库目标`);
+      }
+    }
 
     // 验证采购订单是否存在（如果提供了）
     if (data.purchaseOrderId) {
@@ -219,7 +258,9 @@ export async function POST(request: NextRequest) {
           status: 'PENDING',
           purchaseOrderId: data.purchaseOrderId,
           supplierId: data.supplierId,
-          warehouseId: data.warehouseId,
+          // 海外仓入库：warehouseId 置空，仅通过 targetOverseasWarehouse 定位
+          warehouseId: data.targetOverseasWarehouseId ? null : data.warehouseId,
+          targetOverseasWarehouseId: data.targetOverseasWarehouseId ?? null,
           expectedDate: data.expectedDate ? new Date(data.expectedDate) : undefined,
           totalAmount,
           note: data.note,
@@ -243,6 +284,7 @@ export async function POST(request: NextRequest) {
             },
           },
           supplier: true,
+          targetOverseasWarehouse: true,
         },
       });
     });

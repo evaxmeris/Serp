@@ -31,7 +31,9 @@ import { useSortable, SortIndicator } from '@/hooks/use-sortable';
 interface OutboundOrder {
   id: string;
   outboundNo: string;
-  orderId: string;
+  outboundType?: string;
+  orderId: string | null;
+  notes?: string | null;
   warehouseId: string;
   status: string;
   totalAmount: number | null;
@@ -89,6 +91,28 @@ const OUTBOUND_STATUS: Record<string, string> = {
   CANCELLED: '已取消',
 };
 
+/** 出库类型（第一期新增：销售/样品/赠品/内部领用/调拨） */
+const OUTBOUND_TYPES: { value: string; label: string }[] = [
+  { value: 'SALE', label: '销售出库' },
+  { value: 'SAMPLE', label: '样品' },
+  { value: 'GIFT', label: '赠品' },
+  { value: 'INTERNAL', label: '内部领用' },
+  { value: 'TRANSFER', label: '调拨' },
+];
+
+const TYPE_LABELS: Record<string, string> = OUTBOUND_TYPES.reduce(
+  (acc, t) => ({ ...acc, [t.value]: t.label }),
+  {} as Record<string, string>,
+);
+
+const TYPE_COLORS: Record<string, string> = {
+  SALE: 'bg-blue-100 text-blue-800',
+  SAMPLE: 'bg-amber-100 text-amber-800',
+  GIFT: 'bg-pink-100 text-pink-800',
+  INTERNAL: 'bg-slate-100 text-slate-800',
+  TRANSFER: 'bg-teal-100 text-teal-800',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-800',
   PICKING: 'bg-blue-100 text-blue-800',
@@ -103,9 +127,11 @@ export default function OutboundOrdersPage() {
   const { toasts, removeToast, toast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const [orders, setOrders] = useState<OutboundOrder[]>([]);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('all');
+  const [outboundType, setOutboundType] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -133,6 +159,10 @@ export default function OutboundOrdersPage() {
         params.set('status', status);
       }
 
+      if (outboundType !== 'all') {
+        params.set('outboundType', outboundType);
+      }
+
       const response = await fetch(`/api/v1/outbound-orders?${params.toString()}`);
       const result = await response.json();
 
@@ -150,7 +180,32 @@ export default function OutboundOrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, [page, status]);
+  }, [page, status, outboundType]);
+
+  // 仓库主数据：列表接口只回 warehouseId，需前端映射成仓库名/编码
+  useEffect(() => {
+    const loadWarehouses = async () => {
+      try {
+        const res = await fetch('/api/v1/warehouses?limit=100');
+        const data = await res.json();
+        const list = data?.data?.items || [];
+        if (Array.isArray(list)) setWarehouses(list);
+      } catch (error) {
+        console.error('Failed to fetch warehouses:', error);
+      }
+    };
+    loadWarehouses();
+  }, []);
+
+  const warehouseOf = (id?: string) => warehouses.find((w) => w.id === id);
+
+  /** 后端创建出库单时不回写总金额，用明细金额兜底 */
+  const amountOf = (order: OutboundOrder) => {
+    if (order.totalAmount != null) return Number(order.totalAmount);
+    const items = order.items || [];
+    if (items.length === 0) return null;
+    return items.reduce((sum, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0);
+  };
 
   const handleSearch = () => {
     setPage(1);
@@ -359,7 +414,7 @@ export default function OutboundOrdersPage() {
   const { sorted, requestSort, sortConfig } = useSortable(orders, 'createdAt');
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="container mx-auto py-6 fade-in">
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -418,7 +473,7 @@ export default function OutboundOrdersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* 筛选栏 */}
+          {/* 筛选栏：搜索靠左，筛选条件右对齐 */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
               <Input
@@ -433,20 +488,35 @@ export default function OutboundOrdersPage() {
                 搜索
               </Button>
             </div>
-            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-              <SelectTrigger className="w-full sm:w-[150px]">
-                <SelectValue placeholder="状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部状态</SelectItem>
-                <SelectItem value="PENDING">待处理</SelectItem>
-                <SelectItem value="PICKING">拣货中</SelectItem>
-                <SelectItem value="PACKING">打包中</SelectItem>
-                <SelectItem value="SHIPPED">已发货</SelectItem>
-                <SelectItem value="DELIVERED">已送达</SelectItem>
-                <SelectItem value="CANCELLED">已取消</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto sm:ml-auto">
+              <Select value={outboundType} onValueChange={(v) => { setOutboundType(v); setPage(1); }}>
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue placeholder="出库类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部类型</SelectItem>
+                  {OUTBOUND_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue placeholder="状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="PENDING">待处理</SelectItem>
+                  <SelectItem value="PICKING">拣货中</SelectItem>
+                  <SelectItem value="PACKING">打包中</SelectItem>
+                  <SelectItem value="SHIPPED">已发货</SelectItem>
+                  <SelectItem value="DELIVERED">已送达</SelectItem>
+                  <SelectItem value="CANCELLED">已取消</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* 数据表格 */}
@@ -475,6 +545,7 @@ export default function OutboundOrdersPage() {
                     出库单号
                     <SortIndicator field="outboundNo" sortConfig={sortConfig} />
                   </TableHead>
+                  <TableHead>类型</TableHead>
                   <TableHead
                     className="cursor-pointer select-none"
                     onClick={() => requestSort('saleOrderNo')}
@@ -526,6 +597,7 @@ export default function OutboundOrdersPage() {
                     <TableRow key={i}>
                       <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-14" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-12" /></TableCell>
@@ -537,7 +609,7 @@ export default function OutboundOrdersPage() {
                   ))}
                 </> : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9}>
+                    <TableCell colSpan={10}>
                       <EmptyState
                         title="暂无出库单"
                         description="还没有任何出库记录，创建一笔出库单开始使用"
@@ -557,24 +629,34 @@ export default function OutboundOrdersPage() {
                       </TableCell>
                       <TableCell className="font-medium">{order.outboundNo}</TableCell>
                       <TableCell>
-                        {order.order?.orderNo || '-'}
+                        <Badge className={TYPE_COLORS[order.outboundType || 'SALE'] || 'bg-gray-100'}>
+                          {TYPE_LABELS[order.outboundType || 'SALE'] || order.outboundType || '销售出库'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {order.order?.orderNo || '—'}
                         {order.order?.customer && (
                           <div className="text-xs text-muted-foreground">
                             {order.order.customer.companyName}
                           </div>
                         )}
+                        {!order.order && order.notes && (
+                          <div className="text-xs text-muted-foreground truncate max-w-[220px]" title={order.notes}>
+                            {order.notes}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {order.warehouse?.name || '-'}
-                        {order.warehouse?.code && (
+                        {order.warehouse?.name || warehouseOf(order.warehouseId)?.name || '—'}
+                        {(order.warehouse?.code || warehouseOf(order.warehouseId)?.code) && (
                           <div className="text-xs text-muted-foreground">
-                            {order.warehouse.code}
+                            {order.warehouse?.code || warehouseOf(order.warehouseId)?.code}
                           </div>
                         )}
                       </TableCell>
                       <TableCell>{order._count?.items || order.items?.length || 0}</TableCell>
                       <TableCell>
-                        {order.totalAmount != null ? `¥${Number(order.totalAmount).toFixed(2)}` : '-'}
+                        {amountOf(order) != null ? `¥${Number(amountOf(order)).toFixed(2)}` : '—'}
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_COLORS[order.status] || 'bg-gray-100'}>

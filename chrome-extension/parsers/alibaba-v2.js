@@ -14,6 +14,41 @@
   'use strict';
   var parsers = window.__ERP_PARSERS__ = window.__ERP_PARSERS__ || {};
 
+  /**
+   * 规范化详情描述中的图片：
+   * 1. 懒加载属性提升：data-src / data-lazy-src / data-original → src（丢弃占位图）
+   * 2. 高清化：去掉阿里 CDN 尺寸后缀 _350x350 等，保留原图
+   * 3. 相对路径转绝对路径（blob 预览页无法解析相对路径）
+   */
+  parsers.normalizeDescImages = function (html) {
+    if (!html || typeof html !== 'string') return html;
+    return html.replace(/<img([^>]*)>/gi, function (match, attrs) {
+      // 1. 提取懒加载属性并移除（data-src / data-lazy-src / data-original）
+      var lazyMatch = attrs.match(/data-(?:src|lazy-src|original)=["']([^"']+)["']/i);
+      var lazySrc = lazyMatch ? lazyMatch[1] : '';
+      attrs = attrs.replace(/data-(?:src|lazy-src|original)=["'][^"']*["']/gi, '');
+      // 2. 现有 src
+      var curMatch = attrs.match(/\bsrc=["']([^"']*)["']/i);
+      var src = curMatch ? curMatch[1] : '';
+      // 3. 真实地址优先懒加载属性，其次现有 src
+      src = lazySrc || src;
+      if (!src) return match; // 无图地址，原样保留
+      // 4. 高清化：去掉 CDN 尺寸后缀（_350x350 等）
+      src = src.replace(/_\d+x\d+(?=\.(?:jpe?g|png|webp|gif))/i, '');
+      // 5. 相对路径转绝对
+      if (src.indexOf('//') === 0) src = 'https:' + src;
+      else if (src.indexOf('/') === 0) src = window.location.origin + src;
+      else if (src.indexOf('http') !== 0 && src.indexOf('data:') !== 0) src = window.location.origin + '/' + src;
+      // 6. 回写 src（覆盖占位图；原本无 src 则插入）
+      if (curMatch) {
+        attrs = attrs.replace(/\bsrc=["'][^"']*["']/i, 'src="' + src + '"');
+      } else {
+        attrs = ' src="' + src + '"' + attrs;
+      }
+      return '<img' + attrs.replace(/\s+$/, '') + '>';
+    });
+  };
+
   // 预缓存选择器引用
   var SelectorRegistry = parsers.SelectorRegistry;
   var JsonLdParser = parsers.JsonLdParser;
@@ -88,6 +123,11 @@
         img.originalUrl = ImageProcessor.upgradeUrl(img.originalUrl || img.src || '');
         return img;
       });
+    }
+
+    // Phase 5.5: 详情描述图片规范化（懒加载提升 + 高清化 + 绝对路径）
+    if (extracted.description) {
+      extracted.description = parsers.normalizeDescImages(extracted.description);
     }
 
     // Phase 6: 组装为最终 payload

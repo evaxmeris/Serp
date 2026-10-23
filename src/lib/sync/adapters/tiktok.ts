@@ -11,6 +11,8 @@ import { PlatformConfig, UnifiedOrder, FetchOrdersParams, AuthResult } from '../
 export class TikTokAdapter extends BasePlatformAdapter {
   readonly platformCode = 'tiktok';
   readonly platformName = 'TikTok Shop';
+  /** TikTok Shop 零售单写入 PlatformOrder 镜像表，不进 B2B Order 表 */
+  readonly orderKind = 'RETAIL' as const;
   
   async authenticate(config: PlatformConfig): Promise<AuthResult> {
     // TODO: 实现 TikTok OAuth2 认证

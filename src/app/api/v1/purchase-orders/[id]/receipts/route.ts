@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolveWarehouseCode, WarehouseNotFoundError } from '@/lib/warehouse-resolver';
 import { getUserFromRequest } from '@/lib/auth-unified';
 import {
   listResponse,
@@ -71,6 +72,17 @@ export async function POST(
       return errorResponse('请指定入库仓库', 'VALIDATION_ERROR', 422);
     }
 
+    // 库存表只认仓库编码 code：前端可能传 Warehouse.id 或 'MAIN'，统一归一化后再落库
+    let warehouseCode: string;
+    try {
+      warehouseCode = await resolveWarehouseCode(body.warehouse);
+    } catch (e) {
+      if (e instanceof WarehouseNotFoundError) {
+        return errorResponse(e.message, 'VALIDATION_ERROR', 422);
+      }
+      throw e;
+    }
+
     // 在事务内完成：收货登记 + 入库确认 + 库存更新 + 采购单状态推进
     const result = await prisma.$transaction(async (tx) => {
       // 1. 验证采购订单存在且状态正确
@@ -101,10 +113,16 @@ export async function POST(
       }
 
       // 3. 创建收货单
+      // 修复：receiptNo 是必填唯一字段，此前 create 未提供 → Prisma 校验失败（收货必 500）
+      const receiptNo = `PR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now()
+        .toString(36)
+        .slice(-6)
+        .toUpperCase()}`;
       const receipt = await tx.purchaseReceipt.create({
         data: {
+          receiptNo,
           purchaseOrderId: id,
-          warehouse: body.warehouse,
+          warehouse: warehouseCode,
           status: 'COMPLETED',
           receiptDate: new Date(),
           notes: body.notes || null,
@@ -125,7 +143,7 @@ export async function POST(
             quantity: (item.acceptedQty || 0) + (item.rejectedQty || 0),
             acceptedQty: item.acceptedQty || 0,
             rejectedQty: item.rejectedQty || 0,
-            warehouse: body.warehouse,
+            warehouse: warehouseCode,
             location: item.location || null,
           },
         });
@@ -151,7 +169,7 @@ export async function POST(
           where: {
             productId_warehouse: {
               productId: poItem.productId!,
-              warehouse: body.warehouse,
+              warehouse: warehouseCode,
             },
           },
           select: {
@@ -181,7 +199,7 @@ export async function POST(
           await tx.inventoryItem.create({
             data: {
               productId: poItem.productId!,
-              warehouse: body.warehouse,
+              warehouse: warehouseCode,
               quantity: acceptedQty,
               availableQty: acceptedQty,
               reservedQty: 0,
@@ -195,7 +213,7 @@ export async function POST(
           where: {
             productId_warehouse: {
               productId: poItem.productId!,
-              warehouse: body.warehouse,
+              warehouse: warehouseCode,
             },
           },
           select: { quantity: true },
@@ -205,7 +223,7 @@ export async function POST(
         await tx.inventoryLog.create({
           data: {
             productId: poItem.productId!,
-            warehouseId: body.warehouse,
+            warehouseId: warehouseCode,
             type: 'IN',
             quantity: acceptedQty,
             beforeQuantity: existingInventory?.quantity || 0,

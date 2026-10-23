@@ -77,6 +77,9 @@ export default function LogisticsOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  /** 关联业务下拉数据（销售订单 / 采购订单） */
+  const [salesOrders, setSalesOrders] = useState<any[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -99,7 +102,11 @@ export default function LogisticsOrdersPage() {
     currency: 'CNY', totalQuantity: 1, totalNetWeight: 0, totalGrossWeight: 0,
     totalVolume: 0, totalAmount: 0, insurance: false, insuranceAmount: 0,
     customsBroker: false, notes: '',
+    // 关联业务：销售订单 / 采购订单 二选一必填
+    relationType: 'SALES' as 'SALES' | 'PURCHASE',
+    salesOrderId: '', purchaseOrderId: '',
   });
+  const [relationError, setRelationError] = useState('');
   const [feeItems, setFeeItems] = useState<{ feeType: string; description: string; amount: number }[]>([]);
   const [itemList, setItemList] = useState<{ productName: string; quantity: number; netWeight: number; dimensions: string }[]>([]);
   // 单据凭证 [{type, name, url}]
@@ -114,11 +121,13 @@ export default function LogisticsOrdersPage() {
     const params = new URLSearchParams({ page: String(page), limit: '20' });
     if (search) params.set('search', search);
     if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
-    const [oRes, pRes, uRes, meRes] = await Promise.all([
+    const [oRes, pRes, uRes, meRes, soRes, poRes] = await Promise.all([
       fetch(`/api/v1/logistics/orders?${params}`),
       fetch('/api/v1/logistics/providers?status=ACTIVE&limit=100'),
       fetch('/api/users'),
       fetch('/api/auth/me'),
+      fetch('/api/orders?limit=100&page=1'),
+      fetch('/api/v1/purchase-orders?limit=100&page=1'),
     ]);
     const oData = await oRes.json();
     if (oData.success) { setOrders(oData.data?.items || oData.data || []); setTotal(oData.data?.pagination?.total || 0); }
@@ -130,13 +139,21 @@ export default function LogisticsOrdersPage() {
     if (Array.isArray(userList)) setUsers(userList);
     const meData = await meRes.json();
     if (meData.success || meData.id) setCurrentUser(meData.user || meData);
+    // 关联业务候选：销售订单（data.items）、采购订单（data.items）
+    const soData = await soRes.json();
+    const soPayload = soData?.data ?? soData;
+    setSalesOrders(Array.isArray(soPayload?.items) ? soPayload.items : []);
+    const poData = await poRes.json();
+    const poPayload = poData?.data ?? poData;
+    setPurchaseOrders(Array.isArray(poPayload?.items) ? poPayload.items : []);
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, [page, statusFilter]);
 
   const resetForm = () => {
-    setForm({ providerId: '', destination: '', transportMethod: 'SEA_FREIGHT', origin: '', currency: 'CNY', totalQuantity: 1, totalNetWeight: 0, totalGrossWeight: 0, totalVolume: 0, totalAmount: 0, insurance: false, insuranceAmount: 0, customsBroker: false, notes: '' });
+    setForm({ providerId: '', destination: '', transportMethod: 'SEA_FREIGHT', origin: '', currency: 'CNY', totalQuantity: 1, totalNetWeight: 0, totalGrossWeight: 0, totalVolume: 0, totalAmount: 0, insurance: false, insuranceAmount: 0, customsBroker: false, notes: '', relationType: 'SALES', salesOrderId: '', purchaseOrderId: '' });
+    setRelationError('');
     setFeeItems([]); setItemList([]); setDocList([]);
   };
 
@@ -148,27 +165,63 @@ export default function LogisticsOrdersPage() {
       totalVolume: Number(order.totalVolume) || 0, totalAmount: Number(order.totalAmount) || 0,
       insurance: order.insurance || false, insuranceAmount: Number(order.insuranceAmount) || 0,
       customsBroker: order.customsBroker || false, notes: order.notes || '',
+      // 已有采购单关联 → 展示采购单分支；否则默认销售订单分支
+      relationType: order.purchaseOrderId ? 'PURCHASE' : 'SALES',
+      salesOrderId: order.salesOrderId || '', purchaseOrderId: order.purchaseOrderId || '',
     });
+    setRelationError('');
     setItemList(Array.isArray(order.items) ? order.items : []);
     setFeeItems(Array.isArray(order.amountBreakdown) ? order.amountBreakdown : []);
     setDocList(Array.isArray(order.documents) ? order.documents : []);
     setShowEdit(order);
   };
 
+  /** 关联单据必填校验：销售订单 / 采购订单二选一 */
+  const validateRelation = () => {
+    if (!form.salesOrderId && !form.purchaseOrderId) {
+      setRelationError('请选择关联的销售订单或采购订单（两者至少关联一个）');
+      toast.warning('请选择关联的销售订单或采购订单');
+      return false;
+    }
+    setRelationError('');
+    return true;
+  };
+
+  const buildBody = () => {
+    const rest: any = { ...form };
+    delete rest.relationType;
+    return {
+      ...rest,
+      salesOrderId: form.salesOrderId || undefined,
+      purchaseOrderId: form.purchaseOrderId || undefined,
+      items: itemList,
+      amountBreakdown: feeItems,
+      documents: docList,
+    };
+  };
+
   const handleCreate = async () => {
     if (!form.providerId || !form.destination) { toast.warning('请选择物流服务商和填写目的地'); return; }
+    if (!validateRelation()) return;
     setSaving(true);
-    const body = { ...form, items: itemList, amountBreakdown: feeItems, documents: docList };
-    const res = await fetch('/api/v1/logistics/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowCreate(false); resetForm(); fetchData(); } else { toast.error('创建失败'); }
+    const res = await fetch('/api/v1/logistics/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()) });
+    if (res.ok) { toast.success('物流订单创建成功'); setShowCreate(false); resetForm(); fetchData(); }
+    else {
+      const d = await res.json().catch(() => ({}));
+      const errs: Array<{ field: string; message: string }> = Array.isArray(d?.errors) ? d.errors : [];
+      if (errs.some(e => e.field === 'purchaseOrderId' || e.field === 'salesOrderId')) {
+        setRelationError(errs.map(e => e.message).join('；'));
+      }
+      toast.error(errs.length > 0 ? errs.map(e => e.message).join('；') : (d?.message || d?.error || '创建失败'));
+    }
     setSaving(false);
   };
 
   const handleUpdate = async () => {
     if (!showEdit) return; setSaving(true);
-    const body = { ...form, items: itemList, amountBreakdown: feeItems, documents: docList };
-    const res = await fetch(`/api/v1/logistics/orders/${showEdit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowEdit(null); fetchData(); } else { toast.error('更新失败'); }
+    const res = await fetch(`/api/v1/logistics/orders/${showEdit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()) });
+    if (res.ok) { toast.success('已保存'); setShowEdit(null); fetchData(); }
+    else { const d = await res.json().catch(() => ({})); toast.error(d?.message || d?.error || '更新失败'); }
     setSaving(false);
   };
 
@@ -241,6 +294,13 @@ export default function LogisticsOrdersPage() {
   // 获取用户显示名
   const userName = (u: any) => u?.name || u?.email || '-';
 
+  /** 销售订单号：列表接口只回 salesOrderId，用下拉数据映射成 SO 单号 */
+  const salesOrderNo = (id?: string | null) => {
+    if (!id) return null;
+    const found = salesOrders.find((o: any) => o.id === id);
+    return found?.orderNo || '已关联销售订单';
+  };
+
   // 获取用户主角色显示名（RBAC 后 User.role 已删除，角色在 userRoles[].role）
   const userRoleLabel = (u: any) => {
     const roles = Array.isArray(u?.userRoles) ? u.userRoles : [];
@@ -250,6 +310,59 @@ export default function LogisticsOrdersPage() {
 
   const renderForm = () => (
     <form autoComplete="off" onSubmit={(e) => e.preventDefault()} className="space-y-4">
+      {/* 关联业务（第一期新增）：销售订单 / 采购订单 二选一 */}
+      <div className={`rounded-md border p-3 ${relationError ? 'border-destructive bg-destructive/5' : 'bg-muted/40'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+          <Label>
+            关联业务 <span className="text-red-500">*</span>
+          </Label>
+          <span className="text-xs text-muted-foreground">销售订单与采购订单至少关联一个（头程运输一般关联采购订单）</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Select
+            value={form.relationType}
+            onValueChange={(v) => setForm({ ...form, relationType: v as 'SALES' | 'PURCHASE', salesOrderId: '', purchaseOrderId: '' })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="SALES">关联销售订单</SelectItem>
+              <SelectItem value="PURCHASE">关联采购订单</SelectItem>
+            </SelectContent>
+          </Select>
+          {form.relationType === 'SALES' ? (
+            <Select
+              value={form.salesOrderId}
+              onValueChange={(v) => { setForm({ ...form, salesOrderId: v, purchaseOrderId: '' }); setRelationError(''); }}
+            >
+              <SelectTrigger className={relationError ? 'border-destructive' : ''}>
+                <SelectValue placeholder="选择销售订单" />
+              </SelectTrigger>
+              <SelectContent>
+                {salesOrders.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">暂无可选销售订单</div>}
+                {salesOrders.map((o: any) => (
+                  <SelectItem key={o.id} value={o.id}>{o.orderNo} · {o.customer?.companyName || '无客户'}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Select
+              value={form.purchaseOrderId}
+              onValueChange={(v) => { setForm({ ...form, purchaseOrderId: v, salesOrderId: '' }); setRelationError(''); }}
+            >
+              <SelectTrigger className={relationError ? 'border-destructive' : ''}>
+                <SelectValue placeholder="选择采购订单" />
+              </SelectTrigger>
+              <SelectContent>
+                {purchaseOrders.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">暂无采购订单，请先在采购订单模块创建</div>}
+                {purchaseOrders.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>{p.poNo} · {p.supplier?.companyName || '无供应商'}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        {relationError && <p className="text-xs text-destructive mt-2">{relationError}</p>}
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div><Label>物流服务商 *</Label>
           <Select value={form.providerId} onValueChange={(v) => setForm({ ...form, providerId: v })}>
@@ -404,7 +517,7 @@ export default function LogisticsOrdersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 fade-in">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5" />物流订单管理</CardTitle>
@@ -424,7 +537,7 @@ export default function LogisticsOrdersPage() {
               <Button variant="outline" onClick={fetchData}><Search className="h-4 w-4" /></Button>
             </div>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
-              <SelectTrigger className="w-[140px]"><SelectValue placeholder="全部状态" /></SelectTrigger>
+              <SelectTrigger className="w-[140px] sm:ml-auto"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部状态</SelectItem>
                 {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
@@ -438,7 +551,9 @@ export default function LogisticsOrdersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>订单号</TableHead>
+                  <TableHead>关联单号</TableHead>
                   <TableHead>服务商</TableHead>
+                  <TableHead>物品内容</TableHead>
                   <TableHead>目的地</TableHead>
                   <TableHead>运输</TableHead>
                   <TableHead>金额</TableHead>
@@ -451,7 +566,34 @@ export default function LogisticsOrdersPage() {
                 {orders.map((order: any) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm">{order.orderNo}</TableCell>
+                    <TableCell className="text-xs">
+                      {order.purchaseOrder?.poNo ? (
+                        <div>
+                          <div className="font-mono">{order.purchaseOrder.poNo}</div>
+                          <div className="text-muted-foreground">采购 · {order.purchaseOrder.supplier?.companyName || '—'}</div>
+                        </div>
+                      ) : salesOrderNo(order.salesOrderId) ? (
+                        <div>
+                          <div className="font-mono">{salesOrderNo(order.salesOrderId)}</div>
+                          <div className="text-muted-foreground">销售订单</div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{order.provider?.companyName || '-'}</TableCell>
+                    <TableCell className="max-w-[240px]">
+                      {Array.isArray(order.items) && order.items.length > 0 ? (
+                        <span
+                          className="block truncate"
+                          title={order.items.map((it: any) => `${it.productName || ''}×${it.quantity ?? ''}`).join('、')}
+                        >
+                          {order.items.map((it: any) => `${it.productName || '-'}×${it.quantity ?? '-'}`).join('、')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{order.destination}</TableCell>
                     <TableCell>{TRANSPORT_METHODS.find(m => m.value === order.transportMethod)?.label || order.transportMethod}</TableCell>
                     <TableCell>{order.currency} {Number(order.totalAmount).toLocaleString()}</TableCell>

@@ -14,6 +14,7 @@ import { orderConfirmSchema, orderCancelSchema } from '@/lib/validators/order';
 import { validateOrReturn } from '@/lib/api-validation';
 import { UpdateOrderSchema } from '@/lib/api-schemas';
 import { validateTransition, canCancel } from '@/lib/order-status-machine';
+import { syncOrderPaymentStatus } from '@/lib/order-payment';
 import type { OrderStatus } from '@/types/order';
 
 /**
@@ -264,7 +265,8 @@ export async function PUT(
 
     // 如果请求中包含 status 字段且与当前状态不同，验证状态跳转是否合法
     if (restData.status && restData.status !== existingOrder.status) {
-      const isAdmin = session?.role === 'admin';
+      // 铁律：admin 与 super-admin 都视为管理员（历史只判 'admin'，super-admin 被误拒）
+      const isAdmin = session?.role === 'admin' || session?.role === 'super-admin';
 
       const result = validateTransition(
         existingOrder.status as OrderStatus,
@@ -305,6 +307,14 @@ export async function PUT(
       },
     });
 
+    // 履约到 DELIVERED 时，若款项已收齐则允许按状态机推进到 COMPLETED
+    // （收款本身永远不直接置 COMPLETED，必须等送达这一步发生）
+    let finalStatus = order.status;
+    if (order.status === 'DELIVERED' && existingOrder.status !== 'DELIVERED') {
+      const synced = await syncOrderPaymentStatus(prisma, id);
+      if (synced) finalStatus = synced.status as typeof finalStatus;
+    }
+
     // 记录更新订单审计日志
     const { ipAddress, userAgent } = getClientInfo(request);
     await writeAuditLog({
@@ -320,7 +330,7 @@ export async function PUT(
     return successResponse({
       id: order.id,
       orderNo: order.orderNo,
-      status: order.status,
+      status: finalStatus,
       updatedAt: order.updatedAt,
     }, '订单更新成功');
   } catch (error) {

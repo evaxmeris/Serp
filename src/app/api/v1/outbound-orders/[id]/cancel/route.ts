@@ -10,6 +10,7 @@ import {
   extractZodErrors,
 } from '@/lib/api-response';
 import { z } from 'zod';
+import { resolveWarehouseCode } from '@/lib/warehouse-resolver';
 
 /**
  * 出库单取消 API
@@ -87,7 +88,8 @@ export async function POST(
 
       // 恢复库存（如果是待确认状态，说明库存已被扣减）
       if (outboundOrder.status === 'PENDING') {
-        const warehouseCode = outboundOrder.warehouseId; // 从父对象获取仓库 ID
+        // 出库单存的是仓库主键 id，库存表只认 code —— 必须归一化后再动库存
+        const warehouseCode = await resolveWarehouseCode(outboundOrder.warehouseId);
         for (const item of outboundOrder.items) {
           // 获取当前 version（乐观锁）
           const current = await tx.inventoryItem.findUniqueOrThrow({
@@ -97,17 +99,13 @@ export async function POST(
                 warehouse: warehouseCode,
               },
             },
-            select: { version: true },
+            select: { id: true, version: true },
           });
 
           const updateResult = await tx.inventoryItem.updateMany({
-            where: {
-              productId_warehouse: {
-                productId: item.productId,
-                warehouse: warehouseCode,
-              },
-              version: current.version,
-            },
+            // updateMany 的 where 不接受复合唯一键 productId_warehouse（仅 WhereUniqueInput 支持），
+            // 这里用主键 + 乐观锁版本号做条件
+            where: { id: current.id, version: current.version },
             data: {
               quantity: { increment: item.quantity },
               version: { increment: 1 },

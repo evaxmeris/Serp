@@ -55,6 +55,14 @@ export async function GET(
       where: { id },
       include: {
         provider: true,
+        purchaseOrder: {
+          select: {
+            id: true,
+            poNo: true,
+            status: true,
+            supplier: { select: { id: true, companyName: true } },
+          },
+        },
         submitter: { select: { id: true, name: true, email: true } },
         reviewer: { select: { id: true, name: true, email: true } },
         approver: { select: { id: true, name: true, email: true } },
@@ -69,7 +77,10 @@ export async function GET(
       return notFoundResponse('物流订单');
     }
 
-    return successResponse(order, '获取物流订单详情成功');
+    return successResponse(
+      { ...order, purchaseOrderNo: order.purchaseOrder?.poNo ?? null },
+      '获取物流订单详情成功'
+    );
   } catch (error) {
     console.error('获取物流订单详情失败:', error);
     return errorResponse('获取物流订单详情失败', 'INTERNAL_ERROR', 500);

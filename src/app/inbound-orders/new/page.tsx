@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast, ToastContainer } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirmation-dialog';
 
@@ -43,6 +44,15 @@ interface Warehouse {
   code: string;
 }
 
+interface OverseasWarehouse {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  city?: string | null;
+  type?: string;
+}
+
 interface OrderItem {
   productId: string;
   expectedQuantity: number;
@@ -58,11 +68,16 @@ export default function NewInboundOrderPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [overseasWarehouses, setOverseasWarehouses] = useState<OverseasWarehouse[]>([]);
+  const [overseasLoading, setOverseasLoading] = useState(true);
+  /** 目标仓类型：国内仓（warehouseId）/ 海外仓（targetOverseasWarehouseId），二选一 */
+  const [warehouseMode, setWarehouseMode] = useState<'DOMESTIC' | 'OVERSEAS'>('DOMESTIC');
   
   const [formData, setFormData] = useState({
     type: 'PURCHASE_IN',
     supplierId: '',
     warehouseId: '',
+    targetOverseasWarehouseId: '',
     expectedDate: '',
     note: '',
   });
@@ -75,7 +90,22 @@ export default function NewInboundOrderPage() {
     fetchProducts();
     fetchSuppliers();
     fetchWarehouses();
+    fetchOverseasWarehouses();
   }, []);
+
+  const fetchOverseasWarehouses = async () => {
+    setOverseasLoading(true);
+    try {
+      const res = await fetch('/api/v1/overseas/warehouses?limit=100&isActive=true');
+      const data = await res.json();
+      const payload = data?.data ?? data;
+      setOverseasWarehouses(Array.isArray(payload?.items) ? payload.items : []);
+    } catch (error) {
+      console.error('Failed to fetch overseas warehouses:', error);
+    } finally {
+      setOverseasLoading(false);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -135,12 +165,29 @@ export default function NewInboundOrderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 目标仓二选一校验
+    if (warehouseMode === 'DOMESTIC' && !formData.warehouseId) {
+      toast.warning('请选择国内仓库');
+      return;
+    }
+    if (warehouseMode === 'OVERSEAS' && !formData.targetOverseasWarehouseId) {
+      toast.warning('请选择海外仓');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const payload = {
-        ...formData,
+        type: formData.type,
+        supplierId: formData.supplierId || undefined,
         expectedDate: formData.expectedDate ? new Date(formData.expectedDate).toISOString() : undefined,
+        note: formData.note || undefined,
+        // 国内仓与海外仓互斥，只传当前选中的那一个
+        warehouseId: warehouseMode === 'DOMESTIC' ? formData.warehouseId : undefined,
+        targetOverseasWarehouseId:
+          warehouseMode === 'OVERSEAS' ? formData.targetOverseasWarehouseId : undefined,
         items: items.map(item => ({
           ...item,
           expectedQuantity: Number(item.expectedQuantity),
@@ -156,11 +203,18 @@ export default function NewInboundOrderPage() {
 
       const data = await res.json();
 
-      if (data.success) {
-        toast.success('入库单创建成功');
-        router.push(`/inbound-orders/${data.data.id}`);
+      if (res.ok && data.success) {
+        toast.success(
+          warehouseMode === 'OVERSEAS'
+            ? '入库单创建成功（目标：海外仓，确认入库后计入海外仓台账）'
+            : '入库单创建成功',
+        );
+        // 详情页当前会因 inventoryLogs 字段缺失崩溃，创建后回到列表（列表可看到新单据）
+        // 稍作延迟让成功提示可见，再跳转
+        setTimeout(() => router.push('/inbound-orders'), 700);
       } else {
-        toast.error(data.message || '创建失败');
+        const errs: Array<{ field: string; message: string }> = Array.isArray(data.errors) ? data.errors : [];
+        toast.error(errs.length > 0 ? errs.map(x => `${x.field}：${x.message}`).join('；') : (data.message || '创建失败'));
       }
     } catch (error) {
       console.error('Failed to create order:', error);
@@ -175,7 +229,7 @@ export default function NewInboundOrderPage() {
   }, 0);
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="container mx-auto py-6 px-4 fade-in">
       <Button variant="ghost" onClick={() => router.back()} className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" />
         返回
@@ -227,23 +281,69 @@ export default function NewInboundOrderPage() {
                 </Select>
               </div>
 
-              <div>
-                <Label>入库仓库 *</Label>
-                <Select
-                  value={formData.warehouseId}
-                  onValueChange={(value) => setFormData({ ...formData, warehouseId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择仓库" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.code}>
-                        {warehouse.name} ({warehouse.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">
+                  目标仓库 <span className="text-destructive">*</span>
+                </Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    value={warehouseMode}
+                    onValueChange={(v) => setWarehouseMode(v as 'DOMESTIC' | 'OVERSEAS')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DOMESTIC">国内仓</SelectItem>
+                      <SelectItem value="OVERSEAS">海外仓</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {warehouseMode === 'DOMESTIC' ? (
+                    <Select
+                      value={formData.warehouseId}
+                      onValueChange={(value) => setFormData({ ...formData, warehouseId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择国内仓库" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.code}>
+                            {warehouse.name}（{warehouse.code}）
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : overseasLoading ? (
+                    <Skeleton className="h-9 w-full" />
+                  ) : overseasWarehouses.length === 0 ? (
+                    <div className="flex items-center h-9 px-3 rounded-md border text-sm text-muted-foreground">
+                      暂无海外仓，请先在海外仓主数据中维护
+                    </div>
+                  ) : (
+                    <Select
+                      value={formData.targetOverseasWarehouseId}
+                      onValueChange={(value) => setFormData({ ...formData, targetOverseasWarehouseId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择海外仓" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {overseasWarehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.id}>
+                            {warehouse.code} · {warehouse.name}（{warehouse.country}）
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {warehouseMode === 'DOMESTIC'
+                    ? '入库后计入国内仓库存'
+                    : '入库单确认收货后计入海外仓台账（国内仓与海外仓互斥，只能选一个）'}
+                </p>
               </div>
 
               <div>

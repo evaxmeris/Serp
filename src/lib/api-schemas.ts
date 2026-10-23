@@ -180,11 +180,11 @@ export const UpdateProductSchema = CreateProductSchema.partial().extend({
 
 /** 创建采购订单 */
 export const CreatePurchaseOrderSchema = z.object({
-  supplierId: z.string().uuid('供应商 ID 格式不正确'),
+  supplierId: z.string().min(1, '供应商 ID 格式不正确'),
   orderDate: z.string().datetime().optional(),
   expectedDeliveryDate: z.string().datetime().optional(),
   items: z.array(z.object({
-    productId: z.string().uuid('产品 ID 格式不正确'),
+    productId: z.string().min(1, '产品 ID 格式不正确'),
     quantity: z.number().int().positive('数量必须大于 0'),
     unitPrice: z.number().min(0, '单价不能为负'),
     notes: z.string().optional(),
@@ -285,7 +285,7 @@ export const CreateQuotationSchema = z.object({
   validUntil: z.string().datetime().optional(),
   notes: z.string().max(2000).optional(),
   items: z.array(z.object({
-    productId: z.string().uuid('产品 ID 格式不正确'),
+    productId: z.string().min(1, '产品 ID 格式不正确'),
     productName: z.string().optional(),
     specification: z.string().optional(),
     quantity: z.number().int().positive('数量必须大于 0'),
@@ -320,7 +320,7 @@ export const CreateOrderSchema = z.object({
   internalNotes: z.string().optional(),
   attachments: z.array(z.string()).optional(),
   items: z.array(z.object({
-    productId: z.string().uuid('产品 ID 格式不正确'),
+    productId: z.string().min(1, '产品 ID 格式不正确'),
     productName: z.string().optional(),
     productSku: z.string().optional(),
     specification: z.string().optional(),
@@ -482,7 +482,7 @@ export const InventoryReportSchema = z.object({
 
 /** 创建报表订阅 */
 export const CreateSubscriptionSchema = z.object({
-  reportId: z.string().uuid('报表 ID 格式不正确'),
+  reportId: z.string().min(1, '报表 ID 格式不正确'),
   frequency: z.enum(['daily', 'weekly', 'monthly']),
   email: z.string().email('请输入有效的邮箱地址'),
   format: z.enum(['pdf', 'excel', 'csv']).optional(),
@@ -583,6 +583,7 @@ const LogisticsOrderItem = z.object({
 export const CreateLogisticsOrderSchema = z.object({
   providerId: z.string().min(1, '物流服务商 ID 不能为空'),
   salesOrderId: z.string().optional(),
+  purchaseOrderId: z.string().optional(),
   items: z.array(LogisticsOrderItem).optional().default([]),
   totalQuantity: z.number().int().min(0).default(0),
   totalNetWeight: z.number().min(0).default(0),
@@ -632,7 +633,7 @@ export const UpdateLogisticsOrderSchema = CreateLogisticsOrderSchema.partial().e
 
 /** UUID 参数（用于路径参数） */
 export const IdParamSchema = z.object({
-  id: z.string().uuid('ID 格式不正确'),
+  id: z.string().min(1, 'ID 格式不正确'),
 });
 
 // ==================== 验证辅助函数 ====================

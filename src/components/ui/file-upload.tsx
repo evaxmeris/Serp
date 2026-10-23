@@ -126,7 +126,7 @@ export function FileUpload({ currentUrl, onUpload, accept = 'image/*' }: FileUpl
         type="file"
         accept={accept}
         onChange={handleFileChange}
-        className="hidden"
+        className="sr-only"
       />
       {error && <p className="text-red-500 text-xs">{error}</p>}
     </div>

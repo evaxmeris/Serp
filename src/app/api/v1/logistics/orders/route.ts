@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-unified';
-import { listResponse, createdResponse, errorResponse } from '@/lib/api-response';
+import { listResponse, createdResponse, errorResponse, validationErrorResponse } from '@/lib/api-response';
 import { validateOrReturn } from '@/lib/api-validation';
 import { CreateLogisticsOrderSchema } from '@/lib/api-schemas';
 import { generateLogisticsOrderNo } from '@/lib/id-generator';
@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const status = searchParams.get('status') || '';
     const providerId = searchParams.get('providerId') || '';
+    const purchaseOrderId = searchParams.get('purchaseOrderId') || '';
+    const salesOrderId = searchParams.get('salesOrderId') || '';
     const search = searchParams.get('search') || '';
 
     // 构建查询条件
@@ -32,6 +34,14 @@ export async function GET(request: NextRequest) {
 
     if (providerId) {
       where.providerId = providerId;
+    }
+
+    if (purchaseOrderId) {
+      where.purchaseOrderId = purchaseOrderId;
+    }
+
+    if (salesOrderId) {
+      where.salesOrderId = salesOrderId;
     }
 
     if (search) {
@@ -54,6 +64,14 @@ export async function GET(request: NextRequest) {
               contactPhone: true,
             },
           },
+          purchaseOrder: {
+            select: {
+              id: true,
+              poNo: true,
+              status: true,
+              supplier: { select: { id: true, companyName: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -62,12 +80,15 @@ export async function GET(request: NextRequest) {
       prisma.logisticsOrder.count({ where }),
     ]);
 
-    return listResponse(orders, {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    });
+    return listResponse(
+      orders.map(o => ({ ...o, purchaseOrderNo: o.purchaseOrder?.poNo ?? null })),
+      {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }
+    );
   } catch (error) {
     console.error('获取物流订单列表失败:', error);
     return errorResponse('获取物流订单列表失败', 'INTERNAL_ERROR', 500);
@@ -92,6 +113,7 @@ export async function POST(request: NextRequest) {
     const {
       providerId,
       salesOrderId,
+      purchaseOrderId,
       items,
       totalQuantity,
       totalNetWeight,
@@ -126,6 +148,36 @@ export async function POST(request: NextRequest) {
       return errorResponse('物流服务商已停用，无法创建订单', 'CONFLICT', 409);
     }
 
+    // 关联单据校验：销售订单 / 采购订单至少填一个（头程运输走采购订单，平台履约走销售订单）
+    if (!salesOrderId && !purchaseOrderId) {
+      return validationErrorResponse([
+        {
+          field: 'purchaseOrderId',
+          message: '销售订单与采购订单至少需要关联一个（头程运输请关联采购订单）',
+        },
+      ]);
+    }
+
+    if (purchaseOrderId) {
+      const purchaseOrder = await prisma.purchaseOrder.findUnique({
+        where: { id: purchaseOrderId },
+        select: { id: true, poNo: true, deletedAt: true },
+      });
+      if (!purchaseOrder || purchaseOrder.deletedAt) {
+        return errorResponse('关联的采购订单不存在', 'NOT_FOUND', 404);
+      }
+    }
+
+    if (salesOrderId) {
+      const salesOrder = await prisma.order.findUnique({
+        where: { id: salesOrderId },
+        select: { id: true },
+      });
+      if (!salesOrder) {
+        return errorResponse('关联的销售订单不存在', 'NOT_FOUND', 404);
+      }
+    }
+
     // 生成物流订单编号
     const orderNo = await generateLogisticsOrderNo();
 
@@ -134,6 +186,7 @@ export async function POST(request: NextRequest) {
         orderNo,
         providerId,
         salesOrderId: salesOrderId || null,
+        purchaseOrderId: purchaseOrderId || null,
         items: items || [],
         totalQuantity,
         totalNetWeight,
@@ -165,10 +218,14 @@ export async function POST(request: NextRequest) {
             contactPhone: true,
           },
         },
+        purchaseOrder: { select: { id: true, poNo: true, status: true } },
       },
     });
 
-    return createdResponse(order, '物流订单创建成功');
+    return createdResponse(
+      { ...order, purchaseOrderNo: order.purchaseOrder?.poNo ?? null },
+      '物流订单创建成功'
+    );
   } catch (error) {
     console.error('创建物流订单失败:', error);
     return errorResponse('创建物流订单失败', 'INTERNAL_ERROR', 500);

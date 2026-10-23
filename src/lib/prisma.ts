@@ -39,6 +39,8 @@ const childParentSoftDeleteMap: Record<string, Array<{
   relationField: string;
   fkField: string;
   isOptional: boolean;
+  /** 可选传递过滤：外键为 null 时用的自定义条件（点号关系无法用裸 fkField 表达时使用） */
+  fkNullFilter?: any;
 }>> = {
   // ========== Order 的子记录（Order 有 deletedAt） ==========
   'OrderItem': [
@@ -110,7 +112,14 @@ const childParentSoftDeleteMap: Record<string, Array<{
   'OutboundOrderItem': [
     { relationField: 'product',         fkField: 'productId',      isOptional: false },
     // 传递过滤：OutboundOrder → Order（Order 有 deletedAt）
-    { relationField: 'outboundOrder.order', fkField: '',           isOptional: false },
+    // outbound_orders.orderId 已改为可空（无单出库：样品/赠品/内部领用/调拨），
+    // 因此必须用 fkNullFilter 显式放行 orderId 为 null 的明细，否则无单出库的明细会被静默过滤掉。
+    {
+      relationField: 'outboundOrder.order',
+      fkField: '',
+      isOptional: true,
+      fkNullFilter: { outboundOrder: { orderId: null } },
+    },
   ],
 };
 
@@ -179,7 +188,7 @@ try {
               // 可选外键: (fk IS NULL) OR (parent.deletedAt IS NULL)
               parentFilters.push({
                 OR: [
-                  { [rel.fkField]: null },
+                  rel.fkNullFilter ?? { [rel.fkField]: null },
                   buildNestedFilter(rel.relationField, { deletedAt: null }),
                 ],
               });

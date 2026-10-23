@@ -4,77 +4,15 @@ import { getUserFromRequest } from '@/lib/auth-unified';
 import { getSession, requirePermission } from '@/middleware/auth';
 import { listResponse, createdResponse, errorResponse, notFoundResponse } from '@/lib/api-response';
 import { generatePaymentNo, generateTransactionNo } from '@/lib/id-generator';
+import { syncOrderPaymentStatus } from '@/lib/order-payment';
 
 /**
- * 收款完成后更新订单已付金额和余额，并在金额收齐时自动推进订单状态
+ * 收款联动：只重算「钱」的字段（paidAmount / balanceAmount / paymentStatus），
+ * 订单履约状态（status）不因收款被直接置为 COMPLETED —— 见 @/lib/order-payment。
  *
- * 规则:
- * 1. 累加订单关联的所有收款金额 → 更新 paidAmount / balanceAmount
- * 2. 如果 balanceAmount <= 0（全额收齐）:
- *    - 当前状态 PENDING → 推进到 CONFIRMED（并记录 confirmedAt）
- *    - 当前状态非终态 → 推进到 COMPLETED（并记录 completedAt）
- * 3. 如果 balanceAmount > 0 但收款已部分到账且当前为 PENDING:
- *    - 推进到 CONFIRMED（首付款到账即确认订单）
+ * 旧实现的问题：全额到账时 updateData.status = 'COMPLETED'，
+ * PENDING / CONFIRMED / SHIPPED 的订单一收款就"已完成"，绕过 SHIPPED → DELIVERED → COMPLETED。
  */
-async function updateOrderPaymentStatus(orderId: string) {
-  // 查询订单及关联收款
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      totalAmount: true,
-      paidAmount: true,
-      balanceAmount: true,
-      status: true,
-      confirmedAt: true,
-      completedAt: true,
-    },
-  });
-
-  if (!order) return;
-
-  // 累加所有收款金额（假设同币种，暂不处理跨币种）
-  const payments = await prisma.payment.findMany({
-    where: { orderId },
-    select: { amount: true },
-  });
-
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount.toNumber(), 0);
-  const totalAmount = order.totalAmount.toNumber();
-  const newBalance = Math.max(0, totalAmount - totalPaid);
-
-  // 准备更新数据
-  const updateData: any = {
-    paidAmount: totalPaid,
-    balanceAmount: newBalance,
-  };
-
-  // 判断状态推进
-  const isFullyPaid = newBalance <= 0;
-  const isPartiallyPaid = totalPaid > 0 && newBalance > 0;
-
-  if (isFullyPaid) {
-    // 全额到账 → 直接推进到 COMPLETED
-    // PENDING 和 CONFIRMED 都推进到 COMPLETED
-    if (order.status === 'PENDING' || order.status === 'CONFIRMED') {
-      updateData.status = 'COMPLETED';
-      updateData.completedAt = new Date();
-      if (order.status === 'PENDING') {
-        updateData.confirmedAt = new Date();
-      }
-    }
-    // 已经是 COMPLETED / CANCELLED 等终态，不做变更
-  } else if (isPartiallyPaid && order.status === 'PENDING') {
-    // 部分到账且当前为 PENDING → 推进到 CONFIRMED
-    updateData.status = 'CONFIRMED';
-    updateData.confirmedAt = new Date();
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: updateData,
-  });
-}
 
 // GET /api/v1/payments
 export async function GET(request: NextRequest) {
@@ -190,8 +128,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 核心：收款后自动更新订单已付金额/余额，并推进订单状态
-      await updateOrderPaymentStatus(body.orderId);
+      // 核心：收款后重算已付金额/余额/收款状态；订单履约状态只在已送达时才会推进到 COMPLETED
+      // 传入 tx —— 原先调用的是全局 prisma，实际跑在事务之外，收款与订单金额可能不一致
+      await syncOrderPaymentStatus(tx, body.orderId);
 
       return { payment, transaction };
     });

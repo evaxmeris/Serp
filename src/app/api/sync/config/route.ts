@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const platformCode = searchParams.get('platformCode');
+    const marketplaceId = searchParams.get('marketplaceId');
     
     if (!platformCode) {
       // 返回所有平台配置
@@ -35,10 +36,15 @@ export async function GET(request: NextRequest) {
       return successResponse({ configs: safeConfigs });
     }
     
-    // 返回指定平台配置
-    const config = await prisma.platformSyncConfig.findUnique({
-      where: { platformCode },
-    });
+    // 返回指定平台配置（多站点：可精确到 marketplaceId，否则取该平台任一配置）
+    const config = marketplaceId !== null
+      ? await prisma.platformSyncConfig.findUnique({
+          where: { platformCode_marketplaceId: { platformCode, marketplaceId } },
+        })
+      : await prisma.platformSyncConfig.findFirst({
+          where: { platformCode },
+          orderBy: { updatedAt: 'desc' },
+        });
     
     if (!config) {
       return errorResponse('配置不存在', 'CONFIG_NOT_FOUND', 404);
@@ -77,7 +83,7 @@ export async function PUT(request: NextRequest) {
     
     // 解析请求体
     const body = await request.json();
-    const { platformCode, enabled, syncIntervalMin, credentials, settings } = body;
+    const { platformCode, marketplaceId, enabled, syncIntervalMin, credentials, settings } = body;
     
     if (!platformCode) {
       return errorResponse('缺少 platformCode 参数', 'INVALID_REQUEST', 400);
@@ -92,9 +98,14 @@ export async function PUT(request: NextRequest) {
     // 加密 credentials 再存入数据库
     const encryptedCredentials = encryptCredentials(credentials);
 
-    // 创建或更新配置
+    // 站点标识：空串表示默认站点（与 schema 唯一键一致）
+    const siteId: string = marketplaceId || '';
+
+    // 创建或更新配置（platformCode + marketplaceId 复合唯一，支持多站点）
     const config = await prisma.platformSyncConfig.upsert({
-      where: { platformCode },
+      where: {
+        platformCode_marketplaceId: { platformCode, marketplaceId: siteId },
+      },
       update: {
         enabled: enabled !== undefined ? enabled : undefined,
         syncIntervalMin: syncIntervalMin || undefined,
@@ -103,7 +114,8 @@ export async function PUT(request: NextRequest) {
       },
       create: {
         platformCode,
-        platformName: adapter.platformName,
+        marketplaceId: siteId,
+        platformName: siteId ? `${adapter.platformName} (${siteId})` : adapter.platformName,
         enabled: enabled || false,
         syncIntervalMin: syncIntervalMin || 120,
         credentials: encryptedCredentials as any,

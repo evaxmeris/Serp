@@ -3,56 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { getSession, requirePermission } from '@/middleware/auth';
 import { getUserFromRequest } from '@/lib/auth-unified';
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response';
+import { syncOrderPaymentStatus } from '@/lib/order-payment';
 
 /**
- * 收款更新后重新计算订单已付金额和状态
+ * 收款联动（与 POST 共用同一实现）：只重算已付/余额/收款状态，
+ * 不把订单履约状态直接置为 COMPLETED —— 见 @/lib/order-payment。
  */
-async function updateOrderPaymentStatus(orderId: string) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, totalAmount: true, status: true, confirmedAt: true, completedAt: true },
-  });
-
-  if (!order) return;
-
-  const payments = await prisma.payment.findMany({
-    where: { orderId },
-    select: { amount: true },
-  });
-
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount.toNumber(), 0);
-  const totalAmount = order.totalAmount.toNumber();
-  const newBalance = Math.max(0, totalAmount - totalPaid);
-
-  const updateData: any = {
-    paidAmount: totalPaid,
-    balanceAmount: newBalance,
-  };
-
-  const isFullyPaid = newBalance <= 0;
-  const isPartiallyPaid = totalPaid > 0 && newBalance > 0;
-
-  if (isFullyPaid) {
-    if (order.status === 'PENDING') {
-      updateData.status = 'COMPLETED';
-      updateData.completedAt = new Date();
-      if (!order.confirmedAt) {
-        updateData.confirmedAt = new Date();
-      }
-    } else if (!['COMPLETED', 'CANCELLED'].includes(order.status)) {
-      updateData.status = 'COMPLETED';
-      updateData.completedAt = new Date();
-    }
-  } else if (isPartiallyPaid && order.status === 'PENDING') {
-    updateData.status = 'CONFIRMED';
-    updateData.confirmedAt = new Date();
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: updateData,
-  });
-}
 
 // PUT /api/v1/payments/[id]
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -85,7 +41,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     // 重新计算订单收款状态
-    await updateOrderPaymentStatus(existing.orderId);
+    await syncOrderPaymentStatus(prisma, existing.orderId);
 
     return successResponse(payment, '更新成功');
   } catch (e) {
@@ -114,7 +70,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await prisma.payment.delete({ where: { id } });
 
     // 删除后重新计算订单收款状态
-    await updateOrderPaymentStatus(existing.orderId);
+    await syncOrderPaymentStatus(prisma, existing.orderId);
 
     return successResponse(null, '删除成功');
   } catch (e) {

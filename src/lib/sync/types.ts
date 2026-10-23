@@ -13,6 +13,7 @@ export interface UnifiedOrder {
   // 平台信息
   platformCode: string;      // 'alibaba', 'tiktok', 'amazon', 'shopify'
   platformOrderId: string;   // 平台原始订单号
+  marketplaceId?: string;    // 站点/市场 ID（如 Amazon marketplaceId）
   
   // 订单基本信息
   orderNo: string;           // ERP 订单号（由系统生成）
@@ -70,10 +71,19 @@ export interface UnifiedOrderItem {
 // 平台适配器接口
 // ============================================
 
+/** 订单性质：B2B 批发单 / 零售单 */
+export type OrderKind = 'B2B' | 'RETAIL';
+
 export interface PlatformAdapter {
   // 平台标识
   readonly platformCode: string;  // 'alibaba', 'tiktok', 'amazon', 'shopify'
   readonly platformName: string;  // '阿里国际站', 'TikTok Shop', 'Amazon', 'Shopify'
+  /**
+   * 订单性质：
+   * - 'B2B'：写入 B2B 的 Order 表（阿里国际站等批发订单）
+   * - 'RETAIL'：写入 PlatformOrder 镜像表（Amazon/TikTok/Shopify 零售单），不建客户、不建 Order
+   */
+  readonly orderKind?: OrderKind;
   
   // 认证
   authenticate(config: PlatformConfig): Promise<AuthResult>;
@@ -120,6 +130,8 @@ export interface FetchOrdersParams {
 export interface PlatformConfig {
   id: string;
   platformCode: string;
+  /** 站点/市场标识（Amazon marketplaceId 等），空串表示默认站点 */
+  marketplaceId?: string;
   enabled: boolean;
   syncIntervalMin: number;
   credentials: Record<string, string>;

@@ -4,11 +4,14 @@
  * 提供通用功能，各平台适配器继承此类
  */
 
-import { PlatformAdapter, PlatformConfig, UnifiedOrder, FetchOrdersParams, AuthResult } from '../types';
+import { PlatformAdapter, PlatformConfig, UnifiedOrder, FetchOrdersParams, AuthResult, OrderKind } from '../types';
 
 export abstract class BasePlatformAdapter implements PlatformAdapter {
   abstract readonly platformCode: string;
   abstract readonly platformName: string;
+
+  /** 默认按 B2B 批发单处理；零售平台适配器需覆写为 'RETAIL' */
+  readonly orderKind: OrderKind = 'B2B';
   
   /**
    * 认证（必须由子类实现）

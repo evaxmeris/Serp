@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-unified';
+import { confirmOutboundOrderOnce } from '@/lib/outbound-confirm';
 import {
   successResponse,
   errorResponse,
@@ -13,6 +14,11 @@ import { z } from 'zod';
 /**
  * 出库单确认 API
  * 将出库单从 PENDING 状态确认为 SHIPPED 状态
+ *
+ * 幂等保证：
+ *   - 状态领取用 updateMany({ where: { id, status: 'PENDING' } }) 原子完成，
+ *     重复点击 / 并发确认只有第一次生效，后续返回 409，不会重复累计已出数量。
+ *   - 库存扣减发生在【出库单创建】时，确认动作不碰库存表，因此连续确认两次库存只扣一次。
  */
 
 /**
@@ -31,101 +37,33 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const v = validateOrReturn(z.object({ notes: z.string().optional() }), body);
+    // 允许空 body（前端确认按钮可能不带 body）
+    const body = await request.json().catch(() => ({}));
+    const v = validateOrReturn(z.object({ notes: z.string().optional() }), body ?? {});
     if (!v.success) return v.response;
-    const { notes } = v.data;
 
-    // 检查出库单是否存在
-    const outboundOrder = await prisma.outboundOrder.findUnique({
-      where: { id },
-      include: {
-        items: {
+    const result = await prisma.$transaction(async (tx) => {
+      const confirmed = await confirmOutboundOrderOnce(tx, id);
+      if (!confirmed.ok) return confirmed;
+
+      return {
+        ok: true as const,
+        order: await tx.outboundOrder.findUnique({
+          where: { id },
           include: {
-            product: true,
+            items: { include: { product: true } },
+            order: true,
           },
-        },
-        order: true,
-      },
+        }),
+      };
     });
 
-    if (!outboundOrder) {
-      return notFoundResponse('出库单');
+    if (!result.ok) {
+      if (result.reason === 'NOT_FOUND') return notFoundResponse('出库单');
+      return conflictResponse(`当前状态为 ${result.status}，无法确认`);
     }
 
-    // 只有待确认状态的出库单可以确认
-    if (outboundOrder.status !== 'PENDING') {
-      return conflictResponse(`当前状态为 ${outboundOrder.status}，无法确认`);
-    }
-
-    // 更新出库单状态为已发货
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      // 更新出库单状态
-      const order = await tx.outboundOrder.update({
-        where: { id },
-        data: { status: 'SHIPPED' },
-        include: {
-          items: {
-            include: {
-              product: true,
-            },
-          },
-          order: true,
-        },
-      });
-
-      // 如果有关联的销售订单，更新销售订单的出库状态
-      if (outboundOrder.orderId) {
-        const orderItems = await tx.orderItem.findMany({
-          where: { orderId: outboundOrder.orderId },
-        });
-
-        // 计算已出库数量
-        const outboundItems = await tx.outboundOrderItem.findMany({
-          where: {
-            outboundOrder: {
-              orderId: outboundOrder.orderId,
-              status: 'SHIPPED',
-            },
-          },
-        });
-
-        // 更新销售订单项目的已出库数量
-        for (const orderItem of orderItems) {
-          const shippedQty = outboundItems
-            .filter(item => item.productId === orderItem.productId)
-            .reduce((sum, item) => sum + item.quantity, 0);
-
-          if (shippedQty > 0) {
-            await tx.orderItem.update({
-              where: { id: orderItem.id },
-              data: {
-                shippedQty: { increment: shippedQty },
-              },
-            });
-          }
-        }
-
-        // 检查是否所有项目都已出库
-        const allShipped = orderItems.every(item => {
-          const shippedQty = outboundItems
-            .filter(outItem => outItem.productId === item.productId)
-            .reduce((sum, outItem) => sum + outItem.quantity, 0);
-          return shippedQty >= item.quantity;
-        });
-
-        if (allShipped) {
-          await tx.order.update({
-            where: { id: outboundOrder.orderId },
-            data: { status: 'SHIPPED' },
-          });
-        }
-      }
-
-      return order;
-    });
-
-    return successResponse(updatedOrder, '出库单已确认发货');
+    return successResponse(result.order, '出库单已确认发货');
   } catch (error) {
     console.error('Error confirming outbound order:', error);
     return errorResponse('确认出库单失败');

@@ -122,7 +122,7 @@ export function FileUpload({
         ref={inputRef}
         type="file"
         accept={accept}
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           pick(e.target.files?.[0] ?? null);
           e.target.value = '';

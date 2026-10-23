@@ -128,6 +128,7 @@ model Product {
   orderItems         OrderItem[]
   outboundOrderItems OutboundOrderItem[]
   overseasInventory  OverseasInventory[]
+  stockTransferItems StockTransferItem[]
   attributeValues    ProductAttributeValue[]
   category           ProductCategory?        @relation(fields: [categoryId], references: [id])
   profitDetails      ProfitDetail[]
@@ -226,6 +227,8 @@ model Order {
   sourceInquiryId   String?
   sourceQuotationId String?
   status            OrderStatus        @default(PENDING)
+  // 收款状态（与履约状态 status 解耦）：收款只动本字段，履约状态只能由发货/送达推进
+  paymentStatus     OrderPaymentStatus @default(UNPAID)
   currency          String             @default("USD")
   exchangeRate      Decimal            @default(1) @db.Decimal(10, 6)
   totalAmount       Decimal            @db.Decimal(12, 2)
@@ -549,6 +552,7 @@ model PurchaseOrder {
   supplier         Supplier            @relation(fields: [supplierId], references: [id])
   receipts         PurchaseReceipt[]
   payments         SupplierPayment[]
+  logisticsOrders  LogisticsOrder[]
 
   @@index([supplierId, status])
   @@index([salesOrderId])
@@ -679,6 +683,59 @@ model SupplierPayment {
   @@map("supplier_payments")
 }
 
+/// 国内仓调拨单（国内仓 → 海外仓 / 海外仓 → 国内仓），跳过采购直接调拨
+model StockTransfer {
+  id                      String              @id @default(cuid())
+  transferNo              String              @unique
+  status                  StockTransferStatus @default(DRAFT)
+  direction               StockTransferDirection @default(DOMESTIC_TO_OVERSEAS)
+  fromWarehouseId         String?
+  toWarehouseId           String?
+  fromOverseasWarehouseId String?
+  toOverseasWarehouseId   String?
+  logisticsOrderId        String?
+  shippedAt               DateTime?
+  receivedAt              DateTime?
+  cancelledAt             DateTime?
+  cancelReason            String?
+  notes                   String?
+  createdById             String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  items                   StockTransferItem[]
+
+  fromWarehouse         Warehouse?         @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse           Warehouse?         @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
+  fromOverseasWarehouse OverseasWarehouse? @relation("TransferFromOverseas", fields: [fromOverseasWarehouseId], references: [id])
+  toOverseasWarehouse   OverseasWarehouse? @relation("TransferToOverseas", fields: [toOverseasWarehouseId], references: [id])
+  logisticsOrder        LogisticsOrder?    @relation(fields: [logisticsOrderId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([fromWarehouseId])
+  @@index([toOverseasWarehouseId])
+  @@index([logisticsOrderId])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String        @id @default(cuid())
+  transferId String
+  productId  String
+  quantity   Int
+  shippedQty Int           @default(0)
+  receivedQty Int          @default(0)
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product    Product       @relation(fields: [productId], references: [id])
+
+  @@unique([transferId, productId])
+  @@index([transferId])
+  @@index([productId])
+  @@map("stock_transfer_items")
+}
+
 model InventoryItem {
   id               String         @id @default(cuid())
   productId        String
@@ -704,18 +761,21 @@ model InventoryItem {
 }
 
 model StockMovement {
-  id            String       @id @default(cuid())
-  productId     String
-  warehouse     String       @default("MAIN")
-  type          MovementType
-  quantity      Int
-  referenceType String?
-  referenceId   String?
-  notes         String?
-  createdAt     DateTime     @default(now())
+  id                  String       @id @default(cuid())
+  productId           String
+  warehouse           String       @default("MAIN")
+  /// 海外仓流水必填：指向 overseas_warehouses.id（国内仓流水为空）
+  overseasWarehouseId String?
+  type                MovementType
+  quantity            Int
+  referenceType       String?
+  referenceId         String?
+  notes               String?
+  createdAt           DateTime     @default(now())
 
   @@index([productId, createdAt])
   @@index([type, createdAt])
+  @@index([overseasWarehouseId, createdAt])
   @@map("stock_movements")
 }
 
@@ -727,6 +787,8 @@ model InboundOrder {
   purchaseOrderId String?
   supplierId      String?
   warehouseId     String?
+  /// 目标海外仓（设置时 confirm 走海外仓台账，warehouseId 不再生效）
+  targetOverseasWarehouseId String?
   expectedDate    DateTime?
   actualDate      DateTime?
   totalAmount     Decimal            @db.Decimal(12, 2)
@@ -736,10 +798,12 @@ model InboundOrder {
   items           InboundOrderItem[]
   purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
   supplier        Supplier?          @relation(fields: [supplierId], references: [id])
+  targetOverseasWarehouse OverseasWarehouse? @relation(fields: [targetOverseasWarehouseId], references: [id])
   inventoryLogs   InventoryLog[]
 
   @@index([status])
   @@index([warehouseId, status])
+  @@index([targetOverseasWarehouseId])
   @@index([createdAt])
   @@map("inbound_orders")
 }
@@ -801,6 +865,9 @@ model Warehouse {
   status    WarehouseStatus @default(ACTIVE)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
+
+  transfersOut StockTransfer[] @relation("TransferFromWarehouse")
+  transfersIn  StockTransfer[] @relation("TransferToWarehouse")
 
   @@map("warehouses")
 }
@@ -1127,19 +1194,24 @@ model ResearchAttachment {
 model OutboundOrder {
   id            String              @id @default(cuid())
   outboundNo    String              @unique
-  orderId       String
+  /// 关联销售订单（无单出库时为空，必须靠 outboundType + notes 说明用途）
+  orderId       String?
   warehouseId   String
+  /// 出库类型：SALE 需要销售订单；SAMPLE/GIFT/INTERNAL/TRANSFER 允许无销售订单但必须填 notes
+  outboundType  OutboundType        @default(SALE)
   status        OutboundOrderStatus @default(PENDING)
   totalAmount   Decimal?
+  notes         String?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   shipmentId    String?
   inventoryLogs InventoryLog[]
   items         OutboundOrderItem[]
-  order         Order               @relation("OrderOutboundOrders", fields: [orderId], references: [id], onDelete: Cascade)
+  order         Order?              @relation("OrderOutboundOrders", fields: [orderId], references: [id], onDelete: Cascade)
   shipment      Shipment?           @relation(fields: [shipmentId], references: [id])
 
   @@index([orderId])
+  @@index([outboundType])
   @@index([status])
   @@index([createdAt])
   @@map("outbound_orders")
@@ -1387,6 +1459,10 @@ model PlatformOrder {
   id                String          @id @default(cuid())
   platformOrderId   String
   platformOrderSn   String?
+  /// 来源平台代码：'amazon' | 'tiktok' | 'shopify'（零售平台镜像单）
+  platformCode      String          @default("")
+  /// 站点/市场标识（如 Amazon marketplaceId ATVPDKIKX0DER），空串表示默认站点
+  marketplaceId     String?
   platformAccountId String
   platformType      PlatformType
   sellerId          String?
@@ -1398,6 +1474,8 @@ model PlatformOrder {
   paymentStatus     String?
   fulfillmentStatus String?
   orderDate         DateTime?
+  /// 下单时间（与 orderDate 同步，供零售单报表按时间排序）
+  orderedAt         DateTime?
   paymentDate       DateTime?
   shipmentDate      DateTime?
   deliveryDate      DateTime?
@@ -1416,6 +1494,8 @@ model PlatformOrder {
   notes             String?
   internalOrderId   String?
   items             Json            @default("[]")
+  /// 平台原始返回数据（调试/审计用）
+  rawData           Json?
   tags              String[]
   syncVersion       Int             @default(1)
   createdAt         DateTime        @default(now())
@@ -1424,7 +1504,9 @@ model PlatformOrder {
   profitDetails     ProfitDetail[]
 
   @@unique([platformOrderId, platformAccountId])
+  @@unique([platformCode, platformOrderId])
   @@index([platformAccountId, orderDate])
+  @@index([platformCode, orderedAt])
   @@index([platformType, status])
   @@index([internalOrderId])
   @@index([orderDate])
@@ -1456,6 +1538,9 @@ model OverseasWarehouse {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   inventory      OverseasInventory[]
+  inboundOrders  InboundOrder[]
+  transfersOut   StockTransfer[]       @relation("TransferFromOverseas")
+  transfersIn    StockTransfer[]       @relation("TransferToOverseas")
 
   @@index([type, country, isActive])
   @@index([code])
@@ -1469,10 +1554,14 @@ model OverseasInventory {
   sku                String
   fnsku              String?
   asin               String?
+  /// 台账实物数量（本地台账权威值）；availableQty/totalQty 由它派生
+  quantity           Int               @default(0)
   availableQty       Int               @default(0)
   inboundQty         Int               @default(0)
   reservedQty        Int               @default(0)
   totalQty           Int               @default(0)
+  /// 乐观锁版本号，防止并发覆盖台账
+  version            Int               @default(0)
   lastFulfillableQty Int?
   costPerUnit        Decimal?          @db.Decimal(10, 2)
   location           String?
@@ -1860,6 +1949,7 @@ model LogisticsOrder {
   orderNo            String    @unique // LO-YYYYMMDD-XXXX
   providerId         String // 物流服务商
   salesOrderId       String? // 关联销售订单
+  purchaseOrderId    String? // 关联采购订单（头程采购运输）；与 salesOrderId 至少填一个
   items              Json      @default("[]") // [{productName, quantity, netWeight, dimensions}]
   totalQuantity      Int       @default(0) // 总件数
   totalNetWeight     Decimal   @default(0) @db.Decimal(10, 2) // 总净重(kg)
@@ -1906,6 +1996,8 @@ model LogisticsOrder {
   rejectAt             DateTime? // 拒绝时间
 
   provider           LogisticsProvider @relation(fields: [providerId], references: [id])
+  purchaseOrder      PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
+  stockTransfers     StockTransfer[]
   submitter          User?             @relation("LogisticsOrderSubmitter", fields: [submitterId], references: [id])
   reviewer           User?             @relation("LogisticsOrderReviewer", fields: [reviewerId], references: [id])
   approver           User?             @relation("LogisticsOrderApprover", fields: [approverId], references: [id])
@@ -1920,6 +2012,7 @@ model LogisticsOrder {
   @@index([status])
   @@index([providerId])
   @@index([salesOrderId])
+  @@index([purchaseOrderId])
   @@index([approvalStep])
   @@index([reviewerId])
   @@index([approverId])
@@ -2139,6 +2232,29 @@ enum OutboundOrderStatus {
   CANCELLED
 }
 
+/// 出库用途类型：允许无销售订单出库（SAMPLE/GIFT/INTERNAL/TRANSFER 必须备注）
+enum OutboundType {
+  SALE
+  SAMPLE
+  GIFT
+  INTERNAL
+  TRANSFER
+}
+
+/// 调拨单状态
+enum StockTransferStatus {
+  DRAFT
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+/// 调拨方向
+enum StockTransferDirection {
+  DOMESTIC_TO_OVERSEAS
+  OVERSEAS_TO_DOMESTIC
+}
+
 enum SupplierStatus {
   ACTIVE
   INACTIVE
@@ -2173,6 +2289,13 @@ enum ReceiptStatus {
   PARTIAL
   COMPLETED
   CANCELLED
+}
+
+/// 订单收款状态（与 PaymentStatus 的"单笔收款处理状态"不同，这里描述整张订单的收款进度）
+enum OrderPaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
 }
 
 enum PaymentStatus {
@@ -2400,6 +2523,8 @@ enum CommissionStatus {
 model PlatformSyncConfig {
   id              String    @id @default(cuid())
   platformCode    String // 'alibaba', 'tiktok', 'amazon', 'shopify'
+  /// 站点/市场标识（Amazon marketplaceId 等），空串表示默认站点；与 platformCode 组成唯一键以支持多站点
+  marketplaceId   String    @default("")
   platformName    String // 显示名称
   enabled         Boolean   @default(true)
   syncIntervalMin Int       @default(120) // 默认 2 小时
@@ -2411,7 +2536,7 @@ model PlatformSyncConfig {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@unique([platformCode])
+  @@unique([platformCode, marketplaceId])
   @@map("platform_sync_configs")
 }
 

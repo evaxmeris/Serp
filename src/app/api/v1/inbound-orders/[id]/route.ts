@@ -15,6 +15,7 @@ const UpdateInboundOrderSchema = z.object({
   type: z.enum(['PURCHASE_IN', 'RETURN_IN', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'OTHER_IN']).optional(),
   supplierId: z.string().optional(),
   warehouseId: z.string().optional(),
+  targetOverseasWarehouseId: z.string().nullable().optional(),
   expectedDate: z.string().optional(),
   totalAmount: z.number().optional(),
   note: z.string().optional(),
@@ -53,6 +54,7 @@ export async function GET(
         },
         supplier: true,
         purchaseOrder: true,
+        targetOverseasWarehouse: true,
         inventoryLogs: true,
       },
     });
@@ -111,7 +113,9 @@ export async function PUT(
       data: {
         type: data.type,
         supplierId: data.supplierId,
-        warehouseId: data.warehouseId,
+        // 目标海外仓：一旦指定，国内仓 warehouseId 清空（两者互斥）
+        warehouseId: data.targetOverseasWarehouseId ? null : data.warehouseId,
+        targetOverseasWarehouseId: data.targetOverseasWarehouseId,
         expectedDate: data.expectedDate ? new Date(data.expectedDate) : undefined,
         totalAmount: data.totalAmount,
         note: data.note,
@@ -123,6 +127,7 @@ export async function PUT(
             product: true,
           },
         },
+        targetOverseasWarehouse: true,
       },
     });
 

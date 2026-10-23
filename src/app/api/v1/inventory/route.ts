@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-unified';
 import { computeAvailableQty } from '@/lib/inventory-utils';
 import {
+  resolveWarehouseCode,
+  resolveWarehouseCodeOrRaw,
+  WarehouseNotFoundError,
+} from '@/lib/warehouse-resolver';
+import {
   successResponse,
   errorResponse,
   notFoundResponse,
@@ -46,7 +51,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (warehouseId) {
-      where.warehouse = warehouseId;
+      // 支持按仓库 id / code / 'MAIN' 过滤，统一转成库存表里的 code
+      where.warehouse = await resolveWarehouseCodeOrRaw(warehouseId);
     }
 
     if (search) {
@@ -118,12 +124,23 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
+    // 库存表只认仓库 code：请求体可能传 Warehouse.id（前端下拉 value）或 'MAIN'
+    let warehouseCode: string;
+    try {
+      warehouseCode = await resolveWarehouseCode(data.warehouseId);
+    } catch (e) {
+      if (e instanceof WarehouseNotFoundError) {
+        return validationErrorResponse([{ field: 'warehouseId', message: e.message }]);
+      }
+      throw e;
+    }
+
     // 查找或创建库存记录
     let inventoryItem = await prisma.inventoryItem.findUnique({
       where: {
         productId_warehouse: {
           productId: data.productId,
-          warehouse: data.warehouseId,
+          warehouse: warehouseCode,
         },
       },
     });
@@ -133,7 +150,7 @@ export async function POST(request: NextRequest) {
       inventoryItem = await prisma.inventoryItem.create({
         data: {
           productId: data.productId,
-          warehouse: data.warehouseId,
+          warehouse: warehouseCode,
           quantity: 0,
           reservedQty: 0,
         },
@@ -200,7 +217,7 @@ export async function POST(request: NextRequest) {
     const log = await prisma.inventoryLog.create({
       data: {
         productId: data.productId,
-        warehouseId: data.warehouseId,
+        warehouseId: warehouseCode,
         type: data.type,
         quantity: delta,
         beforeQuantity: updatedItem.quantity - delta,

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     if (!session) return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
 
     const body = await request.json();
-    const { platformCode } = body;
+    const { platformCode, marketplaceId } = body;
 
     if (!platformCode) return errorResponse('缺少 platformCode', 'VALIDATION_ERROR', 400);
 
@@ -25,9 +25,13 @@ export async function POST(request: NextRequest) {
     const adapter = platformRegistry.get(platformCode);
     if (!adapter) return errorResponse(`平台 ${platformCode} 未注册`, 'PLATFORM_NOT_FOUND', 404);
 
-    // 读取配置
-    const config = await prisma.platformSyncConfig.findUnique({
-      where: { platformCode },
+    // 读取配置（多站点：可按 marketplaceId 精确匹配）
+    const config = await prisma.platformSyncConfig.findFirst({
+      where: {
+        platformCode,
+        ...(marketplaceId !== undefined && marketplaceId !== null ? { marketplaceId } : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!config) {
@@ -49,6 +53,7 @@ export async function POST(request: NextRequest) {
     const platformConfig = {
       id: config.id,
       platformCode,
+      marketplaceId: config.marketplaceId || '',
       platformName: adapter.platformName,
       enabled: config.enabled,
       syncIntervalMin: config.syncIntervalMin || 120,
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
     const newRefreshToken = (authResult as any).newRefreshToken;
     if (refreshedToken) {
       await prisma.platformSyncConfig.update({
-        where: { platformCode },
+        where: { id: config.id },
         data: {
           credentials: encryptCredentials({
             ...credentials,

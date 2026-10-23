@@ -35,6 +35,12 @@ interface InboundOrder {
     id: string;
     orderNo: string;
   };
+  targetOverseasWarehouse?: {
+    id: string;
+    name: string;
+    code: string;
+    country?: string;
+  };
   totalAmount: number;
   expectedDate?: string;
   actualDate?: string;
@@ -98,7 +104,7 @@ export default function InboundOrderDetailPage() {
       const data = await res.json();
 
       if (data.success) {
-        setOrder(data.data?.items ?? data.data ?? null);
+        setOrder(data.data ?? null);
       }
     } catch (error) {
       console.error('Failed to fetch order:', error);
@@ -237,7 +243,10 @@ export default function InboundOrderDetailPage() {
             <div>
               <div className="text-sm text-gray-500">仓库</div>
               <div className="font-medium">
-                {order.warehouse?.name || '-'}
+                {order.warehouse?.name
+                  || (order.targetOverseasWarehouse
+                    ? `${order.targetOverseasWarehouse.name}（海外仓）`
+                    : '-')}
               </div>
             </div>
             <div>

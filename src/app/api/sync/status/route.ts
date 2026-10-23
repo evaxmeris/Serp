@@ -19,27 +19,34 @@ export async function GET(request: NextRequest) {
       return errorResponse('未认证，请先登录', 'UNAUTHORIZED', 401);
     }
     
-    // 获取所有平台状态
+    // 获取所有平台状态（同一平台可有多站点配置，每个配置一行）
     const platforms = platformRegistry.getAvailablePlatforms();
-    const platformStatuses = [];
+    const platformStatuses: any[] = [];
+    const allConfigs = await prisma.platformSyncConfig.findMany({
+      orderBy: [{ platformCode: 'asc' }, { marketplaceId: 'asc' }],
+    });
     
     for (const code of platforms) {
       const adapter = platformRegistry.get(code);
-      const config = await prisma.platformSyncConfig.findUnique({
-        where: { platformCode: code },
-      });
+      const configs = allConfigs.filter(c => c.platformCode === code);
+      // 未配置的平台也返回一行，便于前端展示
+      const rows = configs.length > 0 ? configs : [null];
       
-      const creds = config ? decryptCredentials(config.credentials) : {};
-      platformStatuses.push({
-        code,
-        name: adapter?.platformName || code,
-        enabled: config?.enabled || false,
-        configured: !!config && Object.keys(creds).length > 0,
-        lastSyncAt: config?.lastSyncAt,
-        lastSyncStatus: config?.lastSyncStatus,
-        syncIntervalMin: config?.syncIntervalMin || 120,
-        callbackUrl: creds.callbackUrl || 'https://serp.cpolar.cn/api/auth/alibaba/callback',
-      });
+      for (const config of rows) {
+        const creds = config ? decryptCredentials(config.credentials) : {};
+        platformStatuses.push({
+          code,
+          name: adapter?.platformName || code,
+          marketplaceId: config?.marketplaceId || '',
+          orderKind: adapter?.orderKind || 'B2B',
+          enabled: config?.enabled || false,
+          configured: !!config && Object.keys(creds).length > 0,
+          lastSyncAt: config?.lastSyncAt,
+          lastSyncStatus: config?.lastSyncStatus,
+          syncIntervalMin: config?.syncIntervalMin || 120,
+          callbackUrl: creds.callbackUrl || 'https://serp.cpolar.cn/api/auth/alibaba/callback',
+        });
+      }
     }
     
     // 获取最近的同步日志

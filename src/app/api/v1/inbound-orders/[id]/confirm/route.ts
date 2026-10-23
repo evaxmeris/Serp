@@ -10,6 +10,8 @@ import {
   extractZodErrors,
 } from '@/lib/api-response';
 import { z } from 'zod';
+import { resolveWarehouseCode, WarehouseNotFoundError } from '@/lib/warehouse-resolver';
+import { applyOverseasStockChange } from '@/lib/overseas-inventory';
 
 const ConfirmInboundOrderSchema = z.object({
   actualDate: z.string().optional(),
@@ -34,25 +36,29 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    const order = await prisma.inboundOrder.findUnique({
+    const inboundOrder = await prisma.inboundOrder.findUnique({
       where: { id },
       include: {
         items: true,
+        targetOverseasWarehouse: { select: { id: true, code: true, name: true, isActive: true } },
       },
     });
 
-    if (!order) {
+    if (!inboundOrder) {
       return notFoundResponse('入库单');
     }
 
     // 检查状态
-    if (order.status === 'COMPLETED') {
+    if (inboundOrder.status === 'COMPLETED') {
       return conflictResponse('入库单已完成，不能重复确认');
     }
 
-    if (order.status === 'CANCELLED') {
+    if (inboundOrder.status === 'CANCELLED') {
       return conflictResponse('已取消的入库单不能确认');
     }
+
+    // 目标海外仓信息在外层取好（事务内的 order 变量会被 update 结果遮蔽）
+    const overseasTarget = inboundOrder.targetOverseasWarehouse;
 
     const validationResult = ConfirmInboundOrderSchema.safeParse(body);
 
@@ -125,7 +131,38 @@ export async function POST(
       });
 
       // 3. 更新库存（在事务中）
-      const warehouseCode = order.warehouseId || 'MAIN';
+      // 分支 A：目标是海外仓 → 入 overseas_inventory 台账 + stock_movements 流水
+      // 分支 B：目标是国内仓（默认）→ 原 inventory_items + inventory_logs 逻辑，保持不动
+      if (inboundOrder.targetOverseasWarehouseId) {
+        const overseas = overseasTarget;
+        if (!overseas) {
+          throw new Error('入库单关联的海外仓不存在');
+        }
+        if (!overseas.isActive) {
+          throw new Error(`海外仓 ${overseas.name} 已停用，不能入库`);
+        }
+
+        for (const item of order.items) {
+          const actualQty = item.actualQuantity || item.expectedQuantity;
+          if (actualQty <= 0) continue;
+
+          await applyOverseasStockChange(tx, {
+            overseasWarehouseId: overseas.id,
+            overseasWarehouseCode: overseas.code,
+            productId: item.productId,
+            delta: actualQty,
+            type: 'IN',
+            referenceType: 'INBOUND_ORDER',
+            referenceId: id,
+            notes: `入库单 ${order.inboundNo} 入海外仓 ${overseas.name}`,
+          });
+        }
+
+        return order;
+      }
+
+      // 入库单存的是仓库 id/编码，库存表只认 code —— 统一归一化（'MAIN' 走主仓别名）
+      const warehouseCode = await resolveWarehouseCode(order.warehouseId || 'MAIN');
 
       for (const item of order.items) {
         const actualQty = item.actualQuantity || item.expectedQuantity;
@@ -196,6 +233,9 @@ export async function POST(
     return successResponse(updatedOrder, '入库确认成功');
   } catch (error) {
     console.error('Error confirming inbound order:', error);
+    if (error instanceof WarehouseNotFoundError) {
+      return errorResponse(error.message, 'VALIDATION_ERROR', 422);
+    }
     return errorResponse('入库确认失败');
   }
 }

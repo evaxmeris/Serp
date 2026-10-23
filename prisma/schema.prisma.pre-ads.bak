@@ -1,0 +1,2705 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                           String              @id @default(cuid())
+  email                        String              @unique
+  name                         String?
+  passwordHash                 String?
+  avatar                       String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  isApproved                   Boolean             @default(false)
+  phone                        String?
+  department                   String?
+  approvedCommissions          Commission[]        @relation("CommissionApprovedBy")
+  userCommissions              Commission[]        @relation("CommissionUser")
+  customers                    Customer[]          @relation("Owner")
+  applicantExpenses            Expense[]
+  orders                       Order[]             @relation("SalesRep")
+  performanceMetrics           PerformanceMetric[]
+  platformAccounts             PlatformAccount[]
+  calculatedProfitCalculations ProfitCalculation[]
+  salesRepProfitDetails        ProfitDetail[]
+  purchaseOrders               PurchaseOrder[]     @relation("Purchaser")
+  applicantReimbursements      Reimbursement[]
+  suppliers                    Supplier[]          @relation("Owner")
+  createdTransactions          Transaction[]
+  userRegistrations            UserRegistration[]
+  userRoles                    UserRole[]
+  // 物流审批相关
+  logisticsSubmitted           LogisticsOrder[]    @relation("LogisticsOrderSubmitter")
+  logisticsReviewed            LogisticsOrder[]    @relation("LogisticsOrderReviewer")
+  logisticsApproved            LogisticsOrder[]    @relation("LogisticsOrderApprover")
+  logisticsFinanceConfirmed    LogisticsOrder[]    @relation("LogisticsOrderFinance")
+  logisticsReviewActions       LogisticsOrder[]    @relation("LogisticsOrderReviewedBy")
+  logisticsApproveActions      LogisticsOrder[]    @relation("LogisticsOrderApprovedBy")
+  logisticsFinanceActions      LogisticsOrder[]    @relation("LogisticsOrderFinanceConfirmedBy")
+
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Customer {
+  id          String            @id @default(cuid())
+  companyName String
+  contactName String?
+  email       String?
+  phone       String?
+  country     String?
+  address     String?
+  website     String?
+  source      String?
+  status      CustomerStatus    @default(ACTIVE)
+  creditLevel String?
+  notes       String?
+  ownerId     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime? // 软删除
+  contacts    CustomerContact[]
+  owner       User?             @relation("Owner", fields: [ownerId], references: [id])
+  inquiries   Inquiry[]
+  orders      Order[]
+  quotations  Quotation[]
+  invoices    Invoice[]
+  followUps   FollowUp[]
+
+  @@index([email])
+  @@index([status, createdAt])
+  @@index([ownerId])
+  @@map("customers")
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  position   String?
+  email      String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_contacts")
+}
+
+model Product {
+  id                 String                  @id @default(cuid())
+  sku                String                  @unique
+  name               String
+  nameEn             String?
+  specification      String?
+  unit               String                  @default("PCS")
+  costPrice          Decimal                 @default(0) @db.Decimal(10, 2)
+  salePrice          Decimal                 @db.Decimal(10, 2)
+  currency           String                  @default("USD")
+  images             String[]
+  description        String?
+  descriptionEn      String?
+  weight             Decimal?                @db.Decimal(10, 2)
+  volume             Decimal?                @db.Decimal(10, 2)
+  moq                Int?
+  leadTime           Int?
+  status             ProductStatus           @default(ACTIVE)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  deletedAt          DateTime?
+  categoryId         String?
+  categoryOld        String?
+  inboundOrderItems  InboundOrderItem[]
+  inventoryItems     InventoryItem[]
+  inventoryLogs      InventoryLog[]
+  orderItems         OrderItem[]
+  outboundOrderItems OutboundOrderItem[]
+  overseasInventory  OverseasInventory[]
+  attributeValues    ProductAttributeValue[]
+  category           ProductCategory?        @relation(fields: [categoryId], references: [id])
+  profitDetails      ProfitDetail[]
+  purchaseOrderItems PurchaseOrderItem[]
+  quotationItems     QuotationItem[]
+  productSuppliers   ProductSupplier[]
+  collectedProducts  CollectedProduct[]
+
+  @@map("products")
+}
+
+model Inquiry {
+  id           String        @id @default(cuid())
+  inquiryNo    String        @unique
+  customerId   String
+  source       String?
+  status       InquiryStatus @default(NEW)
+  priority     Priority      @default(MEDIUM)
+  products     String?
+  quantity     Int?
+  targetPrice  Decimal?      @db.Decimal(10, 2)
+  currency     String        @default("USD")
+  requirements String?
+  deadline     DateTime?
+  assignedTo   String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime? // 软删除
+  followUps    FollowUp[]
+  customer     Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([assignedTo, status])
+  @@index([createdAt])
+  @@map("inquiries")
+}
+
+model FollowUp {
+  id           String       @id @default(cuid())
+  inquiryId    String?
+  customerId   String?
+  type         FollowUpType @default(CALL)
+  content      String
+  nextFollowUp DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  inquiry      Inquiry?     @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([inquiryId, createdAt])
+  @@map("follow_ups")
+}
+
+model Quotation {
+  id            String          @id @default(cuid())
+  quotationNo   String          @unique
+  customerId    String
+  inquiryId     String?
+  status        QuotationStatus @default(DRAFT)
+  currency      String          @default("USD")
+  paymentTerms  String?
+  deliveryTerms String?
+  validityDays  Int?
+  notes         String?
+  totalAmount   Decimal         @db.Decimal(12, 2)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime? // 软删除
+  items         QuotationItem[]
+  customer      Customer        @relation(fields: [customerId], references: [id])
+
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id            String    @id @default(cuid())
+  quotationId   String
+  productId     String?
+  productName   String
+  specification String?
+  quantity      Int
+  unitPrice     Decimal   @db.Decimal(10, 2)
+  amount        Decimal   @db.Decimal(12, 2)
+  notes         String?
+  product       Product?  @relation(fields: [productId], references: [id])
+  quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_items")
+}
+
+model Order {
+  id                String             @id @default(cuid())
+  orderNo           String             @unique
+  customerId        String
+  sourceInquiryId   String?
+  sourceQuotationId String?
+  status            OrderStatus        @default(PENDING)
+  currency          String             @default("USD")
+  exchangeRate      Decimal            @default(1) @db.Decimal(10, 6)
+  totalAmount       Decimal            @db.Decimal(12, 2)
+  paidAmount        Decimal            @default(0) @db.Decimal(12, 2)
+  balanceAmount     Decimal            @default(0) @db.Decimal(12, 2)
+  paymentTerms      String?
+  paymentDeadline   DateTime?
+  deliveryTerms     String?
+  deliveryDate      DateTime?
+  deliveryDeadline  DateTime?
+  shippingAddress   String?
+  shippingContact   String?
+  shippingPhone     String?
+  salesRepId        String?
+  approvalStatus    ApprovalStatus     @default(NOT_REQUIRED)
+  approvedBy        String?
+  approvedAt        DateTime?
+  notes             String?
+  internalNotes     String?
+  attachments       String[]
+  confirmedAt       DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime? // 软删除
+  sourcePlatform    String? // 来源平台：'alibaba', 'tiktok', 'amazon', 'shopify'
+  platformOrderId   String? // 平台原始订单号
+  platformData      Json? // 平台原始数据（用于调试）
+  items             OrderItem[]
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  salesRep          User?              @relation("SalesRep", fields: [salesRepId], references: [id])
+  outboundOrders    OutboundOrder[]    @relation("OrderOutboundOrders")
+  payments          Payment[]
+  productionRecords ProductionRecord[]
+  profitDetails     ProfitDetail[]
+  purchaseOrders    PurchaseOrder[]    @relation("SalesOrder")
+  qualityChecks     QualityCheck[]
+  shipments         Shipment[]
+  invoices          Invoice[]
+
+  @@index([customerId, status])
+  @@index([salesRepId, createdAt])
+  @@index([status, deliveryDate])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([orderNo])
+  @@index([deletedAt, createdAt, status]) // PERF-003: Dashboard overview 查询优化
+  @@index([deletedAt, status]) // PERF-003: Dashboard 状态筛选优化
+  @@map("orders")
+}
+
+model OrderItem {
+  id                      String           @id @default(cuid())
+  orderId                 String
+  productId               String?
+  productName             String
+  productSku              String?
+  specification           String?
+  quantity                Int              @default(1)
+  unit                    String           @default("PCS")
+  unitPrice               Decimal          @db.Decimal(10, 2)
+  discountRate            Decimal          @default(0) @db.Decimal(5, 2)
+  amount                  Decimal          @db.Decimal(12, 2)
+  productionStatus        ProductionStatus @default(NOT_STARTED)
+  productionNote          String?
+  estimatedProductionDate DateTime?
+  actualProductionDate    DateTime?
+  shippedQty              Int              @default(0)
+  deliveredQty            Int              @default(0)
+  productImage            String?
+  productWeight           Decimal?         @db.Decimal(10, 2)
+  productVolume           Decimal?         @db.Decimal(10, 2)
+  hsCode                  String?
+  originCountry           String?          @default("CN")
+  notes                   String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  order                   Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product                 Product?         @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model ProductionRecord {
+  id               String                 @id @default(cuid())
+  orderId          String
+  productionNo     String                 @unique
+  productId        String?
+  quantity         Int
+  plannedStartDate DateTime
+  plannedEndDate   DateTime
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  status           ProductionRecordStatus @default(PLANNED)
+  progress         Int                    @default(0)
+  department       String?
+  factory          String?
+  supervisor       String?
+  notes            String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  order            Order                  @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@map("production_records")
+}
+
+model QualityCheck {
+  id             String             @id @default(cuid())
+  orderId        String
+  qcNo           String             @unique
+  type           QualityCheckType   @default(FINAL)
+  inspector      String?
+  inspectionDate DateTime           @default(now())
+  status         QualityCheckStatus @default(PENDING)
+  passRate       Decimal?           @db.Decimal(5, 2)
+  defectCount    Int?               @default(0)
+  defectReasons  String[]
+  photos         String[]
+  report         String?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  items          QualityCheckItem[]
+  order          Order              @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@map("quality_checks")
+}
+
+model QualityCheckItem {
+  id             String       @id @default(cuid())
+  qualityCheckId String
+  itemName       String
+  standard       String?
+  result         String?
+  passed         Boolean
+  qualityCheck   QualityCheck @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
+
+  @@map("quality_check_items")
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  orderId       String
+  paymentNo     String    @unique
+  amount        Decimal   @db.Decimal(12, 2)
+  currency      String    @default("USD")
+  paymentMethod String?
+  paymentDate   DateTime?
+  bankReference String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  order         Order     @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+model Shipment {
+  id              String          @id @default(cuid())
+  orderId         String
+  shipmentNo      String          @unique
+  carrier         String?
+  trackingNo      String?
+  etd             DateTime?
+  eta             DateTime?
+  portOfLoading   String?
+  portOfDischarge String?
+  containerNo     String?
+  sealNo          String?
+  packages        Int?
+  grossWeight     Decimal?        @db.Decimal(10, 2)
+  volume          Decimal?        @db.Decimal(10, 2)
+  status          ShipmentStatus  @default(PENDING)
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  outboundOrders  OutboundOrder[]
+  order           Order           @relation(fields: [orderId], references: [id])
+
+  @@map("shipments")
+}
+
+model Supplier {
+  id               String               @id @default(cuid())
+  supplierNo       String               @unique
+  companyName      String
+  companyEn        String?
+  contactName      String?
+  contactTitle     String?
+  email            String?
+  phone            String?
+  mobile           String?
+  fax              String?
+  address          String?
+  city             String?
+  province         String?
+  country          String?              @default("CN")
+  postalCode       String?
+  website          String?
+  taxId            String?
+  businessLicense  String?
+  bankName         String?
+  bankAccount      String?
+  bankCode         String?
+  products         String?
+  categories       String[]
+  status           SupplierStatus       @default(ACTIVE)
+  type             SupplierType         @default(DOMESTIC)
+  level            SupplierLevel        @default(NORMAL)
+  score            Decimal?             @db.Decimal(3, 2)
+  creditTerms      String?
+  paymentMethods   String[]
+  currency         String               @default("CNY")
+  minOrderAmount   Decimal?             @db.Decimal(12, 2)
+  totalOrders      Int                  @default(0)
+  totalAmount      Decimal              @default(0) @db.Decimal(14, 2)
+  lastOrderDate    DateTime?
+  ownerId          String?
+  notes            String?
+  attachments      String[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime? // 软删除
+  inboundOrders    InboundOrder[]
+  purchaseOrders   PurchaseOrder[]
+  contacts         SupplierContact[]
+  evaluations      SupplierEvaluation[]
+  productSuppliers ProductSupplier[]
+  owner            User?                @relation("Owner", fields: [ownerId], references: [id])
+
+  @@index([status])
+  @@index([companyName])
+  @@index([ownerId])
+  @@map("suppliers")
+}
+
+model SupplierContact {
+  id         String   @id @default(cuid())
+  supplierId String
+  name       String
+  title      String?
+  department String?
+  email      String?
+  phone      String?
+  mobile     String?
+  wechat     String?
+  qq         String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@map("supplier_contacts")
+}
+
+model SupplierEvaluation {
+  id              String        @id @default(cuid())
+  supplierId      String
+  evaluationDate  DateTime      @default(now())
+  evaluatorId     String?
+  period          String
+  qualityScore    Decimal       @db.Decimal(2, 1)
+  deliveryScore   Decimal       @db.Decimal(2, 1)
+  priceScore      Decimal       @db.Decimal(2, 1)
+  serviceScore    Decimal       @db.Decimal(2, 1)
+  totalScore      Decimal       @db.Decimal(5, 2)
+  level           SupplierLevel
+  comments        String?
+  improvementPlan String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  supplier        Supplier      @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId, period])
+  @@map("supplier_evaluations")
+}
+
+model PurchaseOrder {
+  id               String              @id @default(cuid())
+  poNo             String              @unique
+  supplierId       String
+  salesOrderId     String?
+  status           PurchaseOrderStatus @default(PENDING)
+  approvalStatus   ApprovalStatus      @default(NOT_REQUIRED)
+  currency         String              @default("CNY")
+  exchangeRate     Decimal             @default(1) @db.Decimal(10, 6)
+  totalAmount      Decimal             @db.Decimal(12, 2)
+  paidAmount       Decimal             @default(0) @db.Decimal(12, 2)
+  balanceAmount    Decimal             @default(0) @db.Decimal(12, 2)
+  deliveryDate     DateTime?
+  deliveryDeadline DateTime?
+  deliveryAddress  String?
+  shippingMethod   String?
+  paymentTerms     String?
+  paymentDeadline  DateTime?
+  purchaserId      String?
+  notes            String?
+  internalNotes    String?
+  attachments      String[]
+  confirmedAt      DateTime?
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+  inboundOrders    InboundOrder[]
+  items            PurchaseOrderItem[]
+  purchaser        User?               @relation("Purchaser", fields: [purchaserId], references: [id])
+  salesOrder       Order?              @relation("SalesOrder", fields: [salesOrderId], references: [id])
+  supplier         Supplier            @relation(fields: [supplierId], references: [id])
+  receipts         PurchaseReceipt[]
+  payments         SupplierPayment[]
+
+  @@index([supplierId, status])
+  @@index([salesOrderId])
+  @@index([status, deliveryDate])
+  @@index([createdAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                   String                @id @default(cuid())
+  purchaseOrderId      String
+  productId            String?
+  productName          String
+  productSku           String?
+  specification        String?
+  unit                 String                @default("PCS")
+  quantity             Int                   @default(1)
+  unitPrice            Decimal               @db.Decimal(10, 2)
+  discountRate         Decimal               @default(0) @db.Decimal(5, 2)
+  amount               Decimal               @db.Decimal(12, 2)
+  taxRate              Decimal               @default(0) @db.Decimal(5, 2)
+  taxAmount            Decimal               @default(0) @db.Decimal(12, 2)
+  receivedQty          Int                   @default(0)
+  rejectedQty          Int                   @default(0)
+  pendingQty           Int                   @default(0)
+  expectedDeliveryDate DateTime?
+  actualDeliveryDate   DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  product              Product?              @relation(fields: [productId], references: [id])
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receiptItems         PurchaseReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model PurchaseReceipt {
+  id              String                @id @default(cuid())
+  receiptNo       String                @unique
+  purchaseOrderId String
+  warehouse       String                @default("MAIN")
+  receiptDate     DateTime              @default(now())
+  receiptBy       String?
+  status          ReceiptStatus         @default(PENDING)
+  qualityCheckId  String?
+  qualityStatus   QualityCheckStatus    @default(PENDING)
+  notes           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  items           PurchaseReceiptItem[]
+  purchaseOrder   PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([warehouse])
+  @@index([receiptDate])
+  @@map("purchase_receipts")
+}
+
+model PurchaseReceiptItem {
+  id                  String            @id @default(cuid())
+  receiptId           String
+  purchaseOrderItemId String
+  quantity            Int               @default(1)
+  acceptedQty         Int               @default(0)
+  rejectedQty         Int               @default(0)
+  warehouse           String            @default("MAIN")
+  location            String?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  receipt             PurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@map("purchase_receipt_items")
+}
+
+// ============================================
+// 产品-供应商关联（多对多）
+// 记录每个供应商对特定产品的报价、交期等信息
+// ============================================
+model ProductSupplier {
+  id          String   @id @default(cuid())
+  productId   String
+  supplierId  String
+  supplierSKU String? // 供应商自己的SKU/料号
+  unitPrice   Decimal? @db.Decimal(10, 2) // 供应商报价
+  currency    String   @default("CNY")
+  moq         Int? // 最小起订量
+  leadTime    Int? // 交期（天）
+  isPreferred Boolean  @default(false) // 是否首选供应商
+  rating      Int? // 评分1-5
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([supplierId])
+  @@index([productId])
+  @@map("product_suppliers")
+}
+
+model SupplierPayment {
+  id              String        @id @default(cuid())
+  paymentNo       String        @unique
+  purchaseOrderId String
+  amount          Decimal       @db.Decimal(12, 2)
+  currency        String        @default("CNY")
+  paymentMethod   String?
+  paymentDate     DateTime?
+  bankName        String?
+  bankAccount     String?
+  bankReference   String?
+  status          PaymentStatus @default(PENDING)
+  notes           String?
+  attachments     String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([paymentDate])
+  @@map("supplier_payments")
+}
+
+model InventoryItem {
+  id               String         @id @default(cuid())
+  productId        String
+  warehouse        String         @default("MAIN")
+  quantity         Int            @default(0)
+  reservedQty      Int            @default(0)
+  availableQty     Int            @default(0)
+  minStock         Int?
+  maxStock         Int?
+  location         String?
+  lastInboundDate  DateTime?
+  lastOutboundDate DateTime?
+  lastCountedAt    DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  version          Int            @default(0) // 乐观锁版本号，防止并发超卖
+  product          Product        @relation(fields: [productId], references: [id])
+  logs             InventoryLog[]
+
+  @@unique([productId, warehouse])
+  @@index([warehouse])
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id            String       @id @default(cuid())
+  productId     String
+  warehouse     String       @default("MAIN")
+  type          MovementType
+  quantity      Int
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+
+  @@index([productId, createdAt])
+  @@index([type, createdAt])
+  @@map("stock_movements")
+}
+
+model InboundOrder {
+  id              String             @id @default(cuid())
+  inboundNo       String             @unique
+  type            InboundType        @default(PURCHASE_IN)
+  status          InboundStatus      @default(PENDING)
+  purchaseOrderId String?
+  supplierId      String?
+  warehouseId     String?
+  expectedDate    DateTime?
+  actualDate      DateTime?
+  totalAmount     Decimal            @db.Decimal(12, 2)
+  note            String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  items           InboundOrderItem[]
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  supplier        Supplier?          @relation(fields: [supplierId], references: [id])
+  inventoryLogs   InventoryLog[]
+
+  @@index([status])
+  @@index([warehouseId, status])
+  @@index([createdAt])
+  @@map("inbound_orders")
+}
+
+model InboundOrderItem {
+  id               String       @id @default(cuid())
+  inboundOrderId   String
+  productId        String
+  expectedQuantity Int
+  actualQuantity   Int          @default(0)
+  unitPrice        Decimal      @db.Decimal(10, 2)
+  amount           Decimal      @db.Decimal(12, 2)
+  batchNo          String?
+  productionDate   DateTime?
+  expiryDate       DateTime?
+  inboundOrder     InboundOrder @relation(fields: [inboundOrderId], references: [id], onDelete: Cascade)
+  product          Product      @relation(fields: [productId], references: [id])
+
+  @@index([inboundOrderId])
+  @@index([productId])
+  @@map("inbound_order_items")
+}
+
+model InventoryLog {
+  id              String           @id @default(cuid())
+  productId       String
+  warehouseId     String
+  inboundOrderId  String?
+  outboundOrderId String?
+  type            InventoryLogType @default(IN)
+  quantity        Int
+  beforeQuantity  Int
+  afterQuantity   Int
+  referenceType   String?
+  referenceId     String?
+  note            String?
+  createdAt       DateTime         @default(now())
+  inboundOrder    InboundOrder?    @relation(fields: [inboundOrderId], references: [id])
+  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
+  product         Product          @relation(fields: [productId], references: [id])
+  inventoryItem   InventoryItem    @relation(fields: [productId, warehouseId], references: [productId, warehouse])
+
+  @@index([createdAt])
+  @@index([inboundOrderId])
+  @@index([outboundOrderId])
+  @@index([productId])
+  @@index([type])
+  @@index([warehouseId])
+  @@map("inventory_logs")
+}
+
+model Warehouse {
+  id        String          @id @default(cuid())
+  name      String
+  code      String          @unique
+  address   String?
+  manager   String?
+  phone     String?
+  status    WarehouseStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("warehouses")
+}
+
+model ProductCategory {
+  id                 String              @id @default(cuid())
+  name               String
+  nameEn             String?
+  code               String              @unique
+  parentId           String?
+  level              Int                 @default(1)
+  path               String?
+  description        String?
+  icon               String?
+  sortOrder          Int                 @default(0)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  templates          AttributeTemplate[]
+  marketResearches   MarketResearch[]
+  parent             ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children           ProductCategory[]   @relation("CategoryHierarchy")
+  productComparisons ProductComparison[]
+  productResearches  ProductResearch[]
+  products           Product[]
+  researchTasks      ResearchTask[]
+
+  @@index([parentId])
+  @@index([code])
+  @@index([isActive])
+  @@map("product_categories")
+}
+
+model AttributeTemplate {
+  id             String                          @id @default(cuid())
+  name           String
+  nameEn         String?
+  code           String                          @unique
+  categoryId     String
+  type           AttributeType                   @default(TEXT)
+  unit           String?
+  options        String[]
+  isRequired     Boolean                         @default(false)
+  isComparable   Boolean                         @default(true)
+  sortOrder      Int                             @default(0)
+  description    String?
+  validationRule String?
+  defaultValue   String?
+  placeholder    String?
+  isActive       Boolean                         @default(true)
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+  category       ProductCategory                 @relation(fields: [categoryId], references: [id])
+  productValues  ProductAttributeValue[]
+  researchValues ProductResearchAttributeValue[]
+
+  @@index([categoryId])
+  @@index([code])
+  @@index([type])
+  @@index([isActive])
+  @@map("attribute_templates")
+}
+
+model ProductAttributeValue {
+  id           String            @id @default(cuid())
+  productId    String
+  attributeId  String
+  valueText    String?
+  valueNumber  Decimal?          @db.Decimal(20, 4)
+  valueBoolean Boolean?
+  valueDate    DateTime?
+  valueOptions String[]
+  unit         String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  attribute    AttributeTemplate @relation(fields: [attributeId], references: [id])
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, attributeId])
+  @@index([productId])
+  @@index([attributeId])
+  @@index([attributeId], map: "ProductAttributeValue_attributeId_idx")
+  @@index([productId], map: "ProductAttributeValue_productId_idx")
+  @@map("product_attribute_values")
+}
+
+model ProductResearch {
+  id                     String                          @id @default(cuid())
+  name                   String
+  nameEn                 String?
+  categoryId             String
+  brand                  String?
+  brandEn                String?
+  model                  String?
+  manufacturer           String?
+  manufacturerEn         String?
+  originCountry          String?                         @default("CN")
+  sourceUrl              String?
+  sourcePlatform         String?
+  mainImage              String?
+  images                 String[]
+  status                 ResearchStatus                  @default(DRAFT)
+  priority               Priority                        @default(MEDIUM)
+  assignedTo             String?
+  tags                   String[]
+  notes                  String?
+  conclusion             String?
+  rating                 Decimal?                        @db.Decimal(2, 1)
+  costPrice              Decimal?                        @db.Decimal(10, 2)
+  salePrice              Decimal?                        @db.Decimal(10, 2)
+  currency               String                          @default("CNY")
+  moq                    Int?
+  leadTime               Int?
+  specification          String?
+  weight                 Decimal?                        @db.Decimal(10, 2)
+  volume                 Decimal?                        @db.Decimal(10, 2)
+  dimensions             String?
+  researchedAt           DateTime?
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+  researchTaskId         String?
+  productComparisonItems ProductComparisonItem[]
+  comparisons            ProductComparison[]
+  category               ProductCategory                 @relation(fields: [categoryId], references: [id])
+  researchTask           ResearchTask?                   @relation(fields: [researchTaskId], references: [id])
+  attributes             ProductResearchAttributeValue[]
+  researchAttachments    ResearchAttachment[]
+
+  @@index([categoryId, status])
+  @@index([status, createdAt])
+  @@index([assignedTo, status])
+  @@index([categoryId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([createdAt(sort: Desc)])
+  @@index([brand])
+  @@index([name])
+  @@index([conclusion])
+  @@index([priority])
+  @@index([assignedTo], map: "ProductResearch_assignedTo_idx")
+  @@index([categoryId], map: "ProductResearch_categoryId_idx")
+  @@index([status], map: "ProductResearch_status_idx")
+  @@map("product_research")
+}
+
+model ProductResearchAttributeValue {
+  id           String            @id @default(cuid())
+  productId    String
+  attributeId  String
+  valueText    String?
+  valueNumber  Decimal?          @db.Decimal(20, 4)
+  valueBoolean Boolean?
+  valueDate    DateTime?
+  valueOptions String[]
+  unit         String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  attribute    AttributeTemplate @relation(fields: [attributeId], references: [id])
+  product      ProductResearch   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, attributeId])
+  @@index([productId])
+  @@index([attributeId])
+  @@map("product_research_attribute_values")
+}
+
+model ProductComparison {
+  id                  String                  @id @default(cuid())
+  name                String
+  description         String?
+  categoryId          String?
+  comparedBy          String?
+  status              ComparisonStatus        @default(DRAFT)
+  attributes          String[]
+  highlightDiff       Boolean                 @default(true)
+  summary             String?
+  recommendation      String?
+  rating              Decimal?                @db.Decimal(2, 1)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  productResearchId   String?
+  products            ProductComparisonItem[]
+  category            ProductCategory?        @relation(fields: [categoryId], references: [id])
+  productResearch     ProductResearch?        @relation(fields: [productResearchId], references: [id])
+  researchAttachments ResearchAttachment[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([comparedBy])
+  @@map("product_comparisons")
+}
+
+model ProductComparisonItem {
+  id            String            @id @default(cuid())
+  comparisonId  String
+  productId     String
+  sortOrder     Int               @default(0)
+  isRecommended Boolean           @default(false)
+  score         Decimal?          @db.Decimal(3, 1)
+  pros          String[]
+  cons          String[]
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  comparison    ProductComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  product       ProductResearch   @relation(fields: [productId], references: [id])
+
+  @@unique([comparisonId, productId])
+  @@index([comparisonId])
+  @@index([productId])
+  @@map("product_comparison_items")
+}
+
+model ResearchTask {
+  id                  String               @id @default(cuid())
+  title               String
+  description         String?
+  categoryId          String?
+  assignedTo          String
+  status              TaskStatus           @default(TODO)
+  priority            Priority             @default(MEDIUM)
+  dueDate             DateTime?
+  completedAt         DateTime?
+  targetProducts      Int?
+  requirements        String?
+  budgetRange         String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  researches          ProductResearch[]
+  researchAttachments ResearchAttachment[]
+  category            ProductCategory?     @relation(fields: [categoryId], references: [id])
+
+  @@index([assignedTo])
+  @@index([status])
+  @@index([dueDate])
+  @@map("research_tasks")
+}
+
+model CompetitorAnalysis {
+  id               String         @id @default(cuid())
+  competitorName   String
+  competitorNameEn String?
+  website          String?
+  country          String?        @default("CN")
+  type             CompetitorType @default(DOMESTIC)
+  productName      String
+  productModel     String?
+  category         String?
+  price            Decimal?       @db.Decimal(10, 2)
+  currency         String         @default("CNY")
+  specifications   Json?
+  features         String[]
+  images           String[]
+  strengths        String[]
+  weaknesses       String[]
+  marketShare      String?
+  targetCustomer   String?
+  vsOurProduct     String?
+  suggestion       String?
+  analyzedBy       String?
+  analyzedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([competitorName])
+  @@index([type])
+  @@index([analyzedAt])
+  @@map("competitor_analyses")
+}
+
+model MarketResearch {
+  id             String             @id @default(cuid())
+  title          String
+  categoryId     String?
+  type           MarketResearchType @default(TREND)
+  marketSize     String?
+  growthRate     String?
+  trendDirection TrendDirection     @default(STABLE)
+  summary        String?
+  content        String?
+  sources        String[]
+  attachments    String[]
+  researchPeriod String?
+  publishedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  category       ProductCategory?   @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([type])
+  @@index([publishedAt])
+  @@map("market_researches")
+}
+
+model ResearchAttachment {
+  id           String             @id @default(cuid())
+  productId    String?
+  taskId       String?
+  comparisonId String?
+  fileName     String
+  originalName String
+  fileType     String
+  mimeType     String
+  fileSize     Int
+  url          String
+  thumbnailUrl String?
+  description  String?
+  uploadedBy   String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  comparison   ProductComparison? @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  product      ProductResearch?   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  task         ResearchTask?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([taskId])
+  @@index([comparisonId])
+  @@index([fileType])
+  @@map("research_attachments")
+}
+
+model OutboundOrder {
+  id            String              @id @default(cuid())
+  outboundNo    String              @unique
+  orderId       String
+  warehouseId   String
+  status        OutboundOrderStatus @default(PENDING)
+  totalAmount   Decimal?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  shipmentId    String?
+  inventoryLogs InventoryLog[]
+  items         OutboundOrderItem[]
+  order         Order               @relation("OrderOutboundOrders", fields: [orderId], references: [id], onDelete: Cascade)
+  shipment      Shipment?           @relation(fields: [shipmentId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String        @id @default(cuid())
+  outboundOrderId String
+  productId       String
+  quantity        Int
+  shippedQuantity Int           @default(0)
+  unitPrice       Decimal?
+  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([outboundOrderId])
+  @@index([productId])
+  @@map("outbound_order_items")
+}
+
+model ReportDefinition {
+  id            String               @id @default(cuid())
+  name          String
+  code          String               @unique
+  type          String
+  description   String?
+  config        Json                 @default("{}")
+  columns       Json                 @default("[]")
+  filters       Json                 @default("[]")
+  isSystem      Boolean              @default(false)
+  isActive      Boolean              @default(true)
+  createdBy     String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  data          ReportData[]
+  exportLogs    ReportExportLog[]
+  schedules     ReportSchedule[]
+  subscriptions ReportSubscription[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("report_definitions")
+}
+
+model ReportData {
+  id          String           @id @default(cuid())
+  reportId    String
+  period      String
+  periodStart DateTime
+  periodEnd   DateTime
+  data        Json             @default("{}")
+  metrics     Json             @default("{}")
+  generatedAt DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+  report      ReportDefinition @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([period])
+  @@index([periodStart, periodEnd])
+  @@map("report_data")
+}
+
+model ReportSubscription {
+  id         String           @id @default(cuid())
+  reportId   String
+  userId     String
+  frequency  String
+  format     String           @default("pdf")
+  email      String?
+  isActive   Boolean          @default(true)
+  lastSentAt DateTime?
+  nextSendAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  report     ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("report_subscriptions")
+}
+
+model ReportExportLog {
+  id           String           @id @default(cuid())
+  reportId     String
+  userId       String
+  exportType   String
+  format       String
+  fileUrl      String?
+  fileSize     Int?
+  status       String           @default("pending")
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  completedAt  DateTime?
+  report       ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([status])
+  @@map("report_export_logs")
+}
+
+model ReportSchedule {
+  id             String           @id @default(cuid())
+  reportId       String
+  name           String
+  cronExpression String
+  timezone       String           @default("Asia/Shanghai")
+  config         Json             @default("{}")
+  isActive       Boolean          @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  report         ReportDefinition @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+  @@index([isActive])
+  @@map("report_schedules")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  code        String           @unique
+  displayName String
+  module      String
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roles       RolePermission[]
+
+  @@index([module, isActive])
+  @@index([code])
+  @@map("permissions")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  displayName String
+  description String?
+  isSystem    Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@index([isActive])
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId, isPrimary])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime   @default(now())
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRegistration {
+  id           String    @id @default(cuid())
+  username     String
+  email        String    @unique
+  passwordHash String
+  name         String?
+  phone        String?
+  department   String?
+  position     String?
+  status       RegStatus @default(PENDING)
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+  remarks      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  approvedBy   User?     @relation(fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@map("user_registrations")
+}
+
+model PlatformAccount {
+  id             String          @id @default(cuid())
+  platformType   PlatformType
+  platformName   String
+  accountName    String
+  accountId      String?
+  shopId         String?
+  clientId       String?
+  clientSecret   String?
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  apiKey         String?
+  apiSecret      String?
+  authCode       String?
+  region         String?
+  currency       String          @default("USD")
+  isTest         Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  lastSyncAt     DateTime?
+  syncStatus     String?
+  errorMessage   String?
+  userId         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User?           @relation(fields: [userId], references: [id])
+  orders         PlatformOrder[]
+  profitDetails  ProfitDetail[]
+
+  @@index([platformType, isActive])
+  @@index([userId])
+  @@index([accountId])
+  @@index([shopId])
+  @@map("platform_accounts")
+}
+
+model PlatformOrder {
+  id                String          @id @default(cuid())
+  platformOrderId   String
+  platformOrderSn   String?
+  platformAccountId String
+  platformType      PlatformType
+  sellerId          String?
+  buyerId           String?
+  buyerName         String?
+  buyerEmail        String?
+  buyerPhone        String?
+  status            String
+  paymentStatus     String?
+  fulfillmentStatus String?
+  orderDate         DateTime?
+  paymentDate       DateTime?
+  shipmentDate      DateTime?
+  deliveryDate      DateTime?
+  currency          String          @default("USD")
+  totalAmount       Decimal         @db.Decimal(12, 2)
+  subtotal          Decimal?        @db.Decimal(12, 2)
+  shippingFee       Decimal?        @db.Decimal(10, 2)
+  platformFee       Decimal?        @db.Decimal(10, 2)
+  commissionFee     Decimal?        @db.Decimal(10, 2)
+  tax               Decimal?        @db.Decimal(10, 2)
+  discount          Decimal?        @db.Decimal(10, 2)
+  coupon            Decimal?        @db.Decimal(10, 2)
+  shippingAddress   Json?
+  billingAddress    Json?
+  buyerMessage      String?
+  notes             String?
+  internalOrderId   String?
+  items             Json            @default("[]")
+  tags              String[]
+  syncVersion       Int             @default(1)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  platformAccount   PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  profitDetails     ProfitDetail[]
+
+  @@unique([platformOrderId, platformAccountId])
+  @@index([platformAccountId, orderDate])
+  @@index([platformType, status])
+  @@index([internalOrderId])
+  @@index([orderDate])
+  @@map("platform_orders")
+}
+
+model OverseasWarehouse {
+  id             String                @id @default(cuid())
+  name           String
+  code           String                @unique
+  type           OverseasWarehouseType
+  country        String
+  province       String?
+  city           String?
+  address        String
+  postcode       String?
+  contactName    String?
+  contactPhone   String?
+  email          String?
+  warehouseId    String?
+  region         String?
+  timezone       String                @default("UTC")
+  isActive       Boolean               @default(true)
+  apiEnabled     Boolean               @default(false)
+  apiKey         String?
+  apiUrl         String?
+  fbaSyncEnabled Boolean               @default(false)
+  lastSyncAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  inventory      OverseasInventory[]
+
+  @@index([type, country, isActive])
+  @@index([code])
+  @@map("overseas_warehouses")
+}
+
+model OverseasInventory {
+  id                 String            @id @default(cuid())
+  warehouseId        String
+  productId          String
+  sku                String
+  fnsku              String?
+  asin               String?
+  availableQty       Int               @default(0)
+  inboundQty         Int               @default(0)
+  reservedQty        Int               @default(0)
+  totalQty           Int               @default(0)
+  lastFulfillableQty Int?
+  costPerUnit        Decimal?          @db.Decimal(10, 2)
+  location           String?
+  lastSyncAt         DateTime?
+  updatedAtSource    DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  product            Product           @relation(fields: [productId], references: [id])
+  warehouse          OverseasWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([sku])
+  @@index([fnsku])
+  @@index([asin])
+  @@map("overseas_inventory")
+}
+
+model Account {
+  id             String          @id @default(cuid())
+  name           String
+  type           AccountType
+  accountNumber  String?
+  bankName       String?
+  branchName     String?
+  currency       String          @default("CNY")
+  openingBalance Decimal         @default(0) @db.Decimal(14, 2)
+  currentBalance Decimal         @default(0) @db.Decimal(14, 2)
+  isActive       Boolean         @default(true)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  commissions    Commission[]
+  expenses       Expense[]
+  reimbursements Reimbursement[]
+  transactions   Transaction[]
+
+  @@index([type, isActive])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                  String            @id @default(cuid())
+  transactionNo       String            @unique
+  accountId           String
+  type                TransactionType
+  amount              Decimal           @db.Decimal(14, 2)
+  currency            String            @default("CNY")
+  exchangeRate        Decimal           @default(1) @db.Decimal(10, 6)
+  amountCny           Decimal           @db.Decimal(14, 2)
+  counterParty        String?
+  counterPartyAccount String?
+  description         String?
+  category            String?
+  businessType        String?
+  businessId          String?
+  transactionDate     DateTime
+  status              TransactionStatus @default(CONFIRMED)
+  receiptUrl          String?
+  notes               String?
+  createdById         String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  commissions         Commission[]
+  expenses            Expense[]
+  reimbursements      Reimbursement[]
+  account             Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdBy           User              @relation(fields: [createdById], references: [id])
+
+  @@index([accountId, transactionDate])
+  @@index([type, category])
+  @@index([businessType, businessId])
+  @@index([transactionDate])
+  @@index([status])
+  @@map("transactions")
+}
+
+model Expense {
+  id             String              @id @default(cuid())
+  expenseNo      String              @unique
+  applicantId    String
+  department     String?
+  category       ExpenseCategory
+  amount         Decimal             @db.Decimal(12, 2)
+  currency       String              @default("CNY")
+  description    String
+  receiptCount   Int                 @default(0)
+  receiptUrls    String[]
+  expenseDate    DateTime
+  status         ReimbursementStatus @default(DRAFT)
+  approvalId     String?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  accountId      String?
+  transactionId  String?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  account        Account?            @relation(fields: [accountId], references: [id])
+  applicant      User                @relation(fields: [applicantId], references: [id])
+  transaction    Transaction?        @relation(fields: [transactionId], references: [id])
+  reimbursements Reimbursement[]     @relation("ReimbursementExpenses")
+
+  @@index([applicantId, status])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([status])
+  @@map("expenses")
+}
+
+model Reimbursement {
+  id              String              @id @default(cuid())
+  reimbursementNo String              @unique
+  expenseIds      String[]
+  applicantId     String
+  totalAmount     Decimal             @db.Decimal(12, 2)
+  status          ReimbursementStatus @default(DRAFT)
+  description     String?
+  currentStep     Int                 @default(1)
+  approvedById    String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  accountId       String?
+  transactionId   String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  account         Account?            @relation(fields: [accountId], references: [id])
+  applicant       User                @relation(fields: [applicantId], references: [id])
+  transaction     Transaction?        @relation(fields: [transactionId], references: [id])
+  expenses        Expense[]           @relation("ReimbursementExpenses")
+
+  @@index([applicantId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reimbursements")
+}
+
+model ProfitCalculation {
+  id               String                  @id @default(cuid())
+  calculationNo    String                  @unique
+  name             String
+  periodType       String
+  period           String
+  startDate        DateTime
+  endDate          DateTime
+  status           ProfitCalculationStatus @default(DRAFT)
+  totalRevenue     Decimal                 @db.Decimal(14, 2)
+  totalCost        Decimal                 @db.Decimal(14, 2)
+  totalExpense     Decimal                 @db.Decimal(14, 2)
+  totalProfit      Decimal                 @db.Decimal(14, 2)
+  netProfit        Decimal                 @db.Decimal(14, 2)
+  profitMargin     Decimal?                @db.Decimal(5, 2)
+  orderCount       Int                     @default(0)
+  platformStats    Json                    @default("{}")
+  calculatedBy     String
+  calculatedAt     DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  calculatedByUser User                    @relation(fields: [calculatedBy], references: [id])
+  details          ProfitDetail[]
+
+  @@index([periodType, period])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdAt])
+  @@map("profit_calculations")
+}
+
+model ProfitDetail {
+  id                    String            @id @default(cuid())
+  calculationId         String
+  orderId               String?
+  platformOrderId       String?
+  productId             String?
+  sku                   String?
+  platformType          PlatformType?
+  platformAccountId     String?
+  salesRepId            String?
+  currency              String            @default("USD")
+  exchangeRate          Decimal           @default(1) @db.Decimal(10, 6)
+  salesAmount           Decimal           @db.Decimal(12, 2)
+  shippingIncome        Decimal?          @db.Decimal(10, 2)
+  totalIncome           Decimal           @db.Decimal(12, 2)
+  productCost           Decimal           @db.Decimal(12, 2)
+  shippingCost          Decimal?          @db.Decimal(10, 2)
+  internationalShipping Decimal?          @db.Decimal(10, 2)
+  warehouseCost         Decimal?          @db.Decimal(10, 2)
+  packagingCost         Decimal?          @db.Decimal(10, 2)
+  platformFee           Decimal?          @db.Decimal(10, 2)
+  paymentFee            Decimal?          @db.Decimal(10, 2)
+  adFee                 Decimal?          @db.Decimal(10, 2)
+  tax                   Decimal?          @db.Decimal(10, 2)
+  otherFees             Decimal?          @db.Decimal(10, 2)
+  totalCost             Decimal           @db.Decimal(12, 2)
+  grossProfit           Decimal           @db.Decimal(12, 2)
+  netProfit             Decimal           @db.Decimal(12, 2)
+  profitMargin          Decimal?          @db.Decimal(5, 2)
+  totalIncomeCny        Decimal           @db.Decimal(12, 2)
+  totalCostCny          Decimal           @db.Decimal(12, 2)
+  netProfitCny          Decimal           @db.Decimal(12, 2)
+  quantity              Int               @default(1)
+  tags                  String[]
+  createdAt             DateTime          @default(now())
+  commissionId          String?
+  calculation           ProfitCalculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  commission            Commission?       @relation("CommissionProfitDetails", fields: [commissionId], references: [id])
+  order                 Order?            @relation(fields: [orderId], references: [id])
+  platformAccount       PlatformAccount?  @relation(fields: [platformAccountId], references: [id])
+  platformOrder         PlatformOrder?    @relation(fields: [platformOrderId], references: [id])
+  product               Product?          @relation(fields: [productId], references: [id])
+  salesRep              User?             @relation(fields: [salesRepId], references: [id])
+
+  @@index([calculationId])
+  @@index([orderId])
+  @@index([platformOrderId])
+  @@index([productId])
+  @@index([salesRepId])
+  @@index([platformType])
+  @@map("profit_details")
+}
+
+model PerformanceRule {
+  id                String              @id @default(cuid())
+  name              String
+  code              String              @unique
+  type              PerformanceRuleType
+  calculationMethod CalculationMethod
+  department        String?
+  position          String?
+  targetUserType    String?
+  isActive          Boolean             @default(true)
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  baseFormula       String?
+  tierConfig        Json                @default("[]")
+  conditionConfig   Json                @default("{}")
+  description       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  commissions       Commission[]
+  metrics           PerformanceMetric[]
+
+  @@index([type, isActive])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("performance_rules")
+}
+
+model PerformanceMetric {
+  id           String          @id @default(cuid())
+  ruleId       String
+  userId       String
+  period       String
+  periodStart  DateTime
+  periodEnd    DateTime
+  salesAmount  Decimal         @db.Decimal(14, 2)
+  orderCount   Int             @default(0)
+  newCustomers Int             @default(0)
+  grossProfit  Decimal         @db.Decimal(14, 2)
+  netProfit    Decimal         @db.Decimal(14, 2)
+  targetAmount Decimal?        @db.Decimal(14, 2)
+  achievement  Decimal?        @db.Decimal(5, 2)
+  score        Decimal?        @db.Decimal(5, 2)
+  calculatedAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  rule         PerformanceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id])
+
+  @@unique([ruleId, userId, period])
+  @@index([userId, period])
+  @@index([ruleId])
+  @@index([periodStart, periodEnd])
+  @@map("performance_metrics")
+}
+
+model Commission {
+  id               String           @id @default(cuid())
+  commissionNo     String           @unique
+  userId           String
+  period           String
+  startDate        DateTime
+  endDate          DateTime
+  status           CommissionStatus @default(DRAFT)
+  ruleId           String?
+  salesCommission  Decimal          @default(0) @db.Decimal(12, 2)
+  profitCommission Decimal          @default(0) @db.Decimal(12, 2)
+  targetBonus      Decimal          @default(0) @db.Decimal(12, 2)
+  otherBonus       Decimal          @default(0) @db.Decimal(12, 2)
+  adjustment       Decimal          @default(0) @db.Decimal(12, 2)
+  totalCommission  Decimal          @default(0) @db.Decimal(12, 2)
+  totalSales       Decimal          @default(0) @db.Decimal(14, 2)
+  totalProfit      Decimal          @default(0) @db.Decimal(14, 2)
+  orderCount       Int              @default(0)
+  approvedById     String?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  accountId        String?
+  transactionId    String?
+  notes            String?
+  details          Json             @default("[]")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  account          Account?         @relation(fields: [accountId], references: [id])
+  approvedBy       User?            @relation("CommissionApprovedBy", fields: [approvedById], references: [id])
+  rule             PerformanceRule? @relation(fields: [ruleId], references: [id])
+  transaction      Transaction?     @relation(fields: [transactionId], references: [id])
+  user             User             @relation("CommissionUser", fields: [userId], references: [id])
+  profitDetails    ProfitDetail[]   @relation("CommissionProfitDetails")
+
+  @@index([userId, period])
+  @@index([status])
+  @@index([period])
+  @@index([createdAt])
+  @@map("commissions")
+}
+
+// ============================================
+// 物流管理模块
+// ============================================
+
+/// 物流服务商 — 经检验合作的物流公司信息
+model LogisticsProvider {
+  id              String  @id @default(cuid())
+  companyName     String // 公司名称
+  taxId           String? // 税号
+  companyAddress  String? // 公司地址
+  businessLicense String? // 营业执照扫描件路径
+  legalRepName    String? // 法人姓名
+  legalRepIdFront String? // 法人身份证正面
+  legalRepIdBack  String? // 法人身份证反面
+  contactName     String // 联系人姓名
+  contactPhone    String // 联系人电话
+  contactIdFront  String? // 联系人身份证正面
+  contactIdBack   String? // 联系人身份证反面
+  businessCard    String? // 名片
+  priceListUrl    String? // 报价表文件（Excel/PDF）
+  status          String  @default("ACTIVE") // ACTIVE | INACTIVE
+  notes           String? // 备注
+
+  quotations LogisticsQuotation[]
+  orders     LogisticsOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([companyName])
+  @@map("logistics_providers")
+}
+
+/// 物流报价 — 按区域+运输方式的报价单
+model LogisticsQuotation {
+  id                String    @id @default(cuid())
+  providerId        String // 关联物流服务商
+  region            String // 专线区域/目的地 (如: 北美, 欧洲, 东南亚)
+  transportMethod   String // 运输方式 (SEA | AIR | LAND | RAIL | EXPRESS)
+  itemContent       String? // 物品内容
+  weightMin         Decimal?  @db.Decimal(10, 2) // 计费重量下限(kg)
+  weightMax         Decimal?  @db.Decimal(10, 2) // 计费重量上限(kg)
+  transitDaysMin    Int? // 运输时效下限(天)
+  transitDaysMax    Int? // 运输时效上限(天)
+  deliveryTerm      String? // 交货方式 (DAP | DDP | EXPRESS | COURIER 等)
+  pricePerKg        Decimal   @db.Decimal(10, 2) // 每公斤价格
+  pricePerCbm       Decimal?  @db.Decimal(10, 2) // 每立方米价格
+  minimumCharge     Decimal   @default(0) @db.Decimal(10, 2) // 最低收费
+  totalCostEstimate Decimal?  @db.Decimal(10, 2) // 预估总费用
+  validFrom         DateTime? // 有效期起
+  validUntil        DateTime? // 有效期止
+  notes             String? // 备注
+
+  provider LogisticsProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+  @@index([region])
+  @@map("logistics_quotations")
+}
+
+/// 物流服务订单 — 物流采购及审批
+model LogisticsOrder {
+  id                 String    @id @default(cuid())
+  orderNo            String    @unique // LO-YYYYMMDD-XXXX
+  providerId         String // 物流服务商
+  salesOrderId       String? // 关联销售订单
+  items              Json      @default("[]") // [{productName, quantity, netWeight, dimensions}]
+  totalQuantity      Int       @default(0) // 总件数
+  totalNetWeight     Decimal   @default(0) @db.Decimal(10, 2) // 总净重(kg)
+  totalGrossWeight   Decimal?  @db.Decimal(10, 2) // 总毛重(kg)
+  totalVolume        Decimal?  @db.Decimal(10, 2) // 总体积(cbm)
+  origin             String? // 起运地
+  destination        String // 目的地
+  transportMethod    String // 运输方式
+  transitDays        Int? // 预计时效(天)
+  currency           String    @default("CNY") // 币种
+  totalAmount        Decimal   @default(0) @db.Decimal(12, 2) // 总金额
+  amountBreakdown    Json? // 费用明细 [{feeType, description, amount}]
+  insurance          Boolean   @default(false) // 是否投保
+  insuranceAmount    Decimal?  @db.Decimal(10, 2) // 保险金额
+  customsBroker      Boolean   @default(false) // 是否含报关
+  trackingNo         String? // 追踪号
+  estimatedDeparture DateTime? // 预计发运日
+  estimatedArrival   DateTime? // 预计到达日
+  actualDeparture    DateTime? // 实际发运日
+  actualArrival      DateTime? // 实际到达日
+  status             String    @default("DRAFT")
+  // DRAFT → PENDING_APPROVAL → APPROVED → BOOKED → IN_TRANSIT → ARRIVED → DELIVERED → COMPLETED
+  // 任意状态可 → CANCELLED
+  notes              String?
+  documents          Json? // 关联单据 [{type, name, url}]
+
+  // 审批相关 — 四级审批流程
+  // 流程: 提交人→校对人→审批人→财务签收支付
+  approvalStep         String    @default("DRAFT")
+  // DRAFT → PENDING_REVIEW → PENDING_APPROVAL → PENDING_FINANCE → APPROVED
+  // 任意步骤可 → REJECTED（回到 DRAFT）
+  submitterId          String? // 提交人（谁提交的）
+  reviewerId           String? // 校对人（指定谁来校对）
+  approverId           String? // 审批人（指定谁来审批）
+  financeId            String? // 财务人员（指定谁来签收支付）
+  submittedAt          DateTime? // 提交时间
+  reviewedAt           DateTime? // 校对时间
+  reviewedById         String? // 实际校对人
+  approvedAt           DateTime? // 审批时间
+  approvedById         String? // 实际审批人
+  financeConfirmedAt   DateTime? // 财务确认时间
+  financeConfirmedById String? // 实际财务确认人
+  rejectReason         String? // 拒绝原因
+  rejectAt             DateTime? // 拒绝时间
+
+  provider           LogisticsProvider @relation(fields: [providerId], references: [id])
+  submitter          User?             @relation("LogisticsOrderSubmitter", fields: [submitterId], references: [id])
+  reviewer           User?             @relation("LogisticsOrderReviewer", fields: [reviewerId], references: [id])
+  approver           User?             @relation("LogisticsOrderApprover", fields: [approverId], references: [id])
+  finance            User?             @relation("LogisticsOrderFinance", fields: [financeId], references: [id])
+  reviewedBy         User?             @relation("LogisticsOrderReviewedBy", fields: [reviewedById], references: [id])
+  approvedBy         User?             @relation("LogisticsOrderApprovedBy", fields: [approvedById], references: [id])
+  financeConfirmedBy User?             @relation("LogisticsOrderFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([providerId])
+  @@index([salesOrderId])
+  @@index([approvalStep])
+  @@index([reviewerId])
+  @@index([approverId])
+  @@index([financeId])
+  @@index([createdAt])
+  @@map("logistics_orders")
+}
+
+// ============================================
+// 审批流程配置引擎
+// ============================================
+
+/// 审批流程定义 — 可配置产品采购、物流采购等不同类型
+model ApprovalWorkflow {
+  id           String                 @id @default(cuid())
+  name         String // 流程名称，如 "物流服务采购审批"
+  code         String                 @unique // 流程编码，如 "LOGISTICS_PURCHASE"
+  description  String? // 流程说明
+  applicableTo String[] // 适用模块 ["LOGISTICS", "PURCHASE", "PRODUCT"]
+  isActive     Boolean                @default(true)
+  steps        ApprovalWorkflowStep[]
+  instances    ApprovalInstance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@map("approval_workflows")
+}
+
+/// 审批流程步骤 — 每个步骤的排序和名称
+model ApprovalWorkflowStep {
+  id          String             @id @default(cuid())
+  workflowId  String // 所属流程
+  order       Int // 步骤序号 1,2,3,4...
+  name        String // 步骤名称 "提交" "校对" "审批" "财务确认"
+  description String? // 步骤说明
+  assignees   ApprovalAssignee[] // 该步骤的审批人员
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
+  @@map("approval_workflow_steps")
+}
+
+/// 审批人员分配 — 指定某步骤由谁审批（具体人员或角色）
+model ApprovalAssignee {
+  id         String  @id @default(cuid())
+  stepId     String // 所属步骤
+  userId     String? // 指定人员（具体用户）
+  role       String? // 或指定角色 ADMIN/PURCHASING 等
+  isRequired Boolean @default(true) // 是否必须此人员审批
+
+  step ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([stepId])
+  @@index([userId])
+  @@map("approval_assignees")
+}
+
+/// 审批流程实例 — 每次提交审批时创建，跟踪实际审批进度
+model ApprovalInstance {
+  id           String    @id @default(cuid())
+  workflowId   String // 使用的审批流程
+  targetType   String // 审批对象类型 "LOGISTICS_ORDER" | "PURCHASE_ORDER" 等
+  targetId     String // 审批对象 ID
+  currentStep  Int       @default(1) // 当前在第几步
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS | APPROVED | REJECTED
+  rejectReason String?
+  rejectAt     DateTime?
+  completedAt  DateTime?
+
+  workflow ApprovalWorkflow       @relation(fields: [workflowId], references: [id])
+  actions  ApprovalActionRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([targetType, targetId])
+  @@index([workflowId])
+  @@index([status])
+  @@map("approval_instances")
+}
+
+/// 审批历史记录 — 每一步的审批动作
+model ApprovalActionRecord {
+  id         String   @id @default(cuid())
+  instanceId String // 所属审批实例
+  stepOrder  Int // 第几步
+  stepName   String // 步骤名称
+  action     String // APPROVED | REJECTED
+  userId     String // 操作人
+  comment    String?
+  actedAt    DateTime @default(now())
+
+  instance ApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([userId])
+  @@map("approval_action_records")
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+enum ProductStatus {
+  ACTIVE
+  DISCONTINUED
+  DEVELOPING
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  QUOTED
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum FollowUpType {
+  CALL
+  EMAIL
+  MEETING
+  MESSAGE
+  OTHER
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProductionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+}
+
+enum ProductionRecordStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum QualityCheckType {
+  RAW_MATERIAL
+  IN_PROCESS
+  FINAL
+  PRE_SHIPMENT
+}
+
+enum QualityCheckStatus {
+  PENDING
+  IN_PROGRESS
+  PASSED
+  FAILED
+  CONDITIONAL
+}
+
+enum ShipmentStatus {
+  PENDING
+  BOOKED
+  IN_TRANSIT
+  SHIPPED
+  DELIVERED
+}
+
+enum OutboundOrderStatus {
+  PENDING
+  PICKING
+  PACKING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+  PENDING
+}
+
+enum SupplierType {
+  DOMESTIC
+  OVERSEAS
+}
+
+enum SupplierLevel {
+  STRATEGIC
+  PREFERRED
+  NORMAL
+  RESTRICTED
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReceiptStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  TRANSFER
+  RETURN
+}
+
+enum InboundType {
+  PURCHASE_IN
+  RETURN_IN
+  ADJUSTMENT_IN
+  TRANSFER_IN
+  OTHER_IN
+}
+
+enum InboundStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+enum WarehouseStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InventoryLogType {
+  IN
+  OUT
+  ADJUSTMENT
+  TRANSFER
+  RETURN
+}
+
+enum AttributeType {
+  TEXT
+  NUMBER
+  DECIMAL
+  BOOLEAN
+  DATE
+  SELECT
+  MULTI_SELECT
+  LONG_TEXT
+  URL
+  IMAGE
+  FILE
+}
+
+enum ResearchStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum ComparisonStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
+enum CompetitorType {
+  DOMESTIC
+  OVERSEAS
+}
+
+enum MarketResearchType {
+  TREND
+  COMPETITOR
+  CUSTOMER
+  PRICE
+  TECHNOLOGY
+}
+
+enum TrendDirection {
+  GROWING
+  STABLE
+  DECLINING
+  VOLATILE
+}
+
+enum RegStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PlatformType {
+  ALIBABA
+  ALIBABA_1688
+  AMAZON
+  TIKTOK
+  SHOPIFY
+  WISH
+  EBAY
+  OTHER
+}
+
+enum OverseasWarehouseType {
+  FBA
+  FBN
+  SELF_OWNED
+  THIRD_PARTY
+}
+
+enum AccountType {
+  CASH
+  BANK
+  ALIPAY
+  WECHAT
+  PAYPAL
+  CREDIT_CARD
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER_IN
+  TRANSFER_OUT
+  EXCHANGE
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  RENT
+  UTILITY
+  SALARY
+  BONUS
+  COMMISSION
+  MARKETING
+  ADVERTISING
+  LOGISTICS
+  WAREHOUSE
+  PACKAGING
+  PLATFORM_FEE
+  TAX
+  INSURANCE
+  TRAVEL
+  ENTERTAINMENT
+  OFFICE
+  COMMUNICATION
+  SOFTWARE
+  HARDWARE
+  REPAIR
+  LEGAL
+  FINANCIAL
+  OTHER
+}
+
+enum ReimbursementStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum ProfitCalculationStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PerformanceRuleType {
+  SALES_REVENUE
+  NET_PROFIT
+  ORDER_COUNT
+  NEW_CUSTOMER
+  TARGET_BONUS
+  CUSTOM
+}
+
+enum CalculationMethod {
+  FIXED_AMOUNT
+  PERCENTAGE
+  TIERED
+  COMMISSION_RATE
+}
+
+enum CommissionStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+// ============================================
+// 多平台订单同步模块 (v0.9.7)
+// 支持：阿里国际站、TikTok Shop、Amazon、Shopify 等
+// ============================================
+
+model PlatformSyncConfig {
+  id              String    @id @default(cuid())
+  platformCode    String // 'alibaba', 'tiktok', 'amazon', 'shopify'
+  platformName    String // 显示名称
+  enabled         Boolean   @default(true)
+  syncIntervalMin Int       @default(120) // 默认 2 小时
+  lastSyncAt      DateTime?
+  lastSyncStatus  String? // success, failed, partial, not_configured
+  isSyncing       Boolean   @default(false) // 互斥锁：是否正在同步中
+  credentials     Json // 平台凭据（加密存储）
+  settings        Json? // 平台特定设置
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([platformCode])
+  @@map("platform_sync_configs")
+}
+
+// ============================================
+// 发票管理模块 (v1.0)
+// 形式发票(PI)、商业发票(CI)、税务发票
+// ============================================
+
+enum InvoiceType {
+  PROFORMA // 形式发票(PI)
+  COMMERCIAL // 商业发票(CI)
+  TAX // 税务发票
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  PAID
+  CANCELLED
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  invoiceNo String        @unique // PI-20260501-001
+  type      InvoiceType   @default(PROFORMA)
+  status    InvoiceStatus @default(DRAFT)
+
+  // 关联
+  orderId    String?
+  order      Order?    @relation(fields: [orderId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // 票据信息
+  invoiceDate  DateTime  @default(now())
+  dueDate      DateTime?
+  currency     String    @default("USD")
+  exchangeRate Float     @default(1.0)
+
+  // 金额
+  subtotal       Decimal  @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal  @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal  @default(0) @db.Decimal(12, 2)
+  discountRate   Decimal  @default(0) @db.Decimal(5, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  amountPaid     Decimal? @default(0) @db.Decimal(12, 2)
+  balanceDue     Decimal? @default(0) @db.Decimal(12, 2)
+
+  // 开票方/收票方
+  issuerName       String // 公司名称
+  issuerAddress    String?
+  issuerTaxId      String?
+  issuerPhone      String?
+  recipientName    String? // 客户公司名称
+  recipientAddress String?
+  recipientTaxId   String?
+
+  // 商品明细 (JSON)
+  items Json @default("[]") // [{productName, sku, quantity, unitPrice, totalPrice}]
+
+  // 备注
+  notes String?
+  terms String? // 付款条款
+
+  // 审计
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([status, createdAt])
+  @@map("invoices")
+}
+
+model PlatformSyncLog {
+  id           String    @id @default(cuid())
+  platformCode String // 来源平台
+  triggerType  String // manual, scheduled, webhook
+  status       String // success, failed, partial
+  ordersFound  Int       @default(0)
+  ordersSynced Int       @default(0)
+  ordersFailed Int       @default(0)
+  retryCount   Int       @default(0) // 重试次数（指数退避）
+  errorMessage String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  durationMs   Int?
+
+  @@index([platformCode, startedAt])
+  @@map("platform_sync_logs")
+}
+
+// ============================================
+// 审计日志
+// ============================================
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String // 操作类型: LOGIN, CREATE, UPDATE, DELETE, EXPORT 等
+  entityType String // 操作对象类型: User, Order, Product 等
+  entityId   String // 操作对象 ID
+  userId     String? // 操作人 ID
+  details    Json? // 操作详情（变更前后的数据）
+  ipAddress  String? // 操作时的 IP 地址
+  userAgent  String? // 操作时的 User-Agent
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// 系统配置（键值存储）
+// ============================================
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String // JSON 字符串
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// ============================================
+// 采集产品模块 - Collected Product Module
+// ============================================
+
+// 1. 采集产品主表
+model CollectedProduct {
+  id String @id @default(cuid())
+
+  source    String // "alibaba" | "1688" | "manual"
+  sourceUrl String
+  sourceId  String?
+
+  title            String
+  titleEn          String?
+  shortDescription String? @db.Text
+  description      String? @db.Text
+  descriptionEn    String? @db.Text
+  brand            String?
+  sku              String?
+
+  price          Decimal? @db.Decimal(10, 2)
+  compareAtPrice Decimal? @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  stockQuantity  Int?
+
+  weight        Decimal? @db.Decimal(10, 2)
+  length        Decimal? @db.Decimal(10, 2)
+  width         Decimal? @db.Decimal(10, 2)
+  height        Decimal? @db.Decimal(10, 2)
+  shippingClass String?
+  hsCode        String?
+
+  metaTitle       String?
+  metaDescription String?
+  urlSlug         String?
+  tags            String[]
+
+  categoryId            String?
+  woocommerceCategoryId Int?
+
+  pipelineStatus String @default("collected")
+
+  woocommerceId   Int?
+  woocommerceUrl  String?
+  lastPublishedAt DateTime?
+  publishError    String?   @db.Text
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  rawData Json?
+
+  collectedAt DateTime  @default(now())
+  organizedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  images      CollectedProductImage[]
+  variants    CollectedProductVariant[]
+  attributes  CollectedProductAttribute[]
+  publishLogs PublishLog[]
+
+  @@index([pipelineStatus])
+  @@index([source, pipelineStatus])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("collected_products")
+}
+
+// 2. 采集产品图片
+model CollectedProductImage {
+  id                 String @id @default(cuid())
+  collectedProductId String
+
+  type        String // "main" | "gallery" | "detail"
+  data        Bytes?
+  originalUrl String?
+  mimeType    String  @default("image/jpeg")
+  fileName    String?
+  fileSize    Int?
+  width       Int?
+  height      Int?
+  altText     String?
+  sortOrder   Int     @default(0)
+
+  collectedProduct CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId, type])
+  @@map("collected_product_images")
+}
+
+// 3. 采集产品变体
+model CollectedProductVariant {
+  id                 String @id @default(cuid())
+  collectedProductId String
+
+  sku       String?
+  price     Decimal? @db.Decimal(10, 2)
+  stock     Int?
+  imageId   String?
+  options   Json?
+  sortOrder Int      @default(0)
+
+  collectedProduct CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@map("collected_product_variants")
+}
+
+// 4. 采集产品属性
+model CollectedProductAttribute {
+  id                 String @id @default(cuid())
+  collectedProductId String
+
+  name      String
+  nameEn    String?
+  value     String
+  valueEn   String?
+  unit      String?
+  sortOrder Int     @default(0)
+
+  collectedProduct CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@map("collected_product_attributes")
+}
+
+// 5. 发布日志
+model PublishLog {
+  id                 String @id @default(cuid())
+  collectedProductId String
+
+  action        String // "publish" | "update" | "delete"
+  status        String // "success" | "failed"
+  woocommerceId Int?
+  requestData   Json?
+  responseData  Json?
+  errorMessage  String? @db.Text
+  durationMs    Int?
+
+  createdAt DateTime @default(now())
+
+  collectedProduct CollectedProduct @relation(fields: [collectedProductId], references: [id], onDelete: Cascade)
+
+  @@index([collectedProductId])
+  @@index([createdAt])
+  @@map("publish_logs")
+}
+
+// 6. WooCommerce 店铺配置
+model WooCommerceConfig {
+  id             String  @id @default(cuid())
+  name           String
+  url            String
+  consumerKey    String
+  consumerSecret String
+  isActive       Boolean @default(true)
+  isDefault      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("woocommerce_configs")
+}

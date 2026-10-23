@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth-unified';
-import { getSession } from '@/middleware/auth';
 import { getAvailableQty } from '@/lib/inventory-utils';
+import { resolveWarehouse, WarehouseNotFoundError } from '@/lib/warehouse-resolver';
+import { getSession } from '@/middleware/auth';
 import {
   successResponse,
   paginatedResponse,
@@ -19,10 +20,16 @@ import { z } from 'zod';
  * 支持出库单的查询、创建功能
  */
 
+const OUTBOUND_TYPES = ['SALE', 'SAMPLE', 'GIFT', 'INTERNAL', 'TRANSFER'] as const;
+
 // 创建出库单 Schema 验证
 const CreateOutboundOrderSchema = z.object({
-  orderId: z.string().min(1, '销售订单 ID 不能为空'),
+  // 销售订单可选：非销售出库（样品/赠品/内部领用/调拨）允许无单
+  orderId: z.string().min(1, '销售订单 ID 不能为空').optional(),
+  outboundType: z.enum(OUTBOUND_TYPES).default('SALE'),
   warehouseId: z.string().min(1, '仓库 ID 不能为空'), // 仓库 ID 在出库单级别
+  // 非销售出库必须填备注（决策③：出库类型 + 备注留痕）
+  notes: z.string().max(500, '备注过长').optional(),
   items: z.array(z.object({
     productId: z.string().min(1, '产品 ID 不能为空'),
     quantity: z.number().int().positive('数量必须大于 0'),
@@ -38,6 +45,7 @@ const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
   status: z.enum(['PENDING', 'PICKING', 'PACKING', 'SHIPPED', 'DELIVERED', 'CANCELLED']).optional(),
+  outboundType: z.enum(OUTBOUND_TYPES).optional(),
   orderId: z.string().optional(),
   search: z.string().optional(),
   sortBy: z.string().default('createdAt'),
@@ -63,13 +71,17 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(extractZodErrors(queryResult.error));
     }
 
-    const { page, limit, status, orderId, search, sortBy, sortOrder } = queryResult.data;
+    const { page, limit, status, outboundType, orderId, search, sortBy, sortOrder } = queryResult.data;
 
     // 构建查询条件
     const where: any = {};
 
     if (status) {
       where.status = status;
+    }
+
+    if (outboundType) {
+      where.outboundType = outboundType;
     }
 
     if (orderId) {
@@ -79,6 +91,7 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { outboundNo: { contains: search } },
+        { notes: { contains: search } },
         { items: { some: { notes: { contains: search } } } },
       ];
     }
@@ -151,14 +164,44 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // 验证销售订单是否存在
-    const order = await prisma.order.findUnique({
-      where: { id: data.orderId },
-    });
-
-    if (!order) {
-      return notFoundResponse('销售订单');
+    // 决策③：SALE 必须有销售订单；非 SALE（样品/赠品/内部领用/调拨）必须填备注
+    const errors: Array<{ field: string; message: string }> = [];
+    if (data.outboundType === 'SALE' && !data.orderId) {
+      errors.push({ field: 'orderId', message: '销售出库（SALE）必须关联销售订单' });
     }
+    if (data.outboundType !== 'SALE' && !data.notes?.trim()) {
+      errors.push({
+        field: 'notes',
+        message: `${data.outboundType} 出库必须填写备注，说明用途/去向`,
+      });
+    }
+    if (errors.length > 0) {
+      return validationErrorResponse(errors);
+    }
+
+    // 验证销售订单是否存在（无单出库跳过）
+    if (data.orderId) {
+      const order = await prisma.order.findUnique({
+        where: { id: data.orderId },
+      });
+
+      if (!order) {
+        return notFoundResponse('销售订单');
+      }
+    }
+
+    // 仓库归一化：请求体里的 warehouseId 可能是 Warehouse.id（前端下拉框 value）
+    // 或仓库编码，库存表只认 code，必须先解析成 { id, code } 再动库存。
+    let warehouse;
+    try {
+      warehouse = await resolveWarehouse(data.warehouseId);
+    } catch (e) {
+      if (e instanceof WarehouseNotFoundError) {
+        return conflictResponse(e.message);
+      }
+      throw e;
+    }
+    const warehouseCode = warehouse.code;
 
     // 验证所有产品是否存在，并检查库存
     for (const item of data.items) {
@@ -171,11 +214,11 @@ export async function POST(request: NextRequest) {
       }
 
       // 检查库存：使用动态计算的可用库存（quantity - reservedQty），而非手动维护的 availableQty 字段
-      const availableQty = await getAvailableQty(item.productId, data.warehouseId);
+      const availableQty = await getAvailableQty(item.productId, warehouseCode);
 
       if (availableQty < item.quantity) {
         return conflictResponse(
-          `产品 ${product.name} 库存不足（可用：${availableQty}，需要：${item.quantity}）`
+          `产品 ${product.name} 在仓库 ${warehouse.name}(${warehouseCode}) 库存不足（可用：${availableQty}，需要：${item.quantity}）`
         );
       }
     }
@@ -196,8 +239,10 @@ export async function POST(request: NextRequest) {
       const order = await tx.outboundOrder.create({
         data: {
           outboundNo,
-          orderId: data.orderId,
-          warehouseId: data.warehouseId, // 使用出库单级别的仓库 ID
+          orderId: data.orderId ?? null,
+          outboundType: data.outboundType,
+          notes: data.notes?.trim() || null,
+          warehouseId: warehouse.id, // 出库单存仓库主键 id（前端按 id 展示仓库名）
           status: 'PENDING',
           items: {
             create: data.items.map(item => ({
@@ -217,27 +262,29 @@ export async function POST(request: NextRequest) {
       });
 
       // 扣减库存（不再手动维护 availableQty，由 getAvailableQty 动态计算）
-      const warehouseCode = data.warehouseId; // 从出库单获取仓库 ID
+      // inventory_items.warehouse 只写仓库编码 code（已在上方归一化）
       for (const item of data.items) {
         // 获取当前 version（乐观锁）
-        const current = await tx.inventoryItem.findUniqueOrThrow({
+        const current = await tx.inventoryItem.findUnique({
           where: {
             productId_warehouse: {
               productId: item.productId,
               warehouse: warehouseCode,
             },
           },
-          select: { version: true },
+          select: { id: true, version: true },
         });
 
+        if (!current) {
+          throw new Error(
+            `产品 ${item.productId} 在仓库 ${warehouse.name}(${warehouseCode}) 没有库存记录`
+          );
+        }
+
         const updateResult = await tx.inventoryItem.updateMany({
-          where: {
-            productId_warehouse: {
-              productId: item.productId,
-              warehouse: warehouseCode,
-            },
-            version: current.version,
-          },
+          // updateMany 的 where 不接受复合唯一键 productId_warehouse（仅 WhereUniqueInput 支持），
+          // 这里用主键 + 乐观锁版本号做条件
+          where: { id: current.id, version: current.version },
           data: {
             quantity: { decrement: item.quantity },
             lastOutboundDate: now,

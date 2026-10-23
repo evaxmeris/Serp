@@ -1,24 +1,51 @@
 /**
  * 多平台订单同步服务
- * 
+ *
  * 负责：
  * 1. 从各平台拉取新订单
- * 2. 自动创建/关联客户
- * 3. 创建/更新 ERP 订单及明细
- * 4. 记录同步日志
- * 5. 通知业务员
- * 6. 互斥锁：防止同一平台并发同步
- * 7. 重试机制：指数退避，最多 3 次
+ * 2. 按订单性质分流落库：
+ *    - B2B 单（阿里国际站等）：写入 B2B 的 Order 表，必要时关联/创建客户
+ *    - 零售单（Amazon / TikTok / Shopify）：写入 PlatformOrder 镜像表，
+ *      不创建 Customer、不创建 Order，避免污染 B2B 账套
+ * 3. 记录同步日志
+ * 4. 通知业务员
+ * 5. 互斥锁：防止同一平台（同一站点）并发同步
+ * 6. 重试机制：指数退避，最多 3 次
  */
 
 import { prisma } from '@/lib/prisma';
 import { decryptCredentials } from '@/lib/crypto-utils';
 import { platformRegistry } from './registry';
-import { mapUnifiedOrderToERP, updateOrderStatus } from './mapper';
+import {
+  mapUnifiedOrderToERP,
+  updateOrderStatus,
+  mapUnifiedOrderToPlatformOrder,
+  mapUnifiedOrderToPlatformOrderUpdate,
+  resolvePlatformType,
+} from './mapper';
 import type { UnifiedOrder, SyncResult, PlatformConfig } from './types';
 
 // ============================================
-// 互斥锁：内存 Map，跟踪正在同步的平台
+// 零售平台判定
+// ============================================
+
+/**
+ * 兜底名单：适配器未声明 orderKind 时，这些平台按零售单处理。
+ * 适配器上的 orderKind 字段优先。
+ */
+const RETAIL_PLATFORM_CODES = new Set(['amazon', 'tiktok', 'shopify']);
+
+/**
+ * 判断某平台同步过来的订单是否为零售单（写 PlatformOrder 镜像表）
+ */
+export function isRetailPlatform(platformCode: string, adapter?: { orderKind?: string }): boolean {
+  const kind = adapter?.orderKind ?? platformRegistry.get(platformCode)?.orderKind;
+  if (kind) return kind === 'RETAIL';
+  return RETAIL_PLATFORM_CODES.has((platformCode || '').toLowerCase());
+}
+
+// ============================================
+// 互斥锁：内存 Map，跟踪正在同步的平台（platformCode@marketplaceId）
 // ============================================
 const syncingPlatforms = new Set<string>();
 
@@ -108,33 +135,36 @@ async function fetchWithRetry(
  * 
  * @param platformCode 平台代码
  * @param triggerType 触发类型（manual/scheduled）
+ * @param marketplaceId 站点标识（可选，多站点场景；不传则用配置里的默认站点）
  * @returns 同步结果
  */
 export async function executePlatformSync(
   platformCode: string,
-  triggerType: 'manual' | 'scheduled' = 'scheduled'
+  triggerType: 'manual' | 'scheduled' = 'scheduled',
+  marketplaceId?: string
 ): Promise<SyncResult> {
   const startTime = Date.now();
   const errors: string[] = [];
+  const lockKey = marketplaceId ? `${platformCode}@${marketplaceId}` : platformCode;
   
   // ============================================
   // 互斥锁检查：防止同一平台并发同步
   // ============================================
-  if (syncingPlatforms.has(platformCode)) {
-    console.warn(`[Sync ${platformCode}] 平台正在同步中，跳过本次同步（互斥锁保护）`);
+  if (syncingPlatforms.has(lockKey)) {
+    console.warn(`[Sync ${lockKey}] 平台正在同步中，跳过本次同步（互斥锁保护）`);
     return {
       platformCode,
       status: 'failed',
       ordersFound: 0,
       ordersSynced: 0,
       ordersFailed: 0,
-      errors: [`平台 ${platformCode} 正在同步中，跳过本次同步`],
+      errors: [`平台 ${lockKey} 正在同步中，跳过本次同步`],
       durationMs: Date.now() - startTime,
     };
   }
   
   // 获取互斥锁
-  syncingPlatforms.add(platformCode);
+  syncingPlatforms.add(lockKey);
   
   // 累计重试次数（跨所有分页）
   let totalRetryCount = 0;
@@ -142,7 +172,7 @@ export async function executePlatformSync(
   // 1. 获取平台适配器
   const adapter = platformRegistry.get(platformCode);
   if (!adapter) {
-    syncingPlatforms.delete(platformCode); // 释放锁
+    syncingPlatforms.delete(lockKey); // 释放锁
     return {
       platformCode,
       status: 'failed',
@@ -165,10 +195,20 @@ export async function executePlatformSync(
   });
   
   try {
-    // 3. 获取平台配置
-    const platformConfig = await prisma.platformSyncConfig.findUnique({
-      where: { platformCode },
-    });
+    // 3. 获取平台配置（多站点：优先精确匹配 marketplaceId，退化到该平台的任一配置）
+    const platformConfig =
+      (await prisma.platformSyncConfig.findUnique({
+        where: {
+          platformCode_marketplaceId: {
+            platformCode,
+            marketplaceId: marketplaceId || '',
+          },
+        },
+      })) ||
+      (await prisma.platformSyncConfig.findFirst({
+        where: { platformCode },
+        orderBy: { updatedAt: 'desc' },
+      }));
     
     if (!platformConfig || !platformConfig.enabled) {
       await prisma.platformSyncLog.update({
@@ -192,14 +232,27 @@ export async function executePlatformSync(
       };
     }
     
+    const decryptedCredentials = decryptCredentials(platformConfig.credentials) as Record<string, string>;
+    const rawSettings = (platformConfig.settings as Record<string, any>) || {};
+    // 站点解析优先级：显式入参 > 配置行 > 凭据/站点设置
+    const effectiveMarketplaceId =
+      marketplaceId ||
+      platformConfig.marketplaceId ||
+      decryptedCredentials?.marketplaceId ||
+      rawSettings?.marketplaceId ||
+      '';
+    
     // 构建配置对象
     const config: PlatformConfig = {
       id: platformConfig.id,
       platformCode: platformConfig.platformCode,
+      marketplaceId: effectiveMarketplaceId,
       enabled: platformConfig.enabled,
       syncIntervalMin: platformConfig.syncIntervalMin,
-      credentials: decryptCredentials(platformConfig.credentials) as Record<string, string>,
-      settings: (platformConfig.settings as Record<string, any>) || undefined,
+      credentials: effectiveMarketplaceId
+        ? { marketplaceId: effectiveMarketplaceId, ...decryptedCredentials }
+        : decryptedCredentials,
+      settings: Object.keys(rawSettings).length > 0 ? rawSettings : undefined,
     };
     
     // 4. 获取上次同步时间
@@ -246,7 +299,7 @@ export async function executePlatformSync(
       }
     }
     
-    // 6. 处理每个订单
+    // 6. 处理每个订单（按 B2B / RETAIL 分流）
     let synced = 0;
     let failed = 0;
     
@@ -268,7 +321,7 @@ export async function executePlatformSync(
     // 只在同步成功或部分成功时更新 lastSyncAt
     if (syncStatus !== 'failed') {
       await prisma.platformSyncConfig.update({
-        where: { platformCode },
+        where: { id: platformConfig.id },
         data: {
           lastSyncAt: new Date(),
           lastSyncStatus: syncStatus,
@@ -277,7 +330,7 @@ export async function executePlatformSync(
     } else {
       // 同步失败时只更新状态，不更新 lastSyncAt（保留上次成功时间以便重试）
       await prisma.platformSyncConfig.update({
-        where: { platformCode },
+        where: { id: platformConfig.id },
         data: {
           lastSyncStatus: syncStatus,
         },
@@ -332,13 +385,16 @@ export async function executePlatformSync(
     throw error;
   } finally {
     // 释放互斥锁
-    syncingPlatforms.delete(platformCode);
+    syncingPlatforms.delete(lockKey);
   }
 }
 
 /**
- * 处理单个订单
- * 
+ * 处理单个订单：按平台性质分流
+ *
+ * - 零售单（amazon/tiktok/shopify）→ PlatformOrder 镜像表
+ * - B2B 单（alibaba 等）→ B2B Order 表（+ 客户关联/创建）
+ *
  * @param order 统一订单
  * @param config 平台配置
  */
@@ -346,6 +402,39 @@ async function processSingleOrder(
   order: UnifiedOrder,
   config: PlatformConfig
 ): Promise<void> {
+  if (isRetailPlatform(order.platformCode)) {
+    await processRetailOrder(order, config.marketplaceId || '');
+    return;
+  }
+  await processB2BOrder(order);
+}
+
+/**
+ * 零售单：只写 PlatformOrder 镜像表
+ *
+ * 刻意不做的事：
+ * - 不创建 Customer（零售买家不是 B2B 客户主数据）
+ * - 不创建 Order（B2B 账套只保留阿里国际站等 B2B 单）
+ */
+async function processRetailOrder(order: UnifiedOrder, marketplaceId: string): Promise<void> {
+  const platformAccountId = await ensurePlatformAccount(order.platformCode, marketplaceId);
+  
+  await prisma.platformOrder.upsert({
+    where: {
+      platformCode_platformOrderId: {
+        platformCode: order.platformCode,
+        platformOrderId: order.platformOrderId,
+      },
+    },
+    create: mapUnifiedOrderToPlatformOrder(order, platformAccountId, marketplaceId || undefined),
+    update: mapUnifiedOrderToPlatformOrderUpdate(order, marketplaceId || undefined),
+  });
+}
+
+/**
+ * B2B 单：写 B2B Order 表（保持原有行为）
+ */
+async function processB2BOrder(order: UnifiedOrder): Promise<void> {
   // 1. 检查订单是否已存在（根据 platformOrderId 和 sourcePlatform）
   const existingOrder = await prisma.order.findFirst({
     where: {
@@ -367,7 +456,7 @@ async function processSingleOrder(
     return;
   }
   
-  // 2. 查找或创建客户
+  // 2. 查找或创建客户（仅 B2B 单允许）
   const customerId = await findOrCreateCustomer(order);
   
   // 3. 创建 ERP 订单
@@ -378,8 +467,56 @@ async function processSingleOrder(
   });
 }
 
+// ============================================
+// 平台账号（PlatformOrder 的外键依赖）
+// ============================================
+
+/** 平台账号缓存：platformCode@marketplaceId → PlatformAccount.id */
+const platformAccountCache = new Map<string, string>();
+
 /**
- * 查找或创建客户
+ * 确保平台账号存在（PlatformOrder.platformAccountId 为必填外键）
+ *
+ * 注：这是平台连接账号（店铺维度），不是客户主数据。
+ */
+async function ensurePlatformAccount(platformCode: string, marketplaceId: string): Promise<string> {
+  const cacheKey = `${platformCode}@${marketplaceId}`;
+  const cached = platformAccountCache.get(cacheKey);
+  if (cached) return cached;
+  
+  const platformType = resolvePlatformType(platformCode);
+  const adapter = platformRegistry.get(platformCode);
+  const platformName = adapter?.platformName || platformCode;
+  const accountKey = marketplaceId || platformCode;
+  
+  const existing = await prisma.platformAccount.findFirst({
+    where: { platformType, accountId: accountKey },
+    orderBy: { createdAt: 'asc' },
+  });
+  
+  if (existing) {
+    platformAccountCache.set(cacheKey, existing.id);
+    return existing.id;
+  }
+  
+  const created = await prisma.platformAccount.create({
+    data: {
+      platformType,
+      platformName,
+      accountName: marketplaceId ? `${platformName} (${marketplaceId})` : platformName,
+      accountId: accountKey,
+      shopId: marketplaceId || null,
+      region: marketplaceId || null,
+      isActive: true,
+    },
+  });
+  
+  platformAccountCache.set(cacheKey, created.id);
+  return created.id;
+}
+
+/**
+ * 查找或创建客户（仅用于 B2B 单）
  * 
  * 策略：
  * 1. 优先匹配邮箱
@@ -438,13 +575,16 @@ async function findOrCreateCustomer(order: UnifiedOrder): Promise<string> {
  * @param orders 新订单列表
  */
 async function notifySalesRep(platformCode: string, orders: UnifiedOrder[]): Promise<void> {
+  const retail = isRetailPlatform(platformCode);
+  const entityType = retail ? 'PlatformOrder' : 'Order';
+  
   // 创建审计日志记录作为通知
   for (const order of orders) {
     try {
       await prisma.auditLog.create({
         data: {
           action: 'SYNC_NOTIFICATION',
-          entityType: 'Order',
+          entityType,
           entityId: order.platformOrderId,
           details: {
             platformCode,
@@ -452,7 +592,7 @@ async function notifySalesRep(platformCode: string, orders: UnifiedOrder[]): Pro
             totalAmount: order.totalAmount,
             currency: order.currency,
             customerName: order.customer.contactName || order.customer.companyName || '未知',
-            message: `新订单同步：${order.orderNo}，金额：${order.totalAmount} ${order.currency}`,
+            message: `${retail ? '新零售订单' : '新订单'}同步：${order.orderNo}，金额：${order.totalAmount} ${order.currency}`,
           },
         },
       });
@@ -461,5 +601,5 @@ async function notifySalesRep(platformCode: string, orders: UnifiedOrder[]): Pro
     }
   }
 
-  console.log(`[Sync ${platformCode}] 📢 已创建 ${orders.length} 条同步通知审计日志`);
+  console.log(`[Sync ${platformCode}] 📢 已创建 ${orders.length} 条同步通知审计日志（entityType=${entityType}）`);
 }

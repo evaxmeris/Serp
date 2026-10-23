@@ -10,6 +10,8 @@ import {
   conflictResponse,
 } from '@/lib/api-response';
 import { z } from 'zod';
+import { confirmOutboundOrderOnce } from '@/lib/outbound-confirm';
+import { resolveWarehouseCode } from '@/lib/warehouse-resolver';
 
 /**
  * 出库单批量操作 API
@@ -99,53 +101,17 @@ async function batchConfirm(orders: any[]) {
         continue;
       }
 
-      // 更新状态
-      await prisma.outboundOrder.update({
-        where: { id: order.id },
-        data: { status: 'SHIPPED' },
-      });
+      // 与单个确认共用同一实现：原子领取状态 + 按绝对值重算 shippedQty（幂等，不重复累计）
+      const confirmed = await prisma.$transaction(async (tx) =>
+        confirmOutboundOrderOnce(tx, order.id)
+      );
 
-      // 更新关联销售订单
-      if (order.orderId) {
-        const orderItems = await prisma.orderItem.findMany({
-          where: { orderId: order.orderId },
+      if (!confirmed.ok) {
+        results.failed.push({
+          id: order.id,
+          reason: `当前状态为 ${confirmed.status ?? 'UNKNOWN'}，无法确认`,
         });
-
-        const outboundItems = await prisma.outboundOrderItem.findMany({
-          where: {
-            outboundOrder: {
-              orderId: order.orderId,
-              status: 'SHIPPED',
-            },
-          },
-        });
-
-        for (const orderItem of orderItems) {
-          const shippedQty = outboundItems
-            .filter(item => item.productId === orderItem.productId)
-            .reduce((sum, item) => sum + item.quantity, 0);
-
-          if (shippedQty > 0) {
-            await prisma.orderItem.update({
-              where: { id: orderItem.id },
-              data: { shippedQty: { increment: shippedQty } },
-            });
-          }
-        }
-
-        const allShipped = orderItems.every(item => {
-          const shippedQty = outboundItems
-            .filter(outItem => outItem.productId === item.productId)
-            .reduce((sum, outItem) => sum + outItem.quantity, 0);
-          return shippedQty >= item.quantity;
-        });
-
-        if (allShipped) {
-          await prisma.order.update({
-            where: { id: order.orderId },
-            data: { status: 'SHIPPED' },
-          });
-        }
+        continue;
       }
 
       results.success.push(order.outboundNo);
@@ -199,7 +165,7 @@ async function batchCancel(orders: any[]) {
         });
 
         // 恢复库存
-        const warehouseCode = order.warehouseId;
+        const warehouseCode = await resolveWarehouseCode(order.warehouseId);
         for (const item of order.items) {
           // 获取当前 version（乐观锁）
           const current = await tx.inventoryItem.findUniqueOrThrow({
@@ -209,17 +175,13 @@ async function batchCancel(orders: any[]) {
                 warehouse: warehouseCode,
               },
             },
-            select: { version: true },
+            select: { id: true, version: true },
           });
 
           const updateResult = await tx.inventoryItem.updateMany({
-            where: {
-              productId_warehouse: {
-                productId: item.productId,
-                warehouse: warehouseCode,
-              },
-              version: current.version,
-            },
+            // updateMany 的 where 不接受复合唯一键 productId_warehouse（仅 WhereUniqueInput 支持），
+            // 这里用主键 + 乐观锁版本号做条件
+            where: { id: current.id, version: current.version },
             data: {
               quantity: { increment: item.quantity },
               version: { increment: 1 },
